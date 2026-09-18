@@ -84,5 +84,5 @@ name, use a recording `services` factory, and test timeouts with fake timers or 
 
 ### Phase 2: Cockpit boot and docs
 
-- [ ] 2.1 Host and boot
-- [ ] 2.2 Docs
+- [x] 2.1 Host and boot — 9664a6da
+- [x] 2.2 Docs — e7c67f60
