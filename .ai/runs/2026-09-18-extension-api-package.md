@@ -83,10 +83,10 @@ Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run 
 
 ### Phase 2: The API surface
 
-- [ ] 2.1 Identifiers, manifest, extension
-- [ ] 2.2 JSON boundary and errors
-- [ ] 2.3 Commands and events
-- [ ] 2.4 Storage, components, context
+- [x] 2.1 Identifiers, manifest, extension — f9bbf807
+- [x] 2.2 JSON boundary and errors — 8bea0bec
+- [x] 2.3 Commands and events — 31945d41
+- [x] 2.4 Storage, components, context — def5c206
 
 ### Phase 3: Proof and documentation
 
