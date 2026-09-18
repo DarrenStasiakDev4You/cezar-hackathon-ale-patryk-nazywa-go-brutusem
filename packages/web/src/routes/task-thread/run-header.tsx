@@ -480,7 +480,7 @@ function useRunActions(run: ApiRun, onMarkedUnread?: () => void) {
   // Continue, Archive and Cancel are commands (spec 2026-09-19-command-api): the handler owns the
   // request and the cache rule, the 409 refetch included, so what stays here is presentation —
   // pending state, the confirmation dialog, the toast with the server's words.
-  const continueCommand = useCommand(TaskContinue)
+  const continueCommand = useCommand(TaskContinue, { onError: showError })
   const continueRun = {
     isPending: continueCommand.isPending,
     mutate: () => {
@@ -489,15 +489,14 @@ function useRunActions(run: ApiRun, onMarkedUnread?: () => void) {
       const { runnerOverride } = continuation
       continueCommand.mutate(
         runnerOverride === undefined ? { taskId: run.id } : { taskId: run.id, runner: runnerOverride },
-        { onError: showError },
       )
     },
   }
-  const archiveCommand = useCommand(TaskArchive)
+  const archiveCommand = useCommand(TaskArchive, { onError: showError })
   const archive = {
     isPending: archiveCommand.isPending,
     // Toggling off the record: an archived run is restored.
-    mutate: () => archiveCommand.mutate({ taskId: run.id, archived: !run.archived }, { onError: showError }),
+    mutate: () => archiveCommand.mutate({ taskId: run.id, archived: !run.archived }),
   }
   // Pin/unpin (#935) — the shared hook rather than a local mutation, because the sidebar and the
   // Tasks table drive the same action and the cache rule belongs in one place. Toggling off the
@@ -521,10 +520,10 @@ function useRunActions(run: ApiRun, onMarkedUnread?: () => void) {
       markUnreadMutation.mutate(run.id, { onError })
     },
   }
-  const cancelCommand = useCommand(TaskStop)
+  const cancelCommand = useCommand(TaskStop, { onError: showError })
   const cancel = {
     isPending: cancelCommand.isPending,
-    mutate: () => cancelCommand.mutate({ taskId: run.id }, { onError: showError }),
+    mutate: () => cancelCommand.mutate({ taskId: run.id }),
   }
   const deleteMutation = useMutation({
     mutationFn: () => deleteRun(run.id),

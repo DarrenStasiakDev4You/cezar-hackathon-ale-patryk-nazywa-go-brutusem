@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type UseMutationOptions, type UseMutationResult } from '@tanstack/react-query'
 import { createContext, useContext, useState, type ReactNode } from 'react'
 
 import type { CommandToken } from '@open-mercato/cezar-extension-api'
@@ -40,12 +40,20 @@ export function useCommands(): Pick<CommandRegistry, 'execute' | 'has'> {
   return registry
 }
 
+/** The presentation callbacks a component may attach to every run of a command. */
+export type UseCommandOptions<I, R> = Pick<UseMutationOptions<R, Error, I>, 'onSuccess' | 'onError' | 'onSettled'>
+
 /**
  * A mutation over one single-input command: `mutate(input)`, `isPending`, `onError`. Adds no cache
  * logic of its own — that lives in the handler. A failure is the registry's `CommandError`, whose
- * `message` is the handler's own words (for an API call, the server's).
+ * `message` is the handler's own words (for an API call, the server's). `options` are the mutation's
+ * own callbacks, so — unlike those passed to `mutate` — they fire for every run, even after the
+ * component unmounted.
  */
-export function useCommand<I, R>(command: CommandToken<[input: I], R>): UseMutationResult<R, Error, I> {
+export function useCommand<I, R>(
+  command: CommandToken<[input: I], R>,
+  options: UseCommandOptions<I, R> = {},
+): UseMutationResult<R, Error, I> {
   const commands = useCommands()
-  return useMutation<R, Error, I>({ mutationFn: (input) => commands.execute(command, input) })
+  return useMutation<R, Error, I>({ ...options, mutationFn: (input) => commands.execute(command, input) })
 }

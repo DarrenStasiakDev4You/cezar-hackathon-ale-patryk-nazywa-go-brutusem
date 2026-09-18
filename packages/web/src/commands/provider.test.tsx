@@ -69,6 +69,21 @@ describe('useCommand', () => {
     expect(result.current.error?.message).toBe('greeter is asleep')
     expect(onError).toHaveBeenCalledTimes(1)
   })
+
+  it('fires the hook-level callbacks for every run', async () => {
+    const { registry, refuse } = gatedRegistry()
+    const onError = vi.fn()
+    const { result } = renderHook(() => useCommand(Greet, { onError }), {
+      wrapper: wrapper(new QueryClient(), registry),
+    })
+
+    act(() => result.current.mutate({ name: 'Ada' }))
+    await waitFor(() => expect(result.current.isPending).toBe(true))
+    act(() => refuse(new Error('greeter is asleep')))
+
+    await waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    expect(isExtensionError(onError.mock.calls[0]?.[0], 'command-failed')).toBe(true)
+  })
 })
 
 describe('CommandsProvider', () => {
