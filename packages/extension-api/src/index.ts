@@ -10,6 +10,17 @@ export {
   type ComponentRegistry,
 } from './components.ts'
 export type { ExtensionContext } from './context.ts'
+export {
+  TaskArchive,
+  TaskContinue,
+  TaskStop,
+  type TaskArchiveInput,
+  type TaskArchiveResult,
+  type TaskContinueInput,
+  type TaskContinueResult,
+  type TaskRef,
+  type TaskStopResult,
+} from './core-commands.ts'
 export { ExtensionDefinitionError, isExtensionError, type ExtensionErrorCode } from './errors.ts'
 export { defineEvent, type Events, type EventToken } from './events.ts'
 export { defineExtension, type Extension } from './extension.ts'
