@@ -96,6 +96,16 @@ describe('AppShell', () => {
       expect(screen.queryByRole('button', { name: 'Exit edit mode' })).toBeNull()
     })
 
+    it('allows the exit control to leave edit mode despite the interaction guard', () => {
+      renderShell('/', {})
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Exit edit mode' }))
+
+      expect(screen.getByRole('button', { name: 'Edit mode' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'Exit edit mode' })).toBeNull()
+    })
+
     it('allows only explicitly marked editor actions', () => {
       const onClick = vi.fn()
       renderShell(
