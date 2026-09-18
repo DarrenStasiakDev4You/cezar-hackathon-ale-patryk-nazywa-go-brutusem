@@ -1,7 +1,9 @@
 import type { Commands } from './commands.ts'
+import type { ComponentRegistry } from './components.ts'
 import type { Events } from './events.ts'
 import type { Disposable } from './lifecycle.ts'
 import type { ExtensionManifest } from './manifest.ts'
+import type { ExtensionStorage } from './storage.ts'
 
 /**
  * Everything an extension can reach, handed to its `activate`. The host implements it; an
@@ -21,4 +23,6 @@ export interface ExtensionContext {
   readonly subscriptions: Disposable[]
   readonly commands: Commands
   readonly events: Events
+  readonly storage: ExtensionStorage
+  readonly components: ComponentRegistry
 }
