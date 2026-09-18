@@ -118,7 +118,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
     if (!enabled) close()
   }, [close, enabled])
 
-  const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+  const openFromContextMenu = React.useCallback((event: { target: EventTarget | null; clientX: number; clientY: number; preventDefault: () => void; stopPropagation: () => void }) => {
     if (!enabled) return
     const nextTarget = getLayoutTarget(event.target, registry, allowAnyElement)
     if (!nextTarget) return
@@ -126,7 +126,14 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
     event.stopPropagation()
     setTarget(nextTarget)
     setPosition({ x: event.clientX, y: event.clientY })
-  }
+  }, [allowAnyElement, enabled, registry])
+
+  React.useEffect(() => {
+    if (!enabled || typeof document === 'undefined') return
+    const handleDocumentContextMenu = (event: MouseEvent) => openFromContextMenu(event)
+    document.addEventListener('contextmenu', handleDocumentContextMenu, true)
+    return () => document.removeEventListener('contextmenu', handleDocumentContextMenu, true)
+  }, [enabled, openFromContextMenu])
 
   const handleDelete = async () => {
     if (!target || deletingRef.current) return
@@ -184,7 +191,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
 
   return (
     <>
-      <div data-layout-context-menu-owner="true" className="contents" onContextMenuCapture={onContextMenu}>
+      <div data-layout-context-menu-owner="true" className="contents">
         {children}
       </div>
       {content && typeof document !== 'undefined' ? createPortal(content, document.body) : null}
