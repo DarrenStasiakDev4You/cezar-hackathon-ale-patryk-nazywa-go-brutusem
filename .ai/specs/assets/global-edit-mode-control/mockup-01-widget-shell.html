@@ -3,78 +3,54 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Widget shell — Edit mode mockup</title>
+  <title>cezar — edit mode shell mockup</title>
   <style>
-    :root { color-scheme: light; --canvas:#f5f6f8; --surface:#fff; --surface-2:#fafbfc; --line:#e1e5ea; --ink:#17191c; --muted:#707985; --accent:#b8ff5b; --accent-ink:#172000; --banner:#ffe05a; --banner-ink:#241d00; }
-    :root.dark { color-scheme: dark; --canvas:#0e1012; --surface:#181b1f; --surface-2:#20242a; --line:#303640; --ink:#f2f4f6; --muted:#a2abb5; --accent:#b8ff5b; --accent-ink:#172000; --banner:#ffe477; --banner-ink:#241d00; }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--canvas); color:var(--ink); font:14px/1.4 Inter, ui-sans-serif, system-ui, sans-serif; }
-    button { font:inherit; cursor:pointer; }
-    .app { min-height:100vh; display:grid; grid-template-rows:auto auto 1fr; padding-top:env(safe-area-inset-top); }
-    .chrome { display:flex; align-items:center; min-height:62px; gap:12px; padding:10px max(22px,env(safe-area-inset-right)) 10px max(22px,env(safe-area-inset-left)); border-bottom:1px solid var(--line); background:var(--surface); }
-    .logo { display:flex; align-items:center; gap:9px; font-weight:800; letter-spacing:.01em; }
-    .logo-mark { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#b8ff5b,#ffe05a 52%,#9187ee); color:#172000; font-weight:900; }
-    .crumb { color:var(--muted); }
-    .chrome-actions { display:flex; align-items:center; gap:8px; margin-left:auto; padding-right:clamp(0px, 7vw, 100px); }
-    .theme { width:36px; height:36px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--muted); }
-    .edit-control { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:42px; padding:8px 13px; border:1px solid var(--line); border-radius:9px; background:var(--surface); color:var(--ink); box-shadow:0 5px 15px #00000012; font-weight:700; }
-    .edit-control:hover { background:var(--surface-2); }
-    .edit-control:focus-visible, .theme:focus-visible, .exit:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
-    .edit-control svg { width:19px; height:19px; }
-    .banner { display:none; align-items:center; justify-content:center; gap:16px; min-height:52px; padding:8px 18px; background:var(--banner); color:var(--banner-ink); font-weight:800; }
-    .app.editing .banner { display:flex; }
-    .exit { min-height:34px; padding:6px 12px; border:1px solid #635100; border-radius:7px; background:#fff4b5; color:#2a2100; font-weight:800; }
-    .main { min-width:0; padding:clamp(24px,5vw,58px) max(18px,5vw) 64px; }
-    .heading { max-width:720px; margin-bottom:26px; }
-    h1 { margin:0 0 7px; font-size:clamp(24px,3vw,32px); letter-spacing:-.025em; }
-    .heading p { margin:0; color:var(--muted); }
-    .widget-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding-right:clamp(0px,8vw,150px); }
-    .widget { min-height:174px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); box-shadow:0 8px 24px #0000000b; }
-    .app.editing .widget-grid > * { filter:grayscale(.9); opacity:.42; transition:filter 140ms ease, opacity 140ms ease; }
-    .app.editing .widget-grid > *:hover, .app.editing .widget-grid > *:focus { filter:none; opacity:1; }
-    .app.editing .heading, .app.editing .safe-note { filter:grayscale(.9); opacity:.42; transition:filter 140ms ease, opacity 140ms ease; }
-    .app.editing .heading:hover, .app.editing .heading:focus-within, .app.editing .safe-note:hover, .app.editing .safe-note:focus-within { filter:none; opacity:1; }
-    .widget-label { display:block; margin-bottom:22px; color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
-    .value { font-size:32px; font-weight:800; letter-spacing:-.04em; }
-    .sub { margin-top:8px; color:var(--muted); }
-    .safe-note { position:fixed; top:78px; right:max(18px,env(safe-area-inset-right)); width:132px; padding:10px; border:1px dashed var(--muted); border-radius:8px; color:var(--muted); background:color-mix(in srgb,var(--surface) 94%,transparent); font-size:11px; }
-    @media (max-width:900px) { .widget-grid { grid-template-columns:repeat(2,minmax(0,1fr)); padding-right:clamp(0px,10vw,110px); } .safe-note { width:112px; } }
-    @media (max-width:620px) { .chrome { padding-left:16px; gap:8px; } .crumb { display:none; } .chrome-actions { padding-right:0; } .edit-control { min-width:42px; width:42px; padding:8px; } .edit-control span { display:none; } .main { padding:25px 16px 48px; } .widget-grid { grid-template-columns:1fr; padding-right:0; } .safe-note { position:static; width:auto; margin:0 16px 18px; } .banner { justify-content:space-between; gap:10px; font-size:12px; } }
+    :root { --bg:#f7f7f7; --card:#fff; --sidebar:#fff; --line:#e8e8e8; --ink:#171717; --muted:#727272; --lime:#b8ff5b; --violet:#8f86e8; --banner:#ffe05a; --banner-ink:#241d00; }
+    :root.dark { --bg:#0d0d0d; --card:#171717; --sidebar:#171717; --line:#2a2a2a; --ink:#f5f5f5; --muted:#a1a1a1; --banner:#ffe477; --banner-ink:#241d00; }
+    * { box-sizing:border-box; } html,body { margin:0; min-height:100%; background:var(--bg); color:var(--ink); font:14px/1.4 Inter,system-ui,sans-serif; } button { font:inherit; cursor:pointer; }
+    .app { min-height:100vh; display:grid; grid-template-columns:264px minmax(0,1fr); grid-template-rows:1fr; padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); overflow:hidden; }
+    .sidebar { display:flex; flex-direction:column; min-height:100vh; border-right:1px solid var(--line); background:var(--sidebar); padding:14px 12px max(14px,env(safe-area-inset-bottom)); }
+    .brand { display:flex; align-items:center; gap:9px; padding:0 4px 16px; font-weight:800; } .brand-mark { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#b8ff5b,#ffe05a 52%,#9187ee); color:#172000; font-weight:900; }
+    .new-task { display:flex; align-items:center; justify-content:center; gap:8px; min-height:36px; margin-bottom:13px; border:0; border-radius:7px; background:var(--ink); color:var(--bg); font-weight:750; } .new-task svg { width:15px; height:15px; }
+    .nav { display:grid; gap:3px; } .nav a { display:flex; align-items:center; gap:10px; min-height:34px; padding:0 10px; border-radius:7px; color:var(--muted); text-decoration:none; font-weight:550; } .nav a.active,.nav a:hover { background:color-mix(in srgb,var(--line) 55%,transparent); color:var(--ink); } .nav svg { width:16px; height:16px; }
+    .quick { flex:1; min-height:160px; margin-top:18px; padding:13px 10px; border-top:1px solid var(--line); color:var(--muted); } .quick strong { display:block; margin-bottom:10px; color:var(--ink); font-size:12px; }
+    .task { display:flex; gap:8px; align-items:center; padding:7px 0; font-size:12px; } .dot { width:7px; height:7px; border-radius:50%; background:var(--violet); }
+    .footer { display:flex; align-items:center; gap:8px; border-top:1px solid var(--line); padding-top:12px; color:var(--muted); font-size:12px; } .footer .spacer { margin-left:auto; }
+    .main-column { min-width:0; display:grid; grid-template-rows:auto auto 1fr auto; overflow:hidden; position:relative; }
+    .mobile-bar { display:none; min-height:44px; align-items:center; gap:10px; padding:0 12px; border-bottom:1px solid var(--line); background:var(--card); } .mobile-menu { border:0; background:transparent; color:var(--ink); font-size:20px; }
+    .banner { display:none; align-items:center; justify-content:center; gap:16px; min-height:52px; padding:8px 18px; background:var(--banner); color:var(--banner-ink); font-weight:800; } .app.editing .banner { display:flex; }
+    .exit { min-height:32px; padding:5px 12px; border:1px solid #635100; border-radius:7px; background:#fff4b5; color:#2a2100; font-weight:800; } .exit:focus-visible,.edit-control:focus-visible { outline:3px solid var(--lime); outline-offset:3px; }
+    .main { min-height:0; overflow:auto; padding:34px clamp(18px,5vw,58px) 60px; } .main h1 { margin:0 0 7px; font-size:28px; letter-spacing:-.025em; } .intro { margin:0 0 26px; color:var(--muted); }
+    .widgets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding-right:190px; } .widget { min-height:170px; padding:20px; border:1px solid var(--line); border-radius:10px; background:var(--card); box-shadow:0 8px 22px #0000000b; } .widget-label { color:var(--muted); font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.08em; } .value { margin-top:22px; font-size:31px; font-weight:800; } .sub { margin-top:7px; color:var(--muted); }
+    .app.editing .main > * { filter:grayscale(.9); opacity:.43; transition:filter 140ms ease,opacity 140ms ease; } .app.editing .widget:hover,.app.editing .widget:focus { filter:none; opacity:1; } .widget:focus { outline:3px solid var(--lime); outline-offset:2px; }
+    .edit-control { position:absolute; z-index:60; top:12px; right:max(16px,env(safe-area-inset-right)); display:inline-flex; align-items:center; gap:8px; min-height:42px; padding:8px 13px; border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink); box-shadow:0 5px 15px #00000018; font-weight:750; } .edit-control svg { width:19px; height:19px; }
+    .composer { min-height:22px; border-top:1px solid var(--line); background:var(--card); padding-bottom:env(safe-area-inset-bottom); }
+    @media (max-width:900px) { .widgets { grid-template-columns:repeat(2,minmax(0,1fr)); padding-right:145px; } }
+    @media (max-width:767px) { .app { display:block; overflow:auto; } .sidebar { display:none; } .main-column { min-height:100vh; grid-template-rows:auto auto 1fr auto; } .mobile-bar { display:flex; } .edit-control { top:56px; } .main { padding:24px 16px 48px; } .widgets { grid-template-columns:1fr; padding-right:0; } .banner { justify-content:space-between; font-size:12px; } }
   </style>
 </head>
 <body>
   <div class="app" id="app">
-    <div class="banner" role="status"><span>You are in edit mode</span><button class="exit" id="exit" type="button">Exit edit mode</button></div>
-    <header class="chrome">
-      <div class="logo"><span class="logo-mark">c</span><span>cezar</span></div>
-      <span class="crumb">/ Widgets overview</span>
-      <div class="chrome-actions">
-        <button class="theme" id="theme" type="button" aria-label="Toggle theme">◐</button>
-        <button class="edit-control" id="edit" type="button" aria-label="Edit mode" aria-pressed="false">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/></svg>
-          <span>Edit mode</span>
-        </button>
-      </div>
-    </header>
-    <main>
-      <section class="main">
-        <div class="heading"><h1>Widgets overview</h1><p>Main widget view with a reserved safe area in the top-right corner.</p></div>
-        <div class="widget-grid">
-          <article class="widget" tabindex="0" role="button" aria-disabled="true"><span class="widget-label">Active tasks</span><div class="value">24</div><div class="sub">+8% this week</div></article>
-          <article class="widget" tabindex="0" role="button" aria-disabled="true"><span class="widget-label">Agent activity</span><div class="value">78%</div><div class="sub">Across 6 workspaces</div></article>
-          <article class="widget" tabindex="0" role="button" aria-disabled="true"><span class="widget-label">Review queue</span><div class="value">7</div><div class="sub">2 need attention</div></article>
-        </div>
-      </section>
-      <aside class="safe-note">Reserved safe area.<br/>Content shifts left to keep the independent control visible.</aside>
-    </main>
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">c</span><span>cezar</span></div>
+      <button class="new-task"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>New task</button>
+      <nav class="nav" aria-label="Main"><a class="active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>Tasks</a><a href="#"><span>◌</span>Inbox</a><a href="#"><span>⌘</span>Git</a><a href="#"><span>◈</span>Skills</a><a href="#"><span>◇</span>Workflows</a></nav>
+      <div class="quick"><strong>Recent tasks</strong><div class="task"><span class="dot"></span>Improve dashboard layout</div><div class="task"><span class="dot"></span>Review open changes</div></div>
+      <div class="footer"><span>v0.11.1</span><span class="spacer">☼</span><span>⚙</span></div>
+    </aside>
+    <section class="main-column">
+      <div class="banner" role="status"><span>You are in edit mode</span><button class="exit" id="exit" type="button">Exit edit mode</button></div>
+      <div class="mobile-bar"><button class="mobile-menu" aria-label="Open menu">☰</button><strong>Tasks</strong></div>
+      <button class="edit-control" id="edit" type="button" aria-label="Edit mode" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/></svg><span>Edit mode</span></button>
+      <main class="main"><h1>Tasks</h1><p class="intro">Your active and recent work across the workspace.</p><div class="widgets"><article class="widget" tabindex="0" aria-disabled="true"><span class="widget-label">Active tasks</span><div class="value">24</div><div class="sub">+8% this week</div></article><article class="widget" tabindex="0" aria-disabled="true"><span class="widget-label">Agent activity</span><div class="value">78%</div><div class="sub">Across 6 workspaces</div></article><article class="widget" tabindex="0" aria-disabled="true"><span class="widget-label">Review queue</span><div class="value">7</div><div class="sub">2 need attention</div></article></div></main>
+      <div class="composer"></div>
+    </section>
   </div>
   <script>
-    const app = document.getElementById('app'), edit = document.getElementById('edit'), exit = document.getElementById('exit'), theme = document.getElementById('theme');
-    function setEditMode(enabled) { app.classList.toggle('editing', enabled); edit.setAttribute('aria-pressed', String(enabled)); }
-    edit.addEventListener('click', () => setEditMode(true));
-    exit.addEventListener('click', () => { setEditMode(false); edit.focus(); });
-    theme.addEventListener('click', () => document.documentElement.classList.toggle('dark'));
-    document.querySelectorAll('.widget').forEach((widget) => widget.addEventListener('click', (event) => event.preventDefault()));
+    const app=document.getElementById('app'),edit=document.getElementById('edit'),exit=document.getElementById('exit');
+    function setEditMode(enabled){app.classList.toggle('editing',enabled);edit.setAttribute('aria-pressed',String(enabled));}
+    edit.addEventListener('click',()=>setEditMode(true)); exit.addEventListener('click',()=>{setEditMode(false);edit.focus();});
+    document.querySelectorAll('.widget').forEach((widget)=>widget.addEventListener('click',(event)=>event.preventDefault()));
   </script>
 </body>
 </html>
