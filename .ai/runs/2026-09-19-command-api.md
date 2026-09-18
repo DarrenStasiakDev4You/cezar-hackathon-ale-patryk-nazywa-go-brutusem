@@ -81,6 +81,11 @@ name, a recording `ExtensionScope` fake, and a small `timeoutMs` or fake timers 
   cockpit and the package's test fake — and both change here.
 - **Timeout semantics.** Only extension-provided handlers race `timeoutMs`; a core handler is
   never cut off. Tested both ways.
+- **Gate limit on this machine (recorded 2026-09-19).** `npm test` fails 8 `packages/cezar`
+  server tests (`open-in-app`, `agent-profiles-api`, `route-parity`) on the WSL host this run
+  used: a real `wslpath` is present and `PATH` scans over `/mnt/c` exceed the 5 s test timeout.
+  The same tests fail identically on `origin/main` here, and this branch changes nothing in
+  `packages/cezar`, the contract or the api-client. Every other gate command passes.
 
 ## Progress
 
