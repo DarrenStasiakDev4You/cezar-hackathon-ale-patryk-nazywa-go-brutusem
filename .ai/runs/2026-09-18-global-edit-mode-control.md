@@ -45,20 +45,21 @@ Implement the shell-level mechanism for entering and leaving edit mode in the wi
 
 ## Progress
 
+PR: #4
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Shell control and state
 
-- [ ] 1.1 Add the `EditModeControl` component with the layout icon, “Edit mode” label, global `editMode` state, and full-width “You are in edit mode” banner.
-- [ ] 1.2 Mount the control once in `AppShell`, hide the entry control while active, and keep “Exit edit mode” as the only active-mode action.
+- [x] 1.1 Add the `EditModeControl` component with the layout icon, “Edit mode” label, global `editMode` state, and full-width “You are in edit mode” banner. — b606e278
+- [x] 1.2 Mount the control once in `AppShell`, hide the entry control while active, and keep “Exit edit mode” as the only active-mode action. — b606e278
 
 ### Phase 2: Visual and interaction behavior
 
-- [ ] 2.1 Add safe-area-aware positioning, z-index layering, reserved top-right space, and responsive desktop/tablet/mobile layout behavior.
-- [ ] 2.2 Add active-mode dimming, hover/focus reveal without layout shift, and navigation blocking that does not disable the edit-mode controls.
+- [x] 2.1 Add safe-area-aware positioning, z-index layering, reserved top-right space, and responsive desktop/tablet/mobile layout behavior. — b606e278
+- [x] 2.2 Add active-mode dimming, hover/focus reveal without layout shift, and navigation blocking that does not disable the edit-mode controls. — b606e278
 
 ### Phase 3: Verification
 
-- [ ] 3.1 Add component and shell tests for enter/exit, no modal, banner visibility, control layering, and navigation blocking.
+- [x] 3.1 Add component and shell tests for enter/exit, no modal, banner visibility, control layering, and navigation blocking. — b606e278
 - [ ] 3.2 Run the complete validation gate and inspect the rendered UI in Light/Dark and responsive states.
-
