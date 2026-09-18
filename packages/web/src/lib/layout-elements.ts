@@ -72,11 +72,11 @@ export class LayoutRegistry {
     let active = true
     return () => {
       if (!active) return
-      active = false
-      const children = this.getChildren(descriptor.id)
-      if (children.length > 0) {
+      // Check before spending the handle: a refused unregister must stay retryable.
+      if (this.getChildren(descriptor.id).length > 0) {
         throw new Error(`Cannot unregister layout element "${descriptor.id}" while it has children`)
       }
+      active = false
       this.removeRegistered(descriptor.id)
     }
   }
