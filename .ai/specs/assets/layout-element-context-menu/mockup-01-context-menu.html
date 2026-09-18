@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Context menu mockup</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; background: #15151b; color: #f4f4f5; }
+    .chrome { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+    aside { border-right: 1px solid #2b2b35; padding: 22px 16px; background: #111116; }
+    .brand { font-weight: 700; letter-spacing: .02em; margin-bottom: 32px; }
+    .nav { color: #92929d; font-size: 13px; line-height: 2.7; }
+    main { padding: 34px 42px; background: #1b1b22; }
+    .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 26px; }
+    h1 { margin: 0; font-size: 22px; }
+    .edit { border: 1px solid #7c3aed; border-radius: 7px; color: #ddd6fe; background: #29165b; padding: 9px 12px; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 16px; max-width: 680px; }
+    .card { min-height: 126px; border: 1px solid #484852; border-radius: 10px; background: #24242d; padding: 18px; box-sizing: border-box; }
+    .card.selected { border: 1px solid #a78bfa; box-shadow: 0 0 0 2px #7c3aed66; }
+    .card small { color: #aaaab5; font-size: 11px; }
+    .card h2 { margin: 12px 0 0; font-size: 15px; }
+    .menu { position: absolute; left: 476px; top: 218px; width: 154px; padding: 5px; border: 1px solid #494953; border-radius: 8px; background: #292931; box-shadow: 0 16px 38px #0008; }
+    .item { padding: 9px 10px; border-radius: 5px; color: #e4e4e7; font-size: 13px; }
+    .item.muted { color: #777782; }
+    .item.delete { color: #fca5a5; }
+    .divider { height: 1px; margin: 4px 0; background: #44444d; }
+    .hint { margin-top: 30px; color: #8e8e99; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="chrome">
+    <aside><div class="brand">cezar</div><div class="nav">Tasks<br>Inbox<br>Automations<br>Settings</div></aside>
+    <main>
+      <div class="top"><h1>Dashboard</h1><div class="edit">Edit mode · ON</div></div>
+      <div class="grid">
+        <article class="card selected"><small>group · sales</small><h2>Sales overview</h2></article>
+        <article class="card"><small>widget · revenue</small><h2>Revenue this month</h2></article>
+        <article class="card"><small>widget · activity</small><h2>Recent activity</h2></article>
+      </div>
+      <div class="menu" role="menu" aria-label="Layout element actions">
+        <div class="item muted">Edit</div>
+        <div class="item muted">Move</div>
+        <div class="divider"></div>
+        <div class="item delete">Delete</div>
+      </div>
+      <div class="hint">Right-click a widget or group while edit mode is on.</div>
+    </main>
+  </div>
+</body>
+</html>
+

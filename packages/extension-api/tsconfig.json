@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    // No `lib.dom`, no `types` — the same source runs in the cockpit, in vitest's Node
+    // environment and (later) in a worker, so it may reach for neither runtime. A `node:*`
+    // import or a DOM global fails to compile here: the invariant is structural, not a comment.
+    "lib": ["ES2022"],
+    "types": [],
+    // React is referenced through `import type` only; this makes a value import of it (which
+    // would become a runtime dependency) a compile error rather than a review finding.
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src/**/*.ts"]
+}

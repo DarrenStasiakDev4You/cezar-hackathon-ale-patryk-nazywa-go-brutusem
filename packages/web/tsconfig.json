@@ -25,7 +25,9 @@
       "@/*": ["./src/*"],
       // Source, not `dist` — see the matching alias in vite.config.ts. Typechecking the web
       // app must not depend on the api-client having been built.
-      "@open-mercato/cezar-api-client": ["../api-client/src/index.ts"]
+      "@open-mercato/cezar-api-client": ["../api-client/src/index.ts"],
+      // The extension API, also from source — mirrored in vite.config.ts.
+      "@open-mercato/cezar-extension-api": ["../extension-api/src/index.ts"]
     }
   },
   // `e2e/**` is Node code, not bundled DOM code, but it lives under this tsconfig so it is
