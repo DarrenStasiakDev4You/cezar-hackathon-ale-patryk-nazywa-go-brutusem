@@ -279,10 +279,10 @@ export const AppShell = React.memo(function AppShell({
       <div
         data-slot="edit-mode-surface"
         data-edit-mode={editMode ? 'true' : 'false'}
-        className="flex min-w-0 flex-1"
+        className={cn('flex min-w-0 flex-1', editMode && 'pt-12')}
       >
         <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
-        <div className={cn('relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0', editMode && 'pt-12')}>
+        <div className="relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0">
         {/* The Sheet root renders no DOM of its own. Keep only the mobile controls inside its
             context so a sidebar update cannot propagate through the routed view. */}
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
