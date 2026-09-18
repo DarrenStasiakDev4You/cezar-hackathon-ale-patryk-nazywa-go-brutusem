@@ -78,8 +78,8 @@ Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run 
 
 ### Phase 1: Workspace and boundary
 
-- [ ] 1.1 Scaffold the package and wire it into the monorepo gates
-- [ ] 1.2 Boundary guard test
+- [x] 1.1 Scaffold the package and wire it into the monorepo gates — c96fed5d
+- [x] 1.2 Boundary guard test — bfa4e12e
 
 ### Phase 2: The API surface
 
