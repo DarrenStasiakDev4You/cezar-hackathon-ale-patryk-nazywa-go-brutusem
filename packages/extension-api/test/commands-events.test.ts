@@ -39,7 +39,14 @@ describe('defineCommand', () => {
     expect(error).toBeInstanceOf(ExtensionDefinitionError)
     expect(isExtensionError(error, 'invalid-id')).toBe(true)
     expect((error as ExtensionDefinitionError).issues.map((issue) => issue.path)).toEqual(['id'])
-    expect((error as Error).message).toContain(`Invalid command id ${JSON.stringify(id)}`)
+    expect((error as Error).message).toContain(`Invalid command ${JSON.stringify(id)}: id must be`)
+  })
+
+  it.each([10n, 42, undefined, Symbol('id')])('throws invalid-id — not a TypeError — for a non-string id (%s)', (id) => {
+    // A JS caller may pass anything; describing the id must not itself throw.
+    const error = thrown(() => defineCommand(id as unknown as string))
+    expect(error).toBeInstanceOf(ExtensionDefinitionError)
+    expect((error as Error).message).toContain(`(${typeof id} id)`)
   })
 })
 

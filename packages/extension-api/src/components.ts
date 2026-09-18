@@ -1,6 +1,5 @@
 import type { ComponentType } from 'react'
 
-import { ExtensionDefinitionError } from './errors.ts'
 import type { ContributionId } from './ids.ts'
 import type { Disposable } from './lifecycle.ts'
 import { createToken } from './tokens.ts'
@@ -23,7 +22,7 @@ export interface ComponentContract<Props> {
 /**
  * Declares a component contract: `defineComponentContract<TaskListProps>('cezar.tasks.list', { version: 1 })`.
  *
- * Throws {@link ExtensionDefinitionError} (code `invalid-id`) when the id is not a
+ * Throws {@link ExtensionDefinitionError} (code `invalid-id`, with every issue) when the id is not a
  * {@link ContributionId} or `version` is not a positive integer. Returns a frozen
  * `{ kind, id, version }`.
  */
@@ -32,15 +31,11 @@ export function defineComponentContract<Props>(
   options: { readonly version: number },
 ): ComponentContract<Props> {
   const version = (options as { version?: unknown } | undefined)?.version
-  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
-    const message = 'must be a positive integer — the major version of the contract'
-    throw new ExtensionDefinitionError(
-      'invalid-id',
-      `Invalid component contract ${JSON.stringify(id)}: version ${message}`,
-      [{ path: 'version', message }],
-    )
-  }
-  return createToken<ComponentContract<Props>>({ kind: 'component', id, version })
+  const versionIssues =
+    typeof version === 'number' && Number.isInteger(version) && version >= 1
+      ? []
+      : [{ path: 'version', message: 'must be a positive integer — the major version of the contract' }]
+  return createToken<ComponentContract<Props>>({ kind: 'component', id, version: version as number }, versionIssues)
 }
 
 /** The props of a contract: `ComponentProps<typeof TaskList>`. */

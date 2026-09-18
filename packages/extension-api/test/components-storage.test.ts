@@ -60,6 +60,15 @@ describe('defineComponentContract', () => {
     expect(isExtensionError(error, 'invalid-id')).toBe(true)
     expect((error as ExtensionDefinitionError).issues.map((issue) => issue.path)).toEqual(['id'])
   })
+
+  it('reports a malformed id and a bad version together', () => {
+    const error = thrown(() => defineComponentContract('greeting', { version: 0 }))
+    expect((error as ExtensionDefinitionError).issues.map((issue) => issue.path)).toEqual(['id', 'version'])
+    expect((error as Error).message).toBe(
+      'Invalid component "greeting": id must be two or more dot-separated segments of [a-z0-9][a-z0-9-]*, ' +
+        'at most 128 characters; version must be a positive integer — the major version of the contract',
+    )
+  })
 })
 
 // Type tests: checked by `npm run typecheck`, never executed.
