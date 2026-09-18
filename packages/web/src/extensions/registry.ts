@@ -118,22 +118,93 @@ export function logExtensionError(report: ExtensionErrorReport): void {
   console.error(`[cezar:extensions] ${report.id}: ${report.phase} failed`, report.error)
 }
 
+const DEFAULT_TIMEOUT_MS = 10_000
+
+/** `activate(id)` retries a failure; `activateAll()` never does, so a crash is not re-run automatically. */
+const ACTIVATABLE: readonly ExtensionStatus[] = ['registered', 'failed']
+const ACTIVATED_BY_ALL: readonly ExtensionStatus[] = ['registered']
+
 interface Entry {
   readonly extension: Extension
   /** Captured at `register` (and frozen by `defineExtension`); reassigning `extension.manifest` changes nothing. */
   readonly manifest: Readonly<ExtensionManifest>
   record: ExtensionRecord
+  /** Tail of this extension's lifecycle chain. Every public call enqueues one step on it. */
+  tail: Promise<unknown>
+  /** The current activation while `active`. */
+  activation: Activation | undefined
+  /**
+   * An `activate()`/`deactivate()` call that timed out and has not settled yet. Until it does,
+   * `activate` is refused, so the extension is never inside two lifecycle calls at once.
+   */
+  abandoned: Promise<unknown> | undefined
 }
 
 export function createExtensionRegistry(options: ExtensionRegistryOptions): ExtensionRegistry {
-  void options
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const onError = options.onError ?? logExtensionError
   const entries = new Map<ExtensionId, Entry>()
+
+  const report = (id: ExtensionId, phase: ExtensionErrorReport['phase'], error: unknown): void => {
+    try {
+      onError({ id, phase, error })
+    } catch {
+      // A throwing reporter must not break activateAll, a deactivation or a disposal.
+    }
+  }
 
   const list = (): readonly ExtensionRecord[] =>
     Object.freeze(Array.from(entries.values(), (entry) => entry.record))
 
-  const notImplemented = (): Promise<never> =>
-    Promise.reject(new Error('extension lifecycle is not implemented yet'))
+  const setRecord = (entry: Entry, status: ExtensionStatus, error?: ExtensionFailure): ExtensionRecord => {
+    entry.record = createRecord(entry.manifest, status, error)
+    return entry.record
+  }
+
+  /** Runs `step` after every earlier step of the same extension; steps never enqueue steps. */
+  const enqueue = <T>(entry: Entry, step: () => Promise<T>): Promise<T> => {
+    const run = entry.tail.then(step)
+    entry.tail = run.catch(() => undefined)
+    return run
+  }
+
+  const lookup = (id: ExtensionId): Entry => {
+    const entry = entries.get(id)
+    if (entry === undefined) {
+      throw new ExtensionRegistryError('unknown-extension', `No extension "${id}" is registered`)
+    }
+    return entry
+  }
+
+  const abandon = (entry: Entry, call: Promise<unknown>): void => {
+    entry.abandoned = call
+    const settled = (): void => {
+      if (entry.abandoned === call) entry.abandoned = undefined
+    }
+    call.then(settled, settled)
+  }
+
+  // § Activation, precisely.
+  const activateStep = async (entry: Entry, from: readonly ExtensionStatus[]): Promise<ExtensionRecord> => {
+    if (!from.includes(entry.record.status) || entry.abandoned !== undefined) return entry.record
+
+    const { id } = entry.manifest
+    const activation = createActivation(entry.manifest, (error) => report(id, 'dispose', error))
+    // A throw from `services` counts as an activation failure, like a throw from `activate`.
+    const call = invoke(() => entry.extension.activate(createContext(activation, options.services)))
+    const outcome = await settleWithin(call, timeoutMs, () =>
+      timeoutError('activation-timeout', `Extension "${id}" did not finish activating within ${timeoutMs} ms`),
+    )
+
+    if (outcome.ok) {
+      entry.activation = activation
+      return setRecord(entry, 'active')
+    }
+    if (outcome.timedOut) abandon(entry, call)
+    report(id, 'activate', outcome.error)
+    activation.end()
+    return setRecord(entry, 'failed', toFailure(outcome.error))
+  }
 
   return {
     register(extension, registerOptions) {
@@ -149,8 +220,14 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
           `Extension "${manifest.id}" is already registered`,
         )
       }
-      const status = registerOptions?.enabled === false ? 'disabled' : 'registered'
-      const entry: Entry = { extension, manifest, record: createRecord(manifest, status) }
+      const entry: Entry = {
+        extension,
+        manifest,
+        record: createRecord(manifest, registerOptions?.enabled === false ? 'disabled' : 'registered'),
+        tail: Promise.resolve(),
+        activation: undefined,
+        abandoned: undefined,
+      }
       entries.set(manifest.id, entry)
       return entry.record
     },
@@ -158,10 +235,175 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
     get: (id) => entries.get(id)?.record,
     list,
     listActive: () => Object.freeze(list().filter((record) => record.status === 'active')),
-    activate: notImplemented,
-    activateAll: notImplemented,
-    deactivate: notImplemented,
+
+    async activate(id) {
+      const entry = lookup(id)
+      return enqueue(entry, () => activateStep(entry, ACTIVATABLE))
+    },
+
+    async activateAll() {
+      // Snapshot: an extension registered while this runs is not included.
+      const pending = [...entries.values()].filter((entry) => entry.record.status === 'registered')
+      for (const entry of pending) {
+        try {
+          await enqueue(entry, () => activateStep(entry, ACTIVATED_BY_ALL))
+        } catch (error) {
+          // activateStep isolates everything an extension can throw; this only guards a registry
+          // bug from turning into a rejection, which the boot must never see.
+          report(entry.manifest.id, 'activate', error)
+        }
+      }
+      return list()
+    },
+
+    deactivate: () => Promise.reject(new Error('deactivate is not implemented yet')),
   }
+}
+
+/** One activation: its public scope, its guarded `subscriptions`, and the switch that ends it. */
+interface Activation {
+  readonly scope: ExtensionScope
+  readonly subscriptions: Disposable[]
+  /**
+   * Ends the activation: from now on the scope refuses calls with `disposed`. Then disposes
+   * `subscriptions` newest first, then the tracked registrations newest first — the extension's
+   * own resources go first because they may still be using its registrations. Each dispose is
+   * isolated: a throw is reported and the rest continue.
+   */
+  end(): void
+}
+
+function createActivation(manifest: Readonly<ExtensionManifest>, reportDispose: (error: unknown) => void): Activation {
+  let live = true
+  const tracked = new Set<Disposable>()
+  const owned: Disposable[] = []
+
+  const disposeReported = (item: unknown): void => {
+    try {
+      ;(item as Disposable).dispose()
+    } catch (error) {
+      reportDispose(error)
+    }
+  }
+  /** On an ended activation, whatever is handed in is disposed at once — nothing leaks — and the call fails. */
+  const refuse = (item: unknown): never => {
+    disposeReported(item)
+    throw disposedError(manifest.id)
+  }
+
+  // Once the activation has ended, adding an element disposes it and throws `disposed`. Only
+  // element writes are guarded: `push`, `unshift` and `splice` all add through them.
+  const subscriptions = new Proxy(owned, {
+    set(target, key, value) {
+      if (!live && isArrayIndex(key)) refuse(value)
+      return Reflect.set(target, key, value)
+    },
+  })
+
+  const scope: ExtensionScope = Object.freeze({
+    extension: manifest,
+    track(registration: Disposable): Disposable {
+      if (!live) refuse(registration)
+      let disposed = false
+      const handle: Disposable = {
+        dispose() {
+          if (disposed) return
+          disposed = true
+          tracked.delete(handle)
+          registration.dispose()
+        },
+      }
+      tracked.add(handle)
+      return handle
+    },
+    assertLive() {
+      if (!live) throw disposedError(manifest.id)
+    },
+  })
+
+  return {
+    scope,
+    subscriptions,
+    end() {
+      if (!live) return
+      live = false
+      for (const item of owned.splice(0).reverse()) disposeReported(item)
+      for (const handle of [...tracked].reverse()) disposeReported(handle)
+    },
+  }
+}
+
+/** A fresh context per activation; frozen, so an extension cannot swap `subscriptions` for an unguarded array. */
+function createContext(activation: Activation, services: ExtensionRegistryOptions['services']): ExtensionContext {
+  const { commands, events, storage, components } = services(activation.scope)
+  return Object.freeze({
+    extension: activation.scope.extension,
+    subscriptions: activation.subscriptions,
+    commands,
+    events,
+    storage,
+    components,
+  })
+}
+
+/** Calls `fn` (an extension method, `this` bound by the caller) and turns a synchronous throw into a rejection. */
+function invoke(fn: () => unknown): Promise<unknown> {
+  try {
+    return Promise.resolve(fn())
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
+type Outcome =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: unknown; readonly timedOut: boolean }
+
+/** Never rejects. A call that outlives `ms` resolves as a timeout; its late result is ignored here. */
+function settleWithin(call: Promise<unknown>, ms: number, onTimeout: () => Error): Promise<Outcome> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ ok: false, error: onTimeout(), timedOut: true }), ms)
+    call.then(
+      () => {
+        clearTimeout(timer)
+        resolve({ ok: true })
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        resolve({ ok: false, error, timedOut: false })
+      },
+    )
+  })
+}
+
+function timeoutError(code: 'activation-timeout' | 'deactivation-timeout', message: string): Error {
+  return Object.assign(new Error(message), { code })
+}
+
+/** Recognised by `isExtensionError(error, 'disposed')`: it reads `code` and `message`, never the class. */
+function disposedError(id: ExtensionId): Error & { readonly code: 'disposed' } {
+  return Object.assign(new Error(`Extension "${id}" has been deactivated: its context no longer accepts calls`), {
+    code: 'disposed' as const,
+  })
+}
+
+/** `{ code, message }` from what was thrown: a string `code` when present; a non-Error value is stringified. */
+function toFailure(error: unknown): ExtensionFailure {
+  try {
+    const { code, message } = (typeof error === 'object' && error !== null ? error : {}) as {
+      code?: unknown
+      message?: unknown
+    }
+    const text = typeof message === 'string' ? message : String(error)
+    return Object.freeze(typeof code === 'string' ? { code, message: text } : { message: text })
+  } catch {
+    // A throwing getter or `toString`: the failure is still recorded.
+    return Object.freeze({ message: 'the extension threw a value that cannot be read' })
+  }
+}
+
+function isArrayIndex(key: string | symbol): boolean {
+  return typeof key === 'string' && /^(?:0|[1-9]\d*)$/.test(key)
 }
 
 function createRecord(
@@ -178,10 +420,9 @@ function invalidExtension(error: unknown): ExtensionRegistryError {
   const issues = isExtensionError(error, 'invalid-manifest')
     ? (error as { issues?: unknown }).issues
     : undefined
-  const message = (error as { message?: unknown } | null)?.message
   return new ExtensionRegistryError(
     'invalid-extension',
-    typeof message === 'string' ? message : 'Invalid extension',
+    toFailure(error).message,
     Array.isArray(issues) ? (issues as ManifestIssue[]) : [],
     { cause: error },
   )
