@@ -30,6 +30,8 @@
     .heading p { margin:0; color:var(--muted); }
     .widget-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding-right:clamp(0px,8vw,150px); }
     .widget { min-height:174px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); box-shadow:0 8px 24px #0000000b; }
+    .app.editing .widget-grid > * { filter:grayscale(.62); opacity:.68; transition:filter 140ms ease, opacity 140ms ease; }
+    .app.editing .widget-grid > *:hover, .app.editing .widget-grid > *:focus { filter:none; opacity:1; }
     .widget-label { display:block; margin-bottom:22px; color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
     .value { font-size:32px; font-weight:800; letter-spacing:-.04em; }
     .sub { margin-top:8px; color:var(--muted); }
@@ -56,9 +58,9 @@
       <section class="main">
         <div class="heading"><h1>Widgets overview</h1><p>Main widget view with a reserved safe area in the top-right corner.</p></div>
         <div class="widget-grid">
-          <article class="widget"><span class="widget-label">Active tasks</span><div class="value">24</div><div class="sub">+8% this week</div></article>
-          <article class="widget"><span class="widget-label">Agent activity</span><div class="value">78%</div><div class="sub">Across 6 workspaces</div></article>
-          <article class="widget"><span class="widget-label">Review queue</span><div class="value">7</div><div class="sub">2 need attention</div></article>
+          <article class="widget" tabindex="0" role="button" aria-disabled="true"><span class="widget-label">Active tasks</span><div class="value">24</div><div class="sub">+8% this week</div></article>
+          <article class="widget" tabindex="0" role="button" aria-disabled="true"><span class="widget-label">Agent activity</span><div class="value">78%</div><div class="sub">Across 6 workspaces</div></article>
+          <article class="widget" tabindex="0" role="button" aria-disabled="true"><span class="widget-label">Review queue</span><div class="value">7</div><div class="sub">2 need attention</div></article>
         </div>
       </section>
       <aside class="safe-note">Reserved safe area.<br/>Content shifts left to keep the independent control visible.</aside>
@@ -70,6 +72,7 @@
     edit.addEventListener('click', () => setEditMode(true));
     exit.addEventListener('click', () => { setEditMode(false); edit.focus(); });
     theme.addEventListener('click', () => document.documentElement.classList.toggle('dark'));
+    document.querySelectorAll('.widget').forEach((widget) => widget.addEventListener('click', (event) => event.preventDefault()));
   </script>
 </body>
 </html>
