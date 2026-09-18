@@ -4,155 +4,155 @@
 
 Rozszerzamy istniejący globalny `editMode` w shellu o centralny mechanizm, który przechwytuje aktywacje elementów interaktywnych i nie dopuszcza do nawigacji ani akcji biznesowych. Wyjątkiem są akcje należące do edytora layoutu oraz opcjonalne otwarcie dropdownu potrzebne do identyfikacji elementu.
 
-## Resolved assumptions (autonomous defaults)
+## Założenia rozstrzygnięte autonomicznie
 
-- **Q1 — Zakres istniejącej kontrolki vs. osobna zmiana:** To osobna specyfikacja rozszerzająca istniejącą kontrolkę i branch `feat/global-edit-mode-control`; wcześniejsza specyfikacja pozostaje źródłem prawdy dla wejścia/wyjścia i warstwy wizualnej.
+- **Q1 — Zakres istniejącej kontrolki a osobna zmiana:** To osobna specyfikacja rozszerzająca istniejącą kontrolkę i branch `feat/global-edit-mode-control`; wcześniejsza specyfikacja pozostaje źródłem prawdy dla wejścia/wyjścia i warstwy wizualnej.
 - **Q2 — Dozwolone wyjątki:** Domyślnie dozwolone są tylko akcje oznaczone jako należące do edytora; dropdown może otworzyć się wyłącznie przez jawny marker, ale jego elementy biznesowe pozostają zablokowane.
 - **Q3 — Zakres zdarzeń:** Strażnik blokuje aktywacje użytkownika (`click`, aktywację formularza i równoważne wejście klawiaturą), ale nie blokuje programowych przekierowań niezwiązanych z aktywacją oraz zdarzeń hover/focus potrzebnych do inspekcji.
 
-## 📋 Problem Statement
+## 📋 Problem
 
-Branch `feat/global-edit-mode-control` already owns `editMode` in `AppShell`, dims the shell surface, keeps the edit banner/control alive, and blocks anchor clicks at the shell boundary. That is only a partial safety boundary: buttons, menu items, command-palette triggers, form submissions, and custom interactive elements can still run their business callbacks while the user is selecting or editing layout. Adding `if (editMode)` to every widget would duplicate policy, miss future widgets, and make third-party or extension content unsafe by default.
+Branch `feat/global-edit-mode-control` posiada już `editMode` w `AppShell`, wyszarza powierzchnię shella, utrzymuje aktywny pasek/kontrolkę edycji i blokuje kliknięcia w linki na granicy shella. To jednak tylko częściowa ochrona: przyciski, elementy menu, wyzwalacze command palette, wysłanie formularza i własne elementy interaktywne nadal mogą wykonać callbacki biznesowe, gdy użytkownik wybiera lub edytuje layout. Dodawanie `if (editMode)` do każdego widgetu dublowałoby politykę, pomijało przyszłe widgety i domyślnie nie chroniłoby treści rozszerzeń.
 
-The invariant is simple: normal mode preserves the application's current behavior; edit mode converts user activation into an editor interaction (or a no-op), never into navigation or business mutation. Visual hover/focus affordances remain available because they help identify the element being edited.
+Niezmiennik jest prosty: tryb normalny zachowuje bieżące zachowanie aplikacji, a tryb edycji zamienia aktywację użytkownika w interakcję edytora albo w brak akcji — nigdy w nawigację ani zmianę biznesową. Wizualne affordance hover/focus pozostają dostępne, ponieważ pomagają zidentyfikować element przeznaczony do edycji.
 
-## 📋 Proposed Solution
+## 📋 Proponowane rozwiązanie
 
-Add one shell-owned interaction guard at the same global boundary that already owns `editMode`. The guard runs during capture for user activation events and applies a small, explicit policy:
+Dodajemy jeden strażnik interakcji należący do shella, w tej samej globalnej granicy, która posiada `editMode`. Strażnik działa podczas przechwytywania zdarzeń aktywacji użytkownika i stosuje następującą politykę:
 
-| Context | Edit-mode result |
+| Kontekst | Rezultat w trybie edycji |
 |---|---|
-| Normal mode | Existing link, button, form, dropdown and widget behavior is unchanged. |
-| Editor-owned control | The edit-mode action is allowed to run. |
-| Explicit dropdown trigger marked as inspectable | The menu may open so the user can identify/select an item; its business actions remain guarded. |
-| Any other link, button, submit control or interactive element | Default action and descendant business handler are prevented. |
-| Hover, focus, pointer movement and text selection | Allowed; visual reveal and inspection still work. |
-| Programmatic navigation not caused by a user activation | Outside this guard's scope and remains unchanged. |
+| Tryb normalny | Istniejące zachowanie linków, przycisków, formularzy, dropdownów i widgetów pozostaje bez zmian. |
+| Kontrolka należąca do edytora | Akcja trybu edycji może się wykonać. |
+| Jawnie oznaczony trigger dropdownu inspekcyjnego | Menu może się otworzyć, aby użytkownik mógł zidentyfikować element; jego akcje biznesowe nadal są chronione. |
+| Każdy inny link, przycisk, submit lub element interaktywny | Domyślna akcja i biznesowy handler potomny są blokowane. |
+| Hover, focus, ruch wskaźnika i zaznaczanie tekstu | Dozwolone; inspekcja i wizualne ujawnienie nadal działają. |
+| Programowa nawigacja niezwiązana z aktywacją użytkownika | Poza zakresem tego strażnika i pozostaje bez zmian. |
 
-The implementation should expose a narrow DOM policy rather than a React context that every widget must consume. Existing and future widgets are protected by default. The editor can opt an element into an allowed action with a stable data attribute, and a dropdown trigger can opt into opening-only behavior with a separate attribute. These attributes are infrastructure contracts, not per-widget `editMode` branches.
+Implementacja powinna udostępniać wąską politykę DOM, a nie kontekst Reacta, który każdy widget musiałby konsumować. Istniejące i przyszłe widgety są chronione domyślnie. Edytor może jawnie oznaczyć bezpieczną akcję atrybutem danych, a trigger dropdownu może osobno zezwolić wyłącznie na otwarcie. Atrybuty są kontraktem infrastruktury, nie warunkiem dodawanym ręcznie do każdego widgetu.
 
-The guard must cover both pointer and keyboard activation. It should also guard form submission at the shell boundary, because pressing Enter in a focused submit control can bypass a click-only policy. The event policy must not use `pointer-events: none`, a blanket disabled state, or an opaque overlay: those approaches remove hover/focus semantics and prevent the editor from locating the element.
+Strażnik musi obejmować aktywację wskaźnikiem i klawiaturą. Powinien również chronić wysłanie formularza na granicy shella, ponieważ Enter na skupionym przycisku submit może ominąć politykę opartą wyłącznie na kliknięciach. Nie należy używać `pointer-events: none`, globalnego disabled ani nieprzezroczystej nakładki — te techniki usuwają semantykę hover/focus i uniemożliwiają edytorowi znalezienie elementu.
 
-The existing branch's link-only `onClickCapture` is the starting point to replace. The source-of-truth implementation remains `packages/web/src/components/app-shell.tsx`; a small policy/helper module is preferred if it makes the event matrix independently testable. The existing `EditModeControl` remains the only editor-owned shell chrome for this slice.
+Punktem wyjścia jest istniejący na branchu handler `onClickCapture`, który chroni wyłącznie linki. Źródłem implementacji pozostaje `packages/web/src/components/app-shell.tsx`; mały moduł/helper jest preferowany, jeśli pozwoli niezależnie testować macierz zdarzeń. Istniejący `EditModeControl` pozostaje jedynym chrome edytora w tym zakresie.
 
-### Research notes
+### Wnioski z researchu
 
-The boundary follows the same product distinction used by design tools: editing and previewing/prototyping are separate interaction modes, so a canvas can expose structure without executing the resulting flow. Figma documents separate Design and Prototype modes and treats interaction triggers as mode-specific behavior ([Figma prototyping guide](https://help.figma.com/hc/en-us/articles/360040314193-Guide-to-prototyping-in-Figma), [Figma prototype triggers](https://help.figma.com/hc/en-us/articles/360035725574-Prototype-triggers)). WordPress similarly treats link editing as an editor operation over content that would otherwise navigate ([WordPress link editing](https://wordpress.org/documentation/article/link-editing/)). The proposed solution adopts the useful part of both patterns—central mode ownership and explicit editor affordances—without introducing a prototype runtime or a new widget API.
+Granica odpowiada rozróżnieniu stosowanemu w narzędziach projektowych: edycja i podgląd/prototypowanie są osobnymi trybami interakcji, więc płótno może ujawniać strukturę bez wykonywania wynikowego przepływu. Figma opisuje osobne tryby Design i Prototype oraz triggery zależne od trybu ([przewodnik Figma](https://help.figma.com/hc/en-us/articles/360040314193-Guide-to-prototyping-in-Figma), [triggery prototypu Figma](https://help.figma.com/hc/en-us/articles/360035725574-Prototype-triggers)). WordPress podobnie traktuje edycję linku jako operację edytora na treści, która normalnie prowadziłaby do nawigacji ([edycja linków w WordPress](https://wordpress.org/documentation/article/link-editing/)). Proponowane rozwiązanie wykorzystuje z tych wzorców centralne posiadanie trybu i jawne affordance edytora, ale nie wprowadza silnika prototypowania ani nowego API widgetów.
 
-## 📋 Architecture
+## 📋 Architektura
 
-### Ownership and event flow
+### Własność i przepływ zdarzeń
 
-1. `AppShell` owns the existing `editMode` boolean and mounts the guard once around the routed surface.
-2. A capture handler receives a user activation before a descendant's business callback.
-3. The guard finds the nearest interactive target and classifies it as `editor`, `inspectable-dropdown`, or `business/default`.
-4. In `business/default`, it calls `preventDefault()` and stops propagation so router navigation, button callbacks, menu selection, form submission and widget actions do not run.
-5. In `editor`, it leaves the event untouched. In `inspectable-dropdown`, it allows only the trigger's open behavior; menu-item activation is still classified as business/default.
+1. `AppShell` posiada istniejący boolean `editMode` i montuje strażnika raz, wokół routowanej powierzchni.
+2. Handler capture otrzymuje aktywację przed biznesowym callbackiem potomka.
+3. Strażnik znajduje najbliższy cel interaktywny i klasyfikuje go jako `editor`, `inspectable-dropdown` albo `business/default`.
+4. Dla `business/default` wywołuje `preventDefault()` i zatrzymuje propagację, aby nie uruchomiły się nawigacja routera, callback przycisku, wybór menu, submit formularza ani akcja widgetu.
+5. Dla `editor` pozostawia zdarzenie bez zmian. Dla `inspectable-dropdown` pozwala wyłącznie na otwarcie triggera; aktywacja elementu menu nadal jest klasyfikowana jako `business/default`.
 
-The classification must be based on the composed event target and nearest ancestor, so clicks on an icon or label inside a button are governed by the button. It must tolerate portals: an open menu rendered outside the shell's visual surface is still under the shell guard if the guard is attached to the AppShell root or a document-level capture seam. If the UI library's portal escapes the React tree, the implementation must use the smallest shared event boundary that still covers it and document the boundary in tests.
+Klasyfikacja musi działać na złożonym celu zdarzenia i najbliższym przodku, aby kliknięcie ikony lub etykiety wewnątrz przycisku było zarządzane przez przycisk. Musi też tolerować portale: otwarte menu renderowane poza wizualną powierzchnią shella nie może ominąć strażnika. Jeśli portal biblioteki UI opuszcza drzewo Reacta, implementacja powinna użyć najmniejszej wspólnej granicy zdarzeń, która nadal go obejmuje, i opisać tę granicę w testach.
 
-Recommended markers:
+Zalecane markery:
 
-- `data-edit-mode-action="allow"`: an editor-owned action that is safe to run in edit mode.
-- `data-edit-mode-open="allow"`: an optional trigger that may open a menu for identification; it does not grant permission to its menu items.
-- `data-edit-mode-ignore`: reserved only for non-interactive presentation content if the event classifier needs an escape hatch; it must never allow a business action.
+- `data-edit-mode-action="allow"`: akcja należąca do edytora, bezpieczna w trybie edycji;
+- `data-edit-mode-open="allow"`: opcjonalny trigger, który może otworzyć menu do identyfikacji; nie daje prawa do wykonywania elementów menu;
+- `data-edit-mode-ignore`: wyłącznie dla nieinteraktywnej treści prezentacyjnej, jeśli klasyfikator potrzebuje wyjątku; nigdy nie może zezwalać na akcję biznesową.
 
-The markers should be applied to the existing edit-mode control and exit button through their component implementation. No product widget should be required to read `editMode`. If a future widget needs a real editing action, it explicitly marks that action as editor-owned and tests the action's safety.
+Markery należy zastosować do istniejącej kontrolki trybu edycji i przycisku wyjścia w ich implementacji. Żaden widget produktowy nie powinien czytać `editMode`. Jeśli przyszły widget będzie potrzebował prawdziwej akcji edytora, jawnie oznacza tę akcję i testuje jej bezpieczeństwo.
 
-### Event contract
+### Kontrakt zdarzeń
 
-- `click`: primary pointer and keyboard activation boundary; blocked by default in edit mode.
-- `submit`: blocked by default in edit mode, including implicit form submission; editor-owned forms must opt in explicitly.
-- `keydown`: only prevent keys that would activate a guarded control if the browser/library does not emit a cancellable click in time; do not block arrows, Escape, Tab, text editing or screen-reader navigation.
-- `pointerdown`, `pointerup`, `mouseenter`, `focus`, `focusin`: remain available unless a component-specific menu primitive requires a documented trigger exception.
+- `click`: główna granica aktywacji wskaźnikiem i klawiaturą; domyślnie blokowana w trybie edycji;
+- `submit`: domyślnie blokowany w trybie edycji, również dla implicit submit; formularze edytora muszą jawnie uzyskać zgodę;
+- `keydown`: blokować tylko klawisze, które aktywują chroniony element, jeśli biblioteka nie emituje na czas anulowalnego clicka; nie blokować strzałek, Escape, Tab, edycji tekstu ani nawigacji czytnika ekranu;
+- `pointerdown`, `pointerup`, `mouseenter`, `focus`, `focusin`: pozostają dostępne, chyba że konkretna biblioteka menu wymaga udokumentowanego wyjątku triggera.
 
-The guard is synchronous and local. It adds no API, storage, event-bus topic, browser global, or persistence. It does not intercept navigation caused by an effect, server response, or external browser action; those are not interactive widget activation and must not be silently changed by edit mode.
+Strażnik jest synchroniczny i lokalny. Nie dodaje API, storage, topicu event-busa, globalnego listenera przeglądarki ani persystencji. Nie przechwytuje nawigacji wywołanej przez efekt, odpowiedź serwera albo zewnętrzny callback — nie są to aktywacje interaktywnego widgetu i nie powinny być po cichu zmieniane przez edit mode.
 
-## 📋 Data Model
+## 📋 Model danych
 
-No data model changes. `editMode` remains an in-memory shell boolean. The `data-edit-mode-*` attributes are DOM policy markers only; they are not persisted user data, configuration, or a public API payload.
+Brak zmian modelu danych. `editMode` pozostaje booleanem w pamięci shella. Atrybuty `data-edit-mode-*` są wyłącznie markerami polityki DOM; nie są zapisywanymi danymi użytkownika, konfiguracją ani payloadem API.
 
-## 📋 API Contracts
+## 📋 Kontrakty API
 
-No HTTP, SSE, WebSocket, CLI or extension contract changes. The implementation adds only an internal web event-policy seam and its tests. If the marker names are later reused by extension components, that follow-up must define and version an extension contract separately; this spec does not publish them.
+Brak zmian HTTP, SSE, WebSocket, CLI i kontraktu rozszerzeń. Implementacja dodaje wyłącznie wewnętrzną granicę polityki zdarzeń w webie oraz testy. Jeśli markery zostaną później użyte przez komponenty rozszerzeń, osobny follow-up musi zdefiniować i wersjonować kontrakt rozszerzeń; ta specyfikacja go nie publikuje.
 
 ## 📋 UI/UX
 
-The visual behavior from the existing global edit-mode spec remains unchanged: users can enter and exit through the shell-owned control, the banner remains visible, the routed surface may dim and reveal on hover/focus, and the control itself stays crisp and operable.
+Zachowanie wizualne z wcześniejszej specyfikacji globalnego trybu edycji pozostaje bez zmian: użytkownik wchodzi i wychodzi przez kontrolkę shella, pasek pozostaje widoczny, routowana powierzchnia może się wyszarzać i ujawniać po hover/focus, a sama kontrolka pozostaje wyraźna i operacyjna.
 
-The interaction behavior becomes explicit:
+Zachowanie interakcji staje się jednoznaczne:
 
-- In normal mode, clicking a navigation link changes route, clicking a widget button runs its current action, and opening/choosing a dropdown behaves as it does today.
-- In edit mode, clicking the same link leaves the route unchanged; clicking a business button leaves application state unchanged; submitting a form is ignored; and choosing a business menu item closes or remains governed by the menu primitive but does not execute its action. The preferred implementation keeps the menu open when the selection itself is blocked only if that is required for inspection; otherwise closing without side effects is acceptable.
-- The editor control and exit action remain operable. Their accessible name, focus ring and keyboard activation must continue to work.
-- An optional inspectable dropdown can open to reveal its labels or structure, but opening it cannot navigate, mutate data, submit a form or trigger a command. The spec does not require every dropdown to be inspectable; the default is blocked.
+- W trybie normalnym kliknięcie linku zmienia trasę, kliknięcie przycisku wykonuje bieżącą akcję widgetu, a otwarcie i wybór dropdownu działa jak dotychczas.
+- W trybie edycji kliknięcie tego samego linku nie zmienia trasy, biznesowy przycisk nie zmienia stanu aplikacji, formularz nie jest wysyłany, a biznesowy element menu nie wykonuje swojej akcji. Menu może zostać zamknięte przez własną bibliotekę, ale bez skutku biznesowego.
+- Kontrolka edytora i akcja wyjścia pozostają operacyjne. Ich nazwa dostępnościowa, focus ring i aktywacja klawiaturą muszą działać.
+- Opcjonalny dropdown inspekcyjny może otworzyć się, aby ujawnić etykiety lub strukturę, ale samo otwarcie nie może nawigować, zmieniać danych, wysyłać formularza ani uruchamiać komendy. Domyślnie dropdown pozostaje chroniony.
 
-### Accessibility
+### Dostępność
 
-Do not announce every blocked click as an error or move focus unexpectedly. Keep keyboard focus, allow Tab navigation and preserve visible focus indicators. The active banner/status from the existing control remains the mode announcement. If a blocked action needs feedback, use the editor's future selection affordance rather than a transient toast that could itself create a business action.
+Nie należy ogłaszać każdego zablokowanego kliknięcia jako błędu ani przenosić fokusu. Zachować fokus klawiatury, nawigację Tab i widoczne wskaźniki fokusu. Aktywny pasek/status z istniejącej kontrolki pozostaje komunikatem o trybie. Jeśli zablokowana akcja będzie wymagała informacji zwrotnej, powinna użyć przyszłego affordance wyboru edytora, a nie toastu, który sam mógłby uruchomić akcję biznesową.
 
-## 📋 Edge Cases & Failure Scenarios
+## 📋 Przypadki brzegowe i scenariusze awarii
 
-- **Nested targets:** clicking an SVG/icon/span inside a button resolves to the button, not the decorative child.
-- **Router links:** both the project's `Link` wrapper and plain `react-router` links remain on the blocked-by-default path.
-- **Portaled menus/dialogs:** Radix or similar content rendered in a portal cannot accidentally bypass the guard. Add a regression test for the actual primitive used by the shell.
-- **Dropdown trigger vs. item:** an explicitly allowed trigger may open; an item with a destructive or navigational callback is still blocked unless it is an editor-owned action.
-- **Implicit form submit:** pressing Enter in an input does not submit a business form in edit mode.
-- **Keyboard activation:** Space/Enter activation of buttons and links is covered without disabling ordinary focus navigation or text entry.
-- **Nested editor controls:** an editor action inside a guarded widget is allowed only when the nearest editor marker is the intended action; business ancestors must not regain control through bubbling.
-- **Multiple clicks or mode transitions:** leaving edit mode during an allowed editor action must not replay a previously blocked event. No event queue or deferred replay is introduced.
-- **Native/external links:** edit mode blocks them just like internal links; it must not open a new tab or window.
-- **Non-user redirects:** a route change caused by an existing effect or external callback remains out of scope; the guard must not cause loops or stale mode state.
-- **No JavaScript / hydration boundary:** the server-rendered/static shell must remain usable enough to boot; the guard is an enhancement applied once React owns the shell.
+- **Zagnieżdżone cele:** kliknięcie SVG/ikony/spanu wewnątrz przycisku rozpoznaje przycisk, a nie dekoracyjne dziecko.
+- **Linki routera:** zarówno własny wrapper `Link`, jak i zwykłe linki `react-router` są domyślnie blokowane.
+- **Menu w portalu:** treść renderowana w portalu przez Radix lub podobną bibliotekę nie może ominąć strażnika. Dodać test regresyjny dla faktycznego prymitywu używanego przez shell.
+- **Trigger a element menu:** jawnie dozwolony trigger może się otworzyć; element destrukcyjny lub nawigacyjny nadal jest blokowany, chyba że sam należy do edytora.
+- **Implicit submit:** Enter w polu nie wysyła biznesowego formularza w trybie edycji.
+- **Aktywacja klawiaturą:** Space/Enter dla przycisków i linków jest objęte ochroną bez wyłączania zwykłej nawigacji fokusem ani wpisywania tekstu.
+- **Zagnieżdżone kontrolki edytora:** akcja edytora jest dozwolona tylko wtedy, gdy najbliższy marker dotyczy zamierzonej akcji; biznesowy przodek nie może odzyskać sterowania przez bubbling.
+- **Wielokrotne kliknięcia i zmiana trybu:** wyjście z edit mode podczas dozwolonej akcji nie może odtworzyć wcześniej zablokowanego zdarzenia. Nie wprowadzać kolejki ani odroczonego replayu.
+- **Linki natywne i zewnętrzne:** są blokowane tak samo jak wewnętrzne; nie mogą otworzyć nowej karty ani okna.
+- **Przekierowania niepochodzące od użytkownika:** istniejąca zmiana trasy wywołana efektem lub zewnętrznym callbackiem pozostaje poza zakresem; strażnik nie może powodować pętli ani nieaktualnego stanu.
+- **Brak JavaScriptu/hydratacji:** statyczny shell powinien nadal wystartować; strażnik jest ulepszeniem aktywowanym po przejęciu shella przez React.
 
-## 📋 Risks & Impact Review
+## 📋 Ryzyka i wpływ
 
-- **High — incomplete coverage:** a click-only or anchor-only guard would leave business buttons and forms active. The event matrix and regression tests are mandatory before implementation is considered complete.
-- **Medium — UI library event ordering:** Radix portals and synthetic/native event ordering can differ. Verify the actual dropdown primitive in a browser and keep the policy helper independent of library internals.
-- **Medium — over-blocking editor chrome:** a broad `stopPropagation()` can break the exit action or future selection tools. All editor-owned controls need explicit allow tests.
-- **Low — keyboard regressions:** preventing too much at `keydown` can make the app inaccessible. Prefer cancellable `click`/`submit` capture and only add targeted key handling where tests demonstrate a gap.
+- **Wysokie — niepełne pokrycie:** strażnik oparty wyłącznie na clicku lub anchorach pozostawi aktywne biznesowe przyciski i formularze. Macierz zdarzeń i testy regresyjne są obowiązkowe.
+- **Średnie — kolejność zdarzeń biblioteki UI:** portale Radix i kolejność zdarzeń syntetycznych/natywnych mogą się różnić. Trzeba zweryfikować faktyczny prymityw dropdownu i utrzymać helper niezależny od szczegółów biblioteki.
+- **Średnie — nadmierne blokowanie chrome edytora:** szerokie `stopPropagation()` może zepsuć akcję wyjścia lub przyszłe narzędzia wyboru. Każda kontrolka edytora potrzebuje jawnych testów allow.
+- **Niskie — regresje klawiatury:** zbyt szerokie blokowanie `keydown` może pogorszyć dostępność. Preferować anulowalny capture `click`/`submit` i dodawać obsługę klawiszy tylko po udowodnieniu luki testem.
 
-Rollback is a one-commit revert: remove the guard hookup and helper while keeping the existing control and visual edit mode intact. No data migration, release manifest, API contract or backward-compatibility surface changes.
+Rollback to revert jednego commita: usunięcie podpięcia strażnika i helpera przy zachowaniu istniejącej kontrolki oraz wizualnego edit mode. Brak migracji danych, zmian manifestów wydania, kontraktu API i powierzchni kompatybilności wstecznej.
 
-## 📋 Phasing
+## 📋 Fazowanie
 
-### Phase 1: Central policy seam
+### Faza 1: Centralny punkt polityki
 
-Introduce the event classifier/guard and connect it to the existing shell-owned `editMode`. Mark only the existing edit-mode entry/exit actions as editor-owned. The app remains fully usable in normal mode and all edit-mode business activations are blocked by default.
+Wprowadzić klasyfikator/strażnika zdarzeń i połączyć go z istniejącym `editMode` shella. Oznaczyć tylko istniejące akcje wejścia/wyjścia jako należące do edytora. Tryb normalny działa bez zmian, a aktywacje biznesowe w edit mode są domyślnie blokowane.
 
-### Phase 2: Primitive coverage
+### Faza 2: Pokrycie prymitywów
 
-Exercise the actual router links, buttons, command palette trigger, dropdown trigger/menu and form primitives used by the shell. Add the optional inspectable-dropdown marker only where a concrete identification/editing flow needs it.
+Przetestować faktyczne linki routera, przyciski, command palette, trigger/menu dropdownu i formularze używane przez shell. Dodać marker inspectable-dropdown wyłącznie tam, gdzie konkretny przepływ identyfikacji/edycji tego wymaga.
 
-### Phase 3: Browser and accessibility verification
+### Faza 3: Przeglądarka i dostępność
 
-Verify pointer and keyboard activation in a real browser at desktop and mobile widths, including a portaled dropdown. Confirm that focus, hover reveal, Escape, Tab, text entry and the exit control remain usable.
+Zweryfikować aktywację wskaźnikiem i klawiaturą w trybie normalnym i edycji, na desktopie i mobile, w tym menu renderowane w portalu. Potwierdzić działanie fokusu, hover reveal, Escape, Tab, wpisywania tekstu i wyjścia z trybu.
 
-## 📋 Implementation Plan
+## 📋 Plan implementacji
 
-1. **Map the current surface.** Audit the `feat/global-edit-mode-control` diff and the shared primitives used by `AppShell`; list every existing user activation that must be protected. Testable output: a fixture matrix covering link, router link, button, menu item, form submit, custom `tabIndex` action, editor control and exit control.
-2. **Implement the central classifier.** Add a small shell-owned helper/component that classifies nearest interactive targets and exposes the two explicit editor markers. Testable output: unit tests for nested targets, default blocking, editor allow, inspectable dropdown trigger, and normal-mode pass-through.
-3. **Replace the link-only shell guard.** Wire click/submit capture into `AppShell` and add only the required targeted keyboard handling. Testable output: shell tests prove route, callback, menu selection and form submission do not run in edit mode, while the entry/exit controls do.
-4. **Cover portal and primitive behavior.** Use the actual dropdown/menu and form components from the cockpit, including portal rendering. Testable output: regression tests prove a portaled business item cannot bypass the guard and an explicitly inspectable trigger can open without executing an item action.
-5. **Verify accessibility and browser behavior.** Run keyboard and pointer scenarios in normal/edit modes, Light/Dark and responsive layouts; ensure no focus loss, layout shift, accidental navigation or business mutation. Testable output: browser evidence and a short pass/fail matrix.
-6. **Run the repository gate.** Execute the configured typecheck, unit/full tests, build and package checks. Testable output: all configured commands pass, with any pre-existing unrelated failure documented rather than hidden.
+1. **Zmapować obecną powierzchnię.** Przeanalizować diff `feat/global-edit-mode-control` i współdzielone prymitywy używane przez `AppShell`; wypisać każdą aktywację użytkownika, którą trzeba chronić. Wynik testowalny: macierz fixture obejmująca link, router link, przycisk, element menu, submit formularza, własny element `tabIndex`, kontrolkę edytora i wyjście.
+2. **Zaimplementować centralny klasyfikator.** Dodać mały helper/komponent należący do shella, który klasyfikuje najbliższe cele interaktywne i udostępnia dwa jawne markery edytora. Wynik testowalny: testy jednostkowe dla zagnieżdżonych celów, domyślnego blokowania, allow edytora, triggera dropdownu inspekcyjnego i przepuszczania w trybie normalnym.
+3. **Zastąpić strażnika tylko linków.** Podłączyć capture `click`/`submit` w `AppShell` i dodać wyłącznie niezbędną obsługę klawiatury. Wynik testowalny: testy shella potwierdzają, że trasa, callback, wybór menu i submit nie wykonują się w edit mode, a kontrolki wejścia/wyjścia działają.
+4. **Pokryć portale i prymitywy.** Użyć faktycznych komponentów menu/formularzy, również z renderowaniem portalowym. Wynik testowalny: test regresyjny potwierdza, że biznesowy element w portalu nie omija strażnika, a jawnie oznaczony trigger może się otworzyć bez wykonania akcji elementu.
+5. **Zweryfikować dostępność i przeglądarkę.** Wykonać scenariusze klawiatury i wskaźnika w trybie normalnym i edycji, w Light/Dark oraz przy responsywności; potwierdzić brak utraty fokusu, przesunięcia layoutu, przypadkowej nawigacji i zmiany biznesowej. Wynik testowalny: dowód przeglądarkowy i krótka macierz pass/fail.
+6. **Uruchomić gate repozytorium.** Wykonać skonfigurowany typecheck, testy jednostkowe/pełne, build i testy paczki. Wynik testowalny: wszystkie komendy przechodzą, a ewentualne niezwiązane awarie są udokumentowane.
 
-## 📋 Acceptance Criteria
+## 📋 Kryteria akceptacji
 
-- [ ] In normal mode, existing link, button, form, dropdown and widget behavior is unchanged.
-- [ ] In edit mode, clicking internal or external links never changes the route, opens a new tab, or reloads the document.
-- [ ] In edit mode, business buttons and custom interactive elements do not run their callbacks.
-- [ ] In edit mode, business forms do not submit through click, Enter, or implicit submission.
-- [ ] In edit mode, dropdown business items do not execute commands, mutations or navigation.
-- [ ] An explicitly marked inspectable dropdown trigger may open, but opening it grants no permission to execute its items.
-- [ ] The existing edit-mode entry/exit controls remain keyboard- and pointer-operable and are the only allowed actions in this slice.
-- [ ] Hover, focus, Tab, Escape, text selection and screen-reader navigation remain available; the visual reveal contract is unchanged.
-- [ ] The guard is mounted once at the shell boundary; no widget adds an `if (editMode)` branch to protect its normal behavior.
-- [ ] Tests cover nested targets, router/plain links, buttons, forms, dropdown portals, keyboard activation and normal-mode pass-through.
-- [ ] No API, storage, persistence, permissions, synchronization or widget-editing feature is added.
+- [ ] W trybie normalnym istniejące zachowanie linków, przycisków, formularzy, dropdownów i widgetów pozostaje bez zmian.
+- [ ] W trybie edycji kliknięcie linku wewnętrznego lub zewnętrznego nie zmienia trasy, nie otwiera karty i nie przeładowuje dokumentu.
+- [ ] W trybie edycji biznesowe przyciski i własne elementy interaktywne nie wykonują callbacków.
+- [ ] W trybie edycji biznesowe formularze nie wysyłają się przez kliknięcie, Enter ani implicit submit.
+- [ ] W trybie edycji biznesowe elementy dropdownów nie wykonują komend, mutacji ani nawigacji.
+- [ ] Jawnie oznaczony trigger dropdownu inspekcyjnego może się otworzyć, ale nie daje prawa do wykonania jego elementów.
+- [ ] Istniejące kontrolki wejścia/wyjścia pozostają dostępne klawiaturą i wskaźnikiem oraz są jedynymi dozwolonymi akcjami w tym zakresie.
+- [ ] Hover, focus, Tab, Escape, zaznaczanie tekstu i nawigacja czytnika ekranu pozostają dostępne; wizualny kontrakt reveal się nie zmienia.
+- [ ] Strażnik jest zamontowany raz na granicy shella; żaden widget nie dodaje `if (editMode)` do ochrony własnego zachowania.
+- [ ] Testy pokrywają zagnieżdżone cele, linki routera/zwykłe, przyciski, formularze, portale dropdownów, aktywację klawiaturą i przepuszczanie w trybie normalnym.
+- [ ] Nie dodano API, storage, persystencji, uprawnień, synchronizacji ani funkcji edycji widgetów.
 
-## 📎 Context and evidence
+## 📎 Kontekst i dowody
 
-- Implementation context: branch `feat/global-edit-mode-control`, especially `packages/web/src/components/app-shell.tsx`, `packages/web/src/components/edit-mode-control.tsx` and `packages/web/src/styles/index.css`.
-- Existing design source: `.ai/specs/2026-09-18-global-edit-mode-control.md` from PR #1.
-- Proposed mockup placeholder: `assets/global-edit-mode-interaction-guard/mockup-01-interaction-guard.html`.
+- Kontekst implementacyjny: branch `feat/global-edit-mode-control`, w szczególności `packages/web/src/components/app-shell.tsx`, `packages/web/src/components/edit-mode-control.tsx` i `packages/web/src/styles/index.css`.
+- Istniejące źródło projektowe: `.ai/specs/2026-09-18-global-edit-mode-control.md` z PR #1.
+- Makieta: `assets/global-edit-mode-interaction-guard/mockup-01-interaction-guard.html`.
