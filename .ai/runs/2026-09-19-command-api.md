@@ -88,9 +88,9 @@ name, a recording `ExtensionScope` fake, and a small `timeoutMs` or fake timers 
 
 ### Phase 1: The registry
 
-- [ ] 1.1 Extension API: `has` and the codes
-- [ ] 1.2 Core registration and execution
-- [ ] 1.3 The extension view
+- [x] 1.1 Extension API: `has` and the codes — f0f931e0
+- [x] 1.2 Core registration and execution — b7ae03fa
+- [x] 1.3 The extension view — 45ea37d5
 
 ### Phase 2: Core commands and the extension service
 
