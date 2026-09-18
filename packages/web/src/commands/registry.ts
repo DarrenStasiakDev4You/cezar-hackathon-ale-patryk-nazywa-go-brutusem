@@ -1,11 +1,14 @@
 import {
   isValidContributionId,
   type CommandOptions,
+  type Commands,
   type CommandToken,
   type ContributionId,
   type Disposable,
   type ExtensionErrorCode,
 } from '@open-mercato/cezar-extension-api'
+
+import type { ExtensionScope } from '../extensions/registry'
 
 /**
  * The cockpit's command registry (spec `.ai/specs/2026-09-19-command-api.md`): one handler per
@@ -14,7 +17,8 @@ import {
  * PURE on purpose, like `extensions/registry.ts`: the extension API is its only runtime import —
  * no React, no DOM, no module-level state — so it runs unchanged under vitest and outside React
  * (a shortcut, an extension). Core uses it directly: it registers only `cezar.*` ids, each with an
- * explicit visibility and an input validator, and can execute every command.
+ * explicit visibility and an input validator, and can execute every command. Each extension
+ * activation gets `forExtension(scope)` — the `Commands` it sees as `context.commands`.
  */
 
 export type CommandVisibility = 'public' | 'internal'
@@ -42,6 +46,14 @@ export interface CommandRegistry {
   execute<A extends readonly unknown[], R>(command: CommandToken<A, R>, ...args: A): Promise<R>
   /** Core view: every registered command. Never throws. */
   has<A extends readonly unknown[], R>(command: CommandToken<A, R> | ContributionId): boolean
+  /**
+   * The `Commands` one extension activation sees as `context.commands`. Every method first calls
+   * `scope.assertLive()` (so it fails with `disposed` after deactivation); `register` accepts only
+   * ids under `${extension.id}.` and goes through `scope.track()`; `execute` and `has` see public
+   * core commands plus every extension's commands — an internal core command answers as if it
+   * did not exist.
+   */
+  forExtension(scope: ExtensionScope): Commands
 }
 
 export interface CommandRegistryOptions {
@@ -68,6 +80,9 @@ export class CommandError extends Error {
 }
 
 const CORE_PREFIX = 'cezar.'
+const DEFAULT_TIMEOUT_MS = 30_000
+/** `setTimeout`'s ceiling: a longer delay — `Infinity` included — overflows and fires at once. */
+const MAX_TIMEOUT_MS = 2_147_483_647
 const VISIBILITIES: readonly unknown[] = ['public', 'internal'] satisfies CommandVisibility[]
 const INVALID_TOKEN = 'Invalid command: expected { kind: "command", id } with a valid contribution id'
 
@@ -76,13 +91,27 @@ interface Registration {
   readonly id: ContributionId
   readonly handler: (...args: readonly unknown[]) => unknown
   readonly title: string | undefined
+  /** Extension commands are always `public`: every extension may run them. */
   readonly visibility: CommandVisibility
   /** Present for core commands; extension handlers validate their own input. */
   readonly validate: ((args: readonly unknown[]) => readonly unknown[]) | undefined
+  /** The providing extension; `undefined` for core. Only extension handlers are time-limited. */
+  readonly extensionId: string | undefined
 }
 
-export function createCommandRegistry(_options: CommandRegistryOptions = {}): CommandRegistry {
+type Visible = (registration: Registration) => boolean
+const everything: Visible = () => true
+const publicOnly: Visible = (registration) => registration.visibility === 'public'
+
+export function createCommandRegistry(options: CommandRegistryOptions = {}): CommandRegistry {
+  const timeoutMs = resolveTimeout(options.timeoutMs)
   const registrations = new Map<ContributionId, Registration>()
+
+  const find = (command: unknown, visible: Visible): Registration | undefined => {
+    const id = typeof command === 'string' ? validId(command) : tokenId(command)
+    const registration = id === undefined ? undefined : registrations.get(id)
+    return registration !== undefined && visible(registration) ? registration : undefined
+  }
 
   /** Adds `registration`; the Disposable removes exactly it, once, and never a newer one. */
   const add = (registration: Registration): Disposable => {
@@ -98,11 +127,11 @@ export function createCommandRegistry(_options: CommandRegistryOptions = {}): Co
   }
 
   // § Execution, precisely.
-  const run = async (command: unknown, args: readonly unknown[]): Promise<unknown> => {
+  const run = async (command: unknown, args: readonly unknown[], visible: Visible): Promise<unknown> => {
     const id = tokenId(command)
     if (id === undefined) throw new CommandError('invalid-id', INVALID_TOKEN)
     const registration = registrations.get(id)
-    if (registration === undefined) {
+    if (registration === undefined || !visible(registration)) {
       throw new CommandError('command-not-found', `Command "${id}" not found`, { commandId: id })
     }
 
@@ -119,13 +148,17 @@ export function createCommandRegistry(_options: CommandRegistryOptions = {}): Co
       }
     }
 
-    try {
-      return await registration.handler(...input)
-    } catch (error) {
-      // Wrapped even when the handler threw a coded error of its own: the code describes the
-      // call the caller made, not something the handler called.
-      throw new CommandError('command-failed', messageOf(error), { commandId: id, cause: error })
+    const call = invoke(() => registration.handler(...input))
+    const outcome = await settle(call, registration.extensionId === undefined ? undefined : timeoutMs)
+    if (outcome.ok) return outcome.value
+    if (outcome.timedOut) {
+      throw new CommandError('command-timeout', `Command "${id}" did not finish within ${timeoutMs} ms`, {
+        commandId: id,
+      })
     }
+    // Wrapped even when the handler threw a coded error of its own: the code describes the call
+    // the caller made, not something the handler called.
+    throw new CommandError('command-failed', messageOf(outcome.error), { commandId: id, cause: outcome.error })
   }
 
   return {
@@ -158,17 +191,113 @@ export function createCommandRegistry(_options: CommandRegistryOptions = {}): Co
         title: typeof title === 'string' ? title : undefined,
         visibility: visibility as CommandVisibility,
         validate,
+        extensionId: undefined,
       })
     },
 
     execute(command, ...args) {
-      return run(command, args) as Promise<never>
+      return run(command, args, everything) as Promise<never>
     },
 
     has(command) {
-      const id = typeof command === 'string' ? validId(command) : tokenId(command)
-      return id !== undefined && registrations.has(id)
+      return find(command, everything) !== undefined
     },
+
+    forExtension(scope) {
+      const extensionId = scope.extension.id
+      const prefix = `${extensionId}.`
+      return Object.freeze<Commands>({
+        register(command, handler, commandOptions) {
+          scope.assertLive()
+          const id = tokenId(command)
+          if (id === undefined) throw new CommandError('invalid-id', INVALID_TOKEN)
+          if (!id.startsWith(prefix)) {
+            throw new CommandError(
+              'namespace-violation',
+              `Extension "${extensionId}" may only register commands under "${prefix}", not "${id}"`,
+              { commandId: id },
+            )
+          }
+          if (typeof handler !== 'function') {
+            throw new CommandError('invalid-input', `The handler for command "${id}" is not a function`, {
+              commandId: id,
+            })
+          }
+          if (registrations.has(id)) {
+            throw new CommandError('duplicate-registration', `Command "${id}" is already registered`, {
+              commandId: id,
+            })
+          }
+          return scope.track(
+            add({
+              id,
+              handler: handler as Registration['handler'],
+              title: titleOf(commandOptions),
+              visibility: 'public',
+              validate: undefined,
+              extensionId,
+            }),
+          )
+        },
+
+        async execute(command, ...args) {
+          // Inside the async body: a `disposed` from an ended activation becomes the rejection.
+          scope.assertLive()
+          return run(command, args, publicOnly) as Promise<never>
+        },
+
+        has(command) {
+          scope.assertLive()
+          return find(command, publicOnly) !== undefined
+        },
+      })
+    },
+  }
+}
+
+/** Calls `fn` and turns a synchronous throw into a rejection. */
+function invoke(fn: () => unknown): Promise<unknown> {
+  try {
+    return Promise.resolve(fn())
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
+type Outcome =
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly timedOut: false; readonly error: unknown }
+  | { readonly ok: false; readonly timedOut: true }
+
+/** Never rejects. With a limit, a call that outlives it settles as a timeout; its late result is ignored. */
+function settle(call: Promise<unknown>, ms: number | undefined): Promise<Outcome> {
+  return new Promise((resolve) => {
+    const timer = ms === undefined ? undefined : setTimeout(() => resolve({ ok: false, timedOut: true }), ms)
+    call.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve({ ok: true, value })
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        resolve({ ok: false, timedOut: false, error })
+      },
+    )
+  })
+}
+
+function resolveTimeout(timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined || Number.isNaN(timeoutMs)) return DEFAULT_TIMEOUT_MS
+  return Math.min(Math.max(timeoutMs, 0), MAX_TIMEOUT_MS)
+}
+
+/** `options.title` when it is a string — read defensively, the options come from extension code. */
+function titleOf(options: unknown): string | undefined {
+  try {
+    const title = (typeof options === 'object' && options !== null ? options : {}) as { title?: unknown }
+    return typeof title.title === 'string' ? title.title : undefined
+  } catch {
+    return undefined
   }
 }
 

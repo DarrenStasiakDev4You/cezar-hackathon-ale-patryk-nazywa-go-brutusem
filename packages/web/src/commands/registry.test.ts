@@ -1,8 +1,14 @@
-import { describe, expect, expectTypeOf, it, vi } from 'vitest'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { defineCommand, isExtensionError, type CommandToken } from '@open-mercato/cezar-extension-api'
+import { defineCommand, isExtensionError, type CommandToken, type Disposable } from '@open-mercato/cezar-extension-api'
 
+import { fixtureManifest } from '../extensions/registry.fixtures'
+import type { ExtensionScope } from '../extensions/registry'
 import { CommandError, createCommandRegistry, type CoreCommandOptions } from './registry'
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 interface Echo {
   readonly text: string
@@ -223,6 +229,217 @@ describe('core registration and execution', () => {
 
     expect(registry.has(Hidden)).toBe(true)
     await expect(registry.execute(Hidden, { text: 'hi' })).resolves.toBe('HI')
+  })
+})
+
+/**
+ * A recording ExtensionScope with the registry's contract: `track` returns an idempotent handle,
+ * `end()` disposes what is still tracked (newest first) and from then on every call fails with
+ * `disposed`.
+ */
+function fakeScope(extensionId: string) {
+  let live = true
+  const tracked = new Set<Disposable>()
+  const disposedError = () =>
+    Object.assign(new Error(`Extension "${extensionId}" has been deactivated`), { code: 'disposed' as const })
+  const scope: ExtensionScope = {
+    extension: fixtureManifest(extensionId),
+    track(registration) {
+      if (!live) {
+        registration.dispose()
+        throw disposedError()
+      }
+      const handle: Disposable = {
+        dispose() {
+          if (tracked.delete(handle)) registration.dispose()
+        },
+      }
+      tracked.add(handle)
+      return handle
+    },
+    assertLive() {
+      if (!live) throw disposedError()
+    },
+  }
+  return {
+    scope,
+    tracked,
+    end() {
+      live = false
+      for (const handle of [...tracked].reverse()) handle.dispose()
+    },
+  }
+}
+
+const AlphaPing = defineCommand<[count: number], string>('acme.alpha.ping')
+const BetaPing = defineCommand<[count: number], string>('acme.beta.ping')
+
+describe('the extension view', () => {
+  it('registers only in its own namespace, through scope.track, and forgets it when the scope ends', async () => {
+    const registry = createCommandRegistry()
+    const alpha = fakeScope('acme.alpha')
+    const commands = registry.forExtension(alpha.scope)
+
+    commands.register(AlphaPing, (count) => `pong ${count}`, { title: 'Alpha: ping' })
+
+    expect(alpha.tracked.size).toBe(1)
+    expect(commands.has(AlphaPing)).toBe(true)
+    await expect(commands.execute(AlphaPing, 2)).resolves.toBe('pong 2')
+    for (const foreign of [BetaPing, defineCommand<[count: number], string>('cezar.task.ping')]) {
+      expect(thrown(() => commands.register(foreign, () => '')).code).toBe('namespace-violation')
+    }
+    // A look-alike prefix is another namespace: `acme.alphabet.*` is not `acme.alpha.*`.
+    const lookAlike = defineCommand('acme.alphabet.ping')
+    expect(thrown(() => commands.register(lookAlike, () => {})).code).toBe('namespace-violation')
+    expect(thrown(() => commands.register({ kind: 'command', id: 'Bad' } as never, () => {})).code).toBe('invalid-id')
+    expect(thrown(() => commands.register(AlphaPing, 'nope' as never)).code).toBe('invalid-input')
+
+    alpha.end()
+
+    expect(registry.has(AlphaPing)).toBe(false)
+    const other = registry.forExtension(fakeScope('acme.beta').scope)
+    expect((await rejection(other.execute(AlphaPing, 1))).code).toBe('command-not-found')
+  })
+
+  it('refuses an id another extension holds — the first registration wins', async () => {
+    const registry = createCommandRegistry()
+    const first = registry.forExtension(fakeScope('acme.alpha').scope)
+    const second = registry.forExtension(fakeScope('acme.alpha').scope)
+    first.register(AlphaPing, () => 'first')
+
+    expect(thrown(() => second.register(AlphaPing, () => 'second')).code).toBe('duplicate-registration')
+    await expect(second.execute(AlphaPing, 1)).resolves.toBe('first')
+  })
+
+  it('runs public core commands and other extensions’ commands, and cannot see an internal core one', async () => {
+    const registry = createCommandRegistry()
+    registry.register(EchoCommand, ({ text }) => ({ echoed: text }), publicEcho)
+    registry.register(Hidden, ({ text }) => text, { visibility: 'internal', validate: validateEcho })
+    registry.forExtension(fakeScope('acme.beta').scope).register(BetaPing, (count) => `beta ${count}`)
+    const alpha = registry.forExtension(fakeScope('acme.alpha').scope)
+
+    await expect(alpha.execute(EchoCommand, { text: 'hi' })).resolves.toEqual({ echoed: 'hi' })
+    await expect(alpha.execute(BetaPing, 3)).resolves.toBe('beta 3')
+    expect(alpha.has(EchoCommand)).toBe(true)
+    expect(alpha.has('acme.beta.ping')).toBe(true)
+
+    // The same answer as for an id nobody registered.
+    expect(alpha.has(Hidden)).toBe(false)
+    expect(alpha.has('cezar.test.hidden')).toBe(false)
+    const error = await rejection(alpha.execute(Hidden, { text: 'hi' }))
+    expect(error.code).toBe('command-not-found')
+    expect(error.message).toBe('Command "cezar.test.hidden" not found')
+    // Core still sees everything.
+    expect(registry.has(BetaPing)).toBe(true)
+    await expect(registry.execute(BetaPing, 4)).resolves.toBe('beta 4')
+  })
+
+  it('validates a public core command’s input for an extension caller too', async () => {
+    const registry = createCommandRegistry()
+    const handler = vi.fn(() => ({ echoed: '' }))
+    registry.register(EchoCommand, handler, publicEcho)
+    const alpha = registry.forExtension(fakeScope('acme.alpha').scope)
+
+    expect((await rejection(alpha.execute(EchoCommand, null as unknown as Echo))).code).toBe('invalid-input')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('turns an extension handler’s throw into command-failed for the caller', async () => {
+    const registry = createCommandRegistry()
+    registry.forExtension(fakeScope('acme.beta').scope).register(BetaPing, () => {
+      throw new Error('beta broke')
+    })
+
+    const error = await rejection(registry.forExtension(fakeScope('acme.alpha').scope).execute(BetaPing, 1))
+
+    expect(error.code).toBe('command-failed')
+    expect(error.message).toBe('beta broke')
+  })
+
+  it('fails every call with `disposed` once the calling scope has ended', async () => {
+    const registry = createCommandRegistry()
+    registry.register(EchoCommand, ({ text }) => ({ echoed: text }), publicEcho)
+    const alpha = fakeScope('acme.alpha')
+    const commands = registry.forExtension(alpha.scope)
+
+    alpha.end()
+
+    const executed = commands.execute(EchoCommand, { text: 'hi' })
+    expect(executed).toBeInstanceOf(Promise)
+    expect(isExtensionError(await executed.catch((error: unknown) => error), 'disposed')).toBe(true)
+    for (const call of [() => commands.has(EchoCommand), () => commands.register(AlphaPing, () => '')]) {
+      expect(thrown(call).code).toBe('disposed')
+    }
+    expect(registry.has(AlphaPing)).toBe(false)
+  })
+
+  it('lets a running call settle when its provider deactivates, and answers command-not-found afterwards', async () => {
+    const registry = createCommandRegistry()
+    const beta = fakeScope('acme.beta')
+    let finish!: (value: string) => void
+    registry.forExtension(beta.scope).register(BetaPing, () => new Promise<string>((resolve) => (finish = resolve)))
+    const alpha = registry.forExtension(fakeScope('acme.alpha').scope)
+
+    const running = alpha.execute(BetaPing, 1)
+    await Promise.resolve()
+    beta.end()
+    finish('late but fine')
+
+    await expect(running).resolves.toBe('late but fine')
+    expect((await rejection(alpha.execute(BetaPing, 1))).code).toBe('command-not-found')
+  })
+
+  it('times out an extension handler that never settles, and ignores its late result', async () => {
+    vi.useFakeTimers()
+    const registry = createCommandRegistry({ timeoutMs: 50 })
+    let finish!: (value: string) => void
+    registry.forExtension(fakeScope('acme.beta').scope).register(BetaPing, () => new Promise<string>((resolve) => (finish = resolve)))
+
+    const outcome = registry.execute(BetaPing, 1).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(49)
+    let settled = false
+    void outcome.then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    const error = (await outcome) as CommandError
+    expect(isExtensionError(error, 'command-timeout')).toBe(true)
+    expect(error.message).toBe('Command "acme.beta.ping" did not finish within 50 ms')
+    finish('too late')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await outcome).toBe(error)
+  })
+
+  it('limits extension handlers to 30 s by default', async () => {
+    vi.useFakeTimers()
+    const registry = createCommandRegistry()
+    registry.forExtension(fakeScope('acme.beta').scope).register(BetaPing, () => new Promise<string>(() => {}))
+
+    const outcome = registry.execute(BetaPing, 1).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(29_999)
+    let settled = false
+    void outcome.then(() => (settled = true))
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(isExtensionError(await outcome, 'command-timeout')).toBe(true)
+  })
+
+  it('never cuts off a core handler, however slow', async () => {
+    vi.useFakeTimers()
+    const registry = createCommandRegistry({ timeoutMs: 50 })
+    registry.register(
+      EchoCommand,
+      ({ text }) => new Promise<{ echoed: string }>((resolve) => setTimeout(() => resolve({ echoed: text }), 500)),
+      publicEcho,
+    )
+
+    const outcome = registry.forExtension(fakeScope('acme.alpha').scope).execute(EchoCommand, { text: 'slow' })
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(outcome).resolves.toEqual({ echoed: 'slow' })
   })
 })
 
