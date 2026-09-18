@@ -32,6 +32,8 @@
     .widget { min-height:174px; padding:20px; border:1px solid var(--line); border-radius:12px; background:var(--surface); box-shadow:0 8px 24px #0000000b; }
     .app.editing .widget-grid > * { filter:grayscale(.62); opacity:.68; transition:filter 140ms ease, opacity 140ms ease; }
     .app.editing .widget-grid > *:hover, .app.editing .widget-grid > *:focus { filter:none; opacity:1; }
+    .app.editing .heading, .app.editing .safe-note { filter:grayscale(.62); opacity:.68; transition:filter 140ms ease, opacity 140ms ease; }
+    .app.editing .heading:hover, .app.editing .heading:focus-within, .app.editing .safe-note:hover, .app.editing .safe-note:focus-within { filter:none; opacity:1; }
     .widget-label { display:block; margin-bottom:22px; color:var(--muted); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
     .value { font-size:32px; font-weight:800; letter-spacing:-.04em; }
     .sub { margin-top:8px; color:var(--muted); }
