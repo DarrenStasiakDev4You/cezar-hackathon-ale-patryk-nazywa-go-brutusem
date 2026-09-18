@@ -536,3 +536,31 @@
   font-size: 12px;
   line-height: 1.55;
 }
+
+/* Edit mode is shell-owned chrome. The dimming is applied to the surface's direct layout
+ * regions so the banner and the control remain crisp above it. Hover/focus restores the
+ * individual interactive region without changing dimensions or layout position. */
+[data-slot='edit-mode-surface'][data-edit-mode='true'] > * {
+  filter: grayscale(0.88);
+  opacity: 0.44;
+  transition: filter 140ms ease, opacity 140ms ease;
+}
+[data-slot='edit-mode-surface'][data-edit-mode='true'] > *:hover,
+[data-slot='edit-mode-surface'][data-edit-mode='true'] > *:focus-within {
+  filter: none;
+  opacity: 1;
+}
+[data-slot='edit-mode-surface'][data-edit-mode='true'] a:hover,
+[data-slot='edit-mode-surface'][data-edit-mode='true'] a:focus-visible,
+[data-slot='edit-mode-surface'][data-edit-mode='true'] button:hover,
+[data-slot='edit-mode-surface'][data-edit-mode='true'] button:focus-visible,
+[data-slot='edit-mode-surface'][data-edit-mode='true'] [tabindex]:hover,
+[data-slot='edit-mode-surface'][data-edit-mode='true'] [tabindex]:focus-visible {
+  filter: none;
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='edit-mode-surface'][data-edit-mode='true'] > * {
+    transition: none;
+  }
+}
