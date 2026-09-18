@@ -74,6 +74,8 @@ Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run 
 
 ## Progress
 
+PR: #3
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Workspace and boundary
