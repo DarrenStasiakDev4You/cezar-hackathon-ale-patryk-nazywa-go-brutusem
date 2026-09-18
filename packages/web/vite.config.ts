@@ -35,10 +35,15 @@ export default defineConfig({
   // that build: aliasing to source keeps `npm run dev` a single step and gives HMR when the
   // contract changes. Vite maps the package's internal `./x.ts` specifiers directly. Mirrored
   // in tsconfig.json `paths`.
+  //
+  // The extension API resolves to source for the same reason (it has no build at all: its
+  // `exports` names raw `.ts`). The workspace link would resolve it without the alias too;
+  // `vite-config.test.ts` pins the alias so both spellings keep pointing at one file.
   resolve: {
     alias: {
       '@': resolve(appDir, 'src'),
       '@open-mercato/cezar-api-client': resolve(packagesDir, 'api-client/src/index.ts'),
+      '@open-mercato/cezar-extension-api': resolve(packagesDir, 'extension-api/src/index.ts'),
     },
   },
   build: {

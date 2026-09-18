@@ -10,11 +10,14 @@ import type { ExtensionStorage } from './storage.ts'
  * extension never constructs one.
  *
  * Lifecycle the host guarantees:
- * - `activate` is awaited once.
+ * - `activate` is awaited once per activation, limited by the host's timeout. Each activation gets
+ *   a new context.
  * - Everything registered through the context is tracked and disposed automatically on
- *   deactivation — in reverse order, after `deactivate()` resolves. Each registration also
- *   returns a {@link Disposable} for removing it early; `dispose()` is idempotent.
+ *   deactivation — after `deactivate()` settles (or exceeds the host's timeout): `subscriptions`
+ *   first, then the registrations, each in reverse order. Each registration also returns a
+ *   {@link Disposable} for removing it early; `dispose()` is idempotent.
  * - Any context call after deactivation rejects or throws with code `disposed`.
+ * - Closing or reloading the page does not deactivate anything.
  */
 export interface ExtensionContext {
   /** The manifest as the host loaded it. */

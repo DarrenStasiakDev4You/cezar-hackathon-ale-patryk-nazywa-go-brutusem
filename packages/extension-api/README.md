@@ -1,8 +1,11 @@
 # `@open-mercato/cezar-extension-api` — the extension contract
 
-> **Experimental and private.** Nothing loads extensions yet: the cockpit gains a host runtime in a
-> later item, and every host item may still revise these types in the PR that implements them.
-> The package is versioned with the release but not published to npm.
+> **Experimental and private.** The cockpit's extension registry
+> (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
+> extensions compiled into the cockpit. The services behind `ExtensionContext` — commands, events,
+> storage and components — arrive in later items, and every host item may still revise these types
+> in the PR that implements them. The package is versioned with the release but not published to
+> npm.
 > Design: `.ai/specs/2026-09-18-extension-api-package.md`.
 
 The one package an extension imports. It holds the vocabulary Cezar and its extensions share —
@@ -62,11 +65,24 @@ possible without an API break. The host still treats every payload as untrusted 
 
 ### Lifecycle
 
-`activate` is awaited once. Everything registered through the context is disposed automatically on
-deactivation, in reverse order, after `deactivate()` resolves; every `register`/`on`/`provide` also
-returns a `Disposable` for early removal, and `dispose()` is idempotent. Put your own resources
-(timers, DOM listeners) in `context.subscriptions`. Any context call after deactivation fails with
-code `disposed`.
+`activate` is awaited once per activation. Everything registered through the context is disposed
+automatically on deactivation, after `deactivate()` settles: your `context.subscriptions` first,
+then the context registrations, each newest first. Every `register`/`on`/`provide` also returns a
+`Disposable` for early removal, and `dispose()` is idempotent. Put your own resources (timers, DOM
+listeners) in `context.subscriptions`. Any context call after deactivation fails with code
+`disposed`.
+
+How the host runs it:
+
+- **Sequential, in order.** Extensions activate one after another, in the order the host lists
+  them. One that throws, rejects or hangs fails on its own; the others still activate.
+- **Time-limited.** Each `activate()` and `deactivate()` call has a time limit (10 s in the
+  cockpit). An `activate` over it fails the extension, and whatever it registered is disposed. A
+  `deactivate` over it is reported, and disposal goes ahead.
+- **A new context per activation.** Nothing carries over from a previous activation, so keep no
+  reference to an old context.
+- **Page unload does not call `deactivate`.** Closing or reloading the page discards everything
+  without deactivating it, so never rely on `deactivate` to save data: write it as you go.
 
 ### Storage
 

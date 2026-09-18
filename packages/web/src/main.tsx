@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { setApiBaseUrl } from '@open-mercato/cezar-api-client'
 import { App } from './app'
+import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
+import { startExtensionHost } from './extensions/host'
 import './styles/index.css'
 
 /**
@@ -22,6 +24,11 @@ function resolveApiBase(): string {
 }
 
 setApiBaseUrl(resolveApiBase())
+
+// Extensions compiled into the cockpit (spec `2026-09-18-extension-registry`). Started outside the
+// React tree and never awaited: the host never throws and its `ready` never rejects, so no
+// extension can delay or break the boot. The list ships empty.
+startExtensionHost({ extensions: BUILTIN_EXTENSIONS })
 
 const container = document.getElementById('root')
 if (!container) throw new Error('cezar: #root container is missing from index.html')

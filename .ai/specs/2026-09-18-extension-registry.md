@@ -203,7 +203,8 @@ export type ExtensionServices = Pick<ExtensionContext, 'commands' | 'events' | '
 
 export interface ExtensionErrorReport {
   readonly id: ExtensionId
-  readonly phase: 'activate' | 'deactivate' | 'dispose'
+  /** `register` is reported by `startExtensionHost` only: `register()` itself throws. */
+  readonly phase: 'register' | 'activate' | 'deactivate' | 'dispose'
   /** What was thrown; for a timeout, an Error with code `activation-timeout` / `deactivation-timeout`. */
   readonly error: unknown
 }
@@ -214,7 +215,8 @@ export interface ExtensionRegistryOptions {
   /** Limit on each `activate()` and `deactivate()` call. Default 10_000 ms. */
   readonly timeoutMs?: number
   /**
-   * Every isolated failure. Default: `console.error` with an `[cezar:extensions]` prefix.
+   * Every isolated failure. Default: `logExtensionError` — `console.error` with an
+   * `[cezar:extensions]` prefix.
    * Called inside a try/catch: a throwing reporter is swallowed, never propagated.
    */
   readonly onError?: (report: ExtensionErrorReport) => void
@@ -232,7 +234,7 @@ export interface ExtensionRegistry {
   activate(id: ExtensionId): Promise<ExtensionRecord>
   /**
    * Activates every extension that is `registered` when the call is made, one after another in
-   * registration order. Never rejects.
+   * registration order, then resolves with `list()`. Never rejects.
    */
   activateAll(): Promise<readonly ExtensionRecord[]>
   /** `active` → `registered`. Resolves with the resulting record; rejects only for an unknown id. */
@@ -264,7 +266,8 @@ export const unavailableServices: ExtensionRegistryOptions['services']
 
 /**
  * Creates the cockpit's registry, registers `extensions` (a bad or duplicate entry is reported
- * through `onError` and skipped; the rest still register) and starts `activateAll()`.
+ * through `onError` with phase `register` and skipped; the rest still register) and starts
+ * `activateAll()`.
  * Never throws; `ready` never rejects.
  */
 export function startExtensionHost(options: {
