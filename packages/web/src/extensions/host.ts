@@ -1,5 +1,6 @@
 import type { Extension } from '@open-mercato/cezar-extension-api'
 
+import type { CommandRegistry } from '../commands/registry'
 import {
   createExtensionRegistry,
   logExtensionError,
@@ -37,6 +38,15 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
     },
     components: { provide: fails('components') },
   }
+}
+
+/**
+ * The services the cockpit gives each activation: the real `commands` — the command registry's
+ * extension view (spec `2026-09-19-command-api`) — with events, storage and components still the
+ * {@link unavailableServices} placeholders until their items land.
+ */
+export function cockpitServices(deps: { readonly commands: CommandRegistry }): ExtensionRegistryOptions['services'] {
+  return (scope) => ({ ...unavailableServices(scope), commands: deps.commands.forExtension(scope) })
 }
 
 /**

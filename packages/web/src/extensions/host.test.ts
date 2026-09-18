@@ -1,19 +1,25 @@
+import { QueryClient } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  defineCommand,
   defineComponentContract,
   defineEvent,
   isExtensionError,
+  TaskArchive,
   type Extension,
   type ExtensionContext,
 } from '@open-mercato/cezar-extension-api'
+import { registerCoreCommands } from '../commands/core-commands'
+import { createCommandRegistry } from '../commands/registry'
 import { BUILTIN_EXTENSIONS } from './builtin-extensions'
-import { startExtensionHost, unavailableServices } from './host'
+import { cockpitServices, startExtensionHost, unavailableServices } from './host'
 import { fixture, pingCommand, recordingServices } from './registry.fixtures'
 import { createExtensionRegistry, type ExtensionErrorReport } from './registry'
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 const statuses = (records: readonly { id: string; status: string }[]) =>
@@ -163,6 +169,108 @@ describe('unavailableServices', () => {
     ]) {
       expect(isExtensionError(await call().catch((error: unknown) => error), 'disposed')).toBe(true)
     }
+  })
+})
+
+describe('cockpitServices', () => {
+  const Internal = defineCommand<[input: { readonly taskId: string }], string>('cezar.fixture.internal')
+
+  /** The boot order `main.tsx` uses: registry and core commands first, then the host. */
+  function boot(extensions: readonly Extension[]) {
+    const commands = createCommandRegistry()
+    registerCoreCommands(commands, { queryClient: new QueryClient() })
+    commands.register(Internal, ({ taskId }) => taskId, {
+      visibility: 'internal',
+      validate: (args): [{ taskId: string }] => [args[0] as { taskId: string }],
+    })
+    const host = startExtensionHost({ extensions, services: cockpitServices({ commands }), onError: () => {} })
+    return { ...host, commands }
+  }
+
+  it('lets an extension execute a public core command against the API', async () => {
+    const sent: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        sent.push(`${init.method ?? 'GET'} ${String(input)} ${String(init.body)}`)
+        return new Response(JSON.stringify({ id: 'r1', archived: true }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      }),
+    )
+    let result: unknown
+    const { registry, ready } = boot([
+      fixture('acme.archiver', {
+        async activate(context) {
+          result = await context.commands.execute(TaskArchive, { taskId: 'r1' })
+        },
+      }),
+    ])
+
+    await ready
+
+    expect(registry.get('acme.archiver')?.status).toBe('active')
+    expect(result).toEqual({ taskId: 'r1', archived: true })
+    expect(sent).toEqual(['POST /api/v1/runs/r1/archive {"archived":true}'])
+  })
+
+  it('hides an internal core command: has is false and execute answers command-not-found', async () => {
+    let seen: { has: boolean; error: unknown } | undefined
+    const { ready } = boot([
+      fixture('acme.curious', {
+        async activate(context) {
+          seen = {
+            has: context.commands.has(Internal),
+            error: await context.commands.execute(Internal, { taskId: 'r1' }).catch((error: unknown) => error),
+          }
+        },
+      }),
+    ])
+
+    await ready
+
+    expect(seen?.has).toBe(false)
+    expect(isExtensionError(seen?.error, 'command-not-found')).toBe(true)
+  })
+
+  it('shares an extension command with the others, and removes it when its provider deactivates', async () => {
+    const Ping = defineCommand<[count: number], string>('acme.alpha.ping')
+    let beta: ExtensionContext | undefined
+    const { registry, commands, ready } = boot([
+      fixture('acme.alpha', {
+        activate(context) {
+          context.commands.register(Ping, (count) => `pong ${count}`)
+        },
+      }),
+      fixture('acme.beta', {
+        activate(context) {
+          beta = context
+        },
+      }),
+    ])
+    await ready
+
+    expect(beta?.commands.has(Ping)).toBe(true)
+    await expect(beta?.commands.execute(Ping, 2)).resolves.toBe('pong 2')
+
+    await registry.deactivate('acme.alpha')
+
+    expect(commands.has(Ping)).toBe(false)
+    expect(beta?.commands.has(Ping)).toBe(false)
+  })
+
+  it('keeps events, storage and components on the placeholders', async () => {
+    let context: ExtensionContext | undefined
+    const { ready } = boot([
+      fixture('acme.alpha', {
+        activate(ctx) {
+          context = ctx
+        },
+      }),
+    ])
+    await ready
+
+    await expect(context?.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
   })
 })
 

@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BrowserRouter } from 'react-router'
 
@@ -25,11 +25,14 @@ import { AppRoutes } from './routes'
  *  stream: it is mounted for the app's whole life, above every route, so navigating never drops
  *  and reopens it — and it publishes the live usage map to anything below.
  */
-export function App() {
+export function App(props: {
+  /** The page's client, shared with the command registry `main.tsx` built. Omitted (tests) → one of App's own. */
+  readonly queryClient?: QueryClient
+}) {
   // Lazy initial state rather than a module-level constant: one client per App instance, so a
   // test (or a remount) never inherits another's cache, and StrictMode's double-invoke of the
   // component body still yields exactly one client.
-  const [queryClient] = useState(createQueryClient)
+  const [queryClient] = useState(() => props.queryClient ?? createQueryClient())
 
   return (
     <QueryClientProvider client={queryClient}>
