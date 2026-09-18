@@ -621,6 +621,22 @@ describe('quick replies (legacy Alt+A / Alt+C)', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
+  it('stays quiet while the shell is in edit mode', () => {
+    const { onSubmit } = renderComposer({ quickReplies: true })
+    const shell = document.createElement('div')
+    shell.dataset.slot = 'app-shell'
+    shell.dataset.editMode = 'true'
+    document.body.append(shell)
+
+    try {
+      fireEvent.keyDown(window, { code: 'KeyA', altKey: true })
+      fireEvent.keyDown(window, { code: 'KeyC', altKey: true })
+      expect(onSubmit).not.toHaveBeenCalled()
+    } finally {
+      shell.remove()
+    }
+  })
+
   it('does nothing without the flag, with other modifiers, or while disabled', () => {
     const { onSubmit } = renderComposer({ quickReplies: true, disabled: true })
     fireEvent.keyDown(window, { code: 'KeyA', altKey: true })

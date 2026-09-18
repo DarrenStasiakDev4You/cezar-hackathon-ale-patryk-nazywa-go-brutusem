@@ -16,6 +16,7 @@ Source doc: `.ai/specs/2026-09-18-global-edit-mode-interaction-guard.md`
 | 2 | 2.2 | Add AppShell tests for normal behavior, blocked business actions, forms, and exit behavior | inline | done | b8a5eab |
 | 3 | 3.1 | Run targeted web tests, typecheck, build, and configured repository gate | inline | done | b8a5eab |
 | 4 | 4.1 | Merge origin/main and resolve conflicts with the edit-mode control landed via #4 | inline | done | 7467f9f |
+| 4 | 4.1-review-fix | Guard keyboard activations and suspend global accelerators in edit mode | inline | done | — |
 
 ## Goal
 
@@ -53,6 +54,8 @@ Protect business activations centrally at the shell boundary while keeping edito
 ### Phase 4: Resume — sync with main
 
 - 4.1 Merge `origin/main` into the branch. This branch was stacked on `feat/global-edit-mode-control`, which landed on `main` as the squash commit of #4; the only conflicts were the link-only guard in `app-shell.tsx` and the missing editor-action markers in `edit-mode-control.tsx`, both superseded by this PR's classifier-based guard.
+
+- 4.1-review-fix Review fix: block Enter (non-Shift, non-IME) and Space-on-controls keydowns in the shell's capture phase, widen the classifier to activatable ARIA roles, and suspend the ⌘K / ⌘N / `c` accelerators and the composer quick replies while the shell reports `data-edit-mode="true"`.
 
 ## Risks
 

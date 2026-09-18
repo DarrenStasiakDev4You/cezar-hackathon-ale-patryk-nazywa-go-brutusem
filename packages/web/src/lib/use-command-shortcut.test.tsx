@@ -7,6 +7,7 @@ import {
   shouldTriggerCommandShortcut,
   shouldTriggerKeyShortcut,
   useCommandShortcut,
+  useKeyShortcut,
   type CommandShortcutEvent,
 } from './use-command-shortcut'
 
@@ -165,6 +166,25 @@ describe('useCommandShortcut', () => {
     fireEvent.keyDown(getByTestId('field'), { key: 'k', metaKey: true })
 
     expect(onFire).not.toHaveBeenCalled()
+  })
+
+  it('stands down, chord and bare key alike, while the shell is in edit mode', () => {
+    const onChord = vi.fn()
+    const onKey = vi.fn()
+    function Accelerators() {
+      useCommandShortcut('k', onChord)
+      useKeyShortcut('c', onKey)
+      return <div data-slot="app-shell" data-edit-mode="true" />
+    }
+    render(<Accelerators />)
+
+    const chord = new KeyboardEvent('keydown', { key: 'k', metaKey: true, cancelable: true, bubbles: true })
+    window.dispatchEvent(chord)
+    fireEvent.keyDown(window, { key: 'c' })
+
+    expect(onChord).not.toHaveBeenCalled()
+    expect(onKey).not.toHaveBeenCalled()
+    expect(chord.defaultPrevented).toBe(false)
   })
 
   it('unsubscribes on unmount', () => {
