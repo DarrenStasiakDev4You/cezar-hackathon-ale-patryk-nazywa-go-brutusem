@@ -1,0 +1,39 @@
+{
+  "name": "@open-mercato/cezar-extension-api",
+  "version": "0.11.1",
+  "description": "The public API an extension programs against: manifest, lifecycle, commands, events, storage and the component registry.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
+  },
+  "peerDependencies": {
+    "@types/react": ">=19 <20"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^19.2.17",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/open-mercato/cezar",
+    "directory": "packages/extension-api"
+  }
+}

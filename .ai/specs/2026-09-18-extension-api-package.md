@@ -246,12 +246,15 @@ export type JsonValue = JsonPrimitive | readonly JsonValue[] | { readonly [key: 
 
 type NonJson = Function | Date | bigint | symbol
 /** `true` when T survives a JSON round trip; `void` (no payload) counts as JSON. Accepts interfaces. */
-export type IsJson<T> = [T] extends [void] ? true
+export type IsJson<T> = IsJsonAt<T, []>
+type IsJsonAt<T, Depth extends readonly unknown[]> = [T] extends [void] ? true
+  : [T] extends [JsonValue] ? true
+  : Depth['length'] extends 10 ? true
   : T extends JsonPrimitive ? true
   : T extends NonJson ? false
-  : T extends readonly (infer U)[] ? IsJson<U>
+  : T extends readonly (infer U)[] ? IsJsonAt<U, [...Depth, unknown]>
   : T extends object
-    ? (false extends { [K in keyof T]-?: IsJson<Exclude<T[K], undefined>> }[keyof T] ? false : true)
+    ? (false extends { [K in keyof T]-?: IsJsonAt<Exclude<T[K], undefined>, [...Depth, unknown]> }[keyof T] ? false : true)
     : false
 ```
 
@@ -263,6 +266,12 @@ non-JSON type argument into a compile error at the definition site. This constru
 checked against the repository's TypeScript 7.0.2: it accepts an interface with optional and
 array fields and `void`, and rejects a function or a `Date` field. The implementer may refine
 it; the type tests in Step 4 are the requirement.
+
+*As built (PR #3):* the first draft of this construction — without the `JsonValue` fast path and
+the depth counter — was a TS2589 ("excessively deep") error on `IsJson<JsonValue>`, so a value
+read from storage could not be written back, and a TS2615 on any recursive interface. The fast
+path settles `JsonValue` and every type literal at once; the depth counter (ten levels, deeper
+structure assumed JSON) keeps each recursion's arguments distinct, so recursive shapes terminate.
 
 ### Commands
 
@@ -330,11 +339,15 @@ export interface ExtensionStorage {
   /** Unchecked cast: data may have been written by an older version of the extension — validate it. */
   get<T = JsonValue>(key: string): Promise<T | undefined>
   /** Same JSON predicate as commands and events, so interface-typed values are accepted. */
-  set<T>(key: string, value: IsJson<T> extends true ? T : never): Promise<void>
+  set<T>(key: string, value: T & (IsJson<T> extends true ? unknown : never)): Promise<void>
   delete(key: string): Promise<void>
   keys(): Promise<string[]>
 }
 ```
+
+`set`'s value is spelled `T & (IsJson<T> extends true ? unknown : never)` rather than
+`IsJson<T> extends true ? T : never`: both accept exactly the same values, but with the second
+form a host implementing `set` gets a TS2589 error from `value as JsonValue` (as built, PR #3).
 
 Private to the extension (no extension can read another's keys). Keys are non-empty strings
 ≤ 128 chars. Size limits are the host's and surface as `storage-quota`. Deleting all
