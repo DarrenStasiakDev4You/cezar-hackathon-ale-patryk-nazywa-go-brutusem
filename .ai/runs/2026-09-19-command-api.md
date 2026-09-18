@@ -107,3 +107,5 @@ name, a recording `ExtensionScope` fake, and a small `timeoutMs` or fake timers 
 - [x] 3.1 Provider and hooks — 84f643b7
 - [x] 3.2 Migrate the run header — 036843c8
 - [x] 3.3 Docs — 7effb0d4
+- [x] Post-review fix: keep the header's error toasts on the mutation's own callback (`useCommand` options) — 633f65c3
+- [x] Post-review fix: Continue does not wait for the refetch; handler results no wider than the token; stronger tests — 6ff720cf
