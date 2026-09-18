@@ -129,10 +129,17 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
   }, [allowAnyElement, enabled, registry])
 
   React.useEffect(() => {
-    if (!enabled || typeof document === 'undefined') return
-    const handleDocumentContextMenu = (event: MouseEvent) => openFromContextMenu(event)
-    document.addEventListener('contextmenu', handleDocumentContextMenu, true)
-    return () => document.removeEventListener('contextmenu', handleDocumentContextMenu, true)
+    if (!enabled || typeof window === 'undefined') return
+    const handleWindowContextMenu = (event: MouseEvent) => openFromContextMenu(event)
+    const handleWindowMouseDown = (event: MouseEvent) => {
+      if (event.button === 2) openFromContextMenu(event)
+    }
+    window.addEventListener('contextmenu', handleWindowContextMenu, true)
+    window.addEventListener('mousedown', handleWindowMouseDown, true)
+    return () => {
+      window.removeEventListener('contextmenu', handleWindowContextMenu, true)
+      window.removeEventListener('mousedown', handleWindowMouseDown, true)
+    }
   }, [enabled, openFromContextMenu])
 
   const handleDelete = async () => {
@@ -189,9 +196,11 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
     </div>
   ) : null
 
+  const handleReactContextMenu = (event: React.MouseEvent<HTMLDivElement>) => openFromContextMenu(event)
+
   return (
     <>
-      <div data-layout-context-menu-owner="true" className="contents">
+      <div data-layout-context-menu-owner="true" className="contents" onContextMenuCapture={handleReactContextMenu}>
         {children}
       </div>
       {content && typeof document !== 'undefined' ? createPortal(content, document.body) : null}
