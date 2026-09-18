@@ -4,13 +4,21 @@ import type { ManifestIssue } from './manifest.ts'
  * Every error code of the extension API. `invalid-manifest` and `invalid-id` are thrown by this
  * package's helpers ({@link ExtensionDefinitionError}); the rest are raised by the host:
  *
+ * - `invalid-id` — also raised by the host: `register`, `execute` and `has` treat a value that is
+ *   not `{ kind: 'command', id: <valid ContributionId> }` as malformed.
  * - `namespace-violation` — an id outside the calling extension's `${extension.id}.` prefix, or
  *   an extension emitting a core (`cezar.*`) event.
  * - `duplicate-registration` — a second handler for a command id.
- * - `command-not-found` — `execute` of an id nobody registered.
+ * - `command-not-found` — `execute` of an id nobody registered, or one the caller may not run.
  * - `contract-version-mismatch` — an implementation built against another major of a contract.
  * - `storage-quota` — a write over the host's storage limits.
  * - `disposed` — a context call after the extension was deactivated.
+ * - `invalid-input` — arguments a core command's validator refused, or a handler that is not a
+ *   function.
+ * - `command-failed` — the command's handler threw or rejected; the original is the error's
+ *   `cause`. A handler's own coded error is wrapped too, so the code always describes the call
+ *   the caller made.
+ * - `command-timeout` — an extension-provided handler exceeded the host's time limit.
  *
  * The union grows additively.
  */
@@ -23,6 +31,9 @@ export type ExtensionErrorCode =
   | 'contract-version-mismatch'
   | 'storage-quota'
   | 'disposed'
+  | 'invalid-input'
+  | 'command-failed'
+  | 'command-timeout'
 
 const ERROR_CODES: ReadonlySet<string> = new Set<ExtensionErrorCode>([
   'invalid-manifest',
@@ -33,6 +44,9 @@ const ERROR_CODES: ReadonlySet<string> = new Set<ExtensionErrorCode>([
   'contract-version-mismatch',
   'storage-quota',
   'disposed',
+  'invalid-input',
+  'command-failed',
+  'command-timeout',
 ])
 
 /**

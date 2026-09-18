@@ -27,7 +27,7 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
     return async (): Promise<never> => fail()
   }
   return {
-    commands: { register: fails('commands'), execute: rejects('commands') },
+    commands: { register: fails('commands'), execute: rejects('commands'), has: fails('commands') },
     events: { on: fails('events'), emit: fails('events') },
     storage: {
       get: rejects('storage'),

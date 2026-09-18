@@ -110,6 +110,19 @@ describe('types', () => {
     expectTypeOf(unused).toBeFunction()
   })
 
+  it('asks `has` about a token or a bare id, and nothing else', () => {
+    const SayHello = defineCommand<[name: string], string>('acme.hello.say-hello')
+    const unused = (commands: Commands): void => {
+      expectTypeOf(commands.has(SayHello)).toEqualTypeOf<boolean>()
+      expectTypeOf(commands.has('acme.hello.say-hello')).toEqualTypeOf<boolean>()
+      // @ts-expect-error — a number is neither a token nor an id
+      commands.has(42)
+      // @ts-expect-error — an event token is not a command
+      commands.has(defineEvent('acme.hello.greeted'))
+    }
+    expectTypeOf(unused).toBeFunction()
+  })
+
   it('emits payload-less events without an argument and checks payloads', () => {
     const Refreshed = defineEvent('acme.tasks.refreshed')
     const Paid = defineEvent<Pay>('acme.pay.paid')

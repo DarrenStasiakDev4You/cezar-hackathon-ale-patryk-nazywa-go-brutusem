@@ -30,6 +30,9 @@ describe('isExtensionError', () => {
     'contract-version-mismatch',
     'storage-quota',
     'disposed',
+    'invalid-input',
+    'command-failed',
+    'command-timeout',
   ])('knows the %s code', (code) => {
     expect(isExtensionError(Object.assign(new Error(code), { code }), code)).toBe(true)
   })

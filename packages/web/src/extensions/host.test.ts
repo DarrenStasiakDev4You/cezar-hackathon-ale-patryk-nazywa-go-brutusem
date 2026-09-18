@@ -147,6 +147,7 @@ describe('unavailableServices', () => {
     }
     for (const call of [
       () => live.commands.register(pingCommand('acme.alpha'), () => {}),
+      () => live.commands.has(pingCommand('acme.alpha')),
       () => live.events.on(pingEvent, () => {}),
       () => live.events.emit(pingEvent),
       () => live.components.provide(listContract, { id: 'acme.alpha.list', title: 'List', component: () => null }),
