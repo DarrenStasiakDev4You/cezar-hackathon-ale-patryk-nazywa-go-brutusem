@@ -1,5 +1,7 @@
 import * as React from 'react'
 
+import { isEditModeActive } from '@/components/edit-mode-interaction-guard'
+
 /**
  * The one "cmd-or-ctrl + key" helper (spec, cross-cutting keyboard rule): macOS and
  * Windows/Linux modifiers are always registered together, never as two separate bindings that
@@ -66,6 +68,9 @@ export function useCommandShortcut(key: string, handler: (event: KeyboardEvent) 
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Edit mode turns every user activation into an editor interaction or nothing; a global
+      // accelerator must not open the palette or navigate behind the editor's back.
+      if (isEditModeActive()) return
       if (!shouldTriggerCommandShortcut(event, key)) return
       event.preventDefault()
       handlerRef.current(event)
@@ -123,6 +128,7 @@ export function useKeyShortcut(key: string, handler: (event: KeyboardEvent) => v
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditModeActive()) return
       if (!shouldTriggerKeyShortcut(event, key)) return
       handlerRef.current(event)
     }
