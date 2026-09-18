@@ -2,11 +2,11 @@
 
 > Slug: `migrate-task-actions-to-command-api` · Status: **designed, awaiting implementation** ·
 > Epic 1 (Extension Runtime), item 4. Builds on item 3, `2026-09-19-command-api.md` (spec merged
-> in #10; implementation in draft PR #11). Item 3 adds the command registry, the three public
-> `cezar.task.*` commands, `CommandsProvider` / `useCommand` / `useCommands`, and moves the
-> **run header's** buttons onto them. This item moves **every other Task UI copy** of those
-> actions, including the runner and model pickers. Delivery: one PR to `main`, opened after #11
-> merges in full.
+> in #10; implementation complete in #11, awaiting merge). Item 3 adds the command registry, the
+> three public `cezar.task.*` commands, `CommandsProvider` / `useCommand` / `useCommands`, and
+> moves the **run header's** buttons onto them. This item moves **every other Task UI copy** of
+> those actions, including the runner and model pickers. Delivery: one PR to `main`, opened after
+> #11 merges. The code references below are to #11 as built (head `fc8db166`).
 
 ## 📝 TLDR
 
@@ -25,11 +25,11 @@ This proposal adds the composer's fields to `cezar.task.continue` as optional in
 `agentProfile`, `text`, `attachments`; `runner` is already there) and moves these sites onto
 the commands. Changing the runner or the model therefore means running `cezar.task.continue`
 with those fields, which is the only place the server has ever applied them. The same requests
-go out, the same toasts appear, and the same recovery paths run. The one difference is timing:
-item 3's handlers resolve only after the refetch they start, so a pending state ends on fresh
-data, one request later than today. No Task UI file imports a continue, stop or archive
-function from the API client any more, and extensions get the same continue that the composer
-uses.
+go out, the same toasts appear, the same recovery paths run, and each site keeps its current
+timing. The one exception is the global Tasks archive: `cezar.task.archive` resolves only after
+its refetch, so that page's row toggles unlock one request later than today. No Task UI file
+imports a continue, stop or archive function from the API client any more, and extensions get
+the same continue that the composer uses.
 
 ## Resolved assumptions (autonomous defaults)
 
@@ -40,14 +40,15 @@ is internal to the cockpit, and no HTTP route, state file or published surface c
 | # | Question | Applied default | Why |
 |---|---|---|---|
 | Q1 | Split into one spec per call site? | **One spec, one phase per group of sites.** | Every site depends on the same input growth (Phase 1), and together they make up one capability: the Task UI uses commands. Each phase can ship on its own. |
-| Q2 | Item 3 already defines `task.continue/stop/archive` and migrates the run header. What does this item own, and what does it depend on? | **The input growth and the remaining sites. It depends on #11 in full**: the registry, the core commands, the provider and hooks, and the header migration. Item 3's commands, ids and handlers are reused unchanged. This spec replaces two follow-up notes in item 3 (see Q6 and Q7), and item 3's § Follow-ups now points here. | There is no second definition of the same command. The hooks this item uses are part of item 3's Phase 3, so a partial #11 is not something to build on. |
+| Q2 | Item 3 already defines `task.continue/stop/archive` and migrates the run header. What does this item own, and what does it depend on? | **The input growth and the remaining sites. It depends on #11**, which is complete: the registry, the core commands, the provider and hooks, and the header migration. Item 3's command ids, visibility and results are reused unchanged. Its code changes in two small, additive places only: `validateContinue` and the continue handler learn the new fields, and `invalidateTaskKeys` gains an optional options argument (Q10). This spec replaces two follow-up notes in item 3 (see Q6 and Q7), and item 3's § Follow-ups now points here. | There is no second definition of the same command, and #11 already ships everything this item builds on. |
 | Q3 | Are "change runner" and "change model" commands of their own (`cezar.task.setRunner`, `…setModel`)? | **No. They are optional `runner` and `model` inputs of `cezar.task.continue`.** The picker's selection stays component state, and the pick reaches the server through the command. | The server applies runner and model only when it reopens a session (`POST /runs/:id/continue`, `continueSchema` in `packages/cezar/src/server/server.ts`). The brief rules out backend changes, so a standalone command would need a new route or a new client-side selection store. Dedicated ids can be added later without breaking anything. |
 | Q4 | Which fields join `TaskContinueInput`? | **`model`, `agentProfile`, `text`, `attachments`, all optional.** The input field is named `attachments` and maps to the `images` field that `POST /continue` receives. | The composer sends all of them in one request, so leaving any out would keep the composer on the client. The contract's own deprecation note says attachments "are no longer images only". |
 | Q5 | Does a **public** command carry user content (a prompt, attachments) to extensions? | **Yes. The continue command stays public**, and validator messages name the field and the rule but never the value. | That is no new capability: extension code already runs in the cockpit's origin and can call the route (item 3 § Risks). A second internal "rich continue" would recreate the duplication this epic removes. |
 | Q6 | Two recovery paths decide on `ApiError.status === 409`, but a command rejects with a wrapped `CommandError`. How do they keep working? | **Through a cockpit-internal helper, `apiErrorOf(error)`, which reads the `ApiError` from a `command-failed` error's `cause`.** No extension contract change. This replaces item 3's note that such actions stay on the client "until a command can carry them (additive `CommandError` fields)". | Item 3 already puts the original error in `cause`. An HTTP status on `CommandError` would tie the extension API to HTTP. |
-| Q7 | Which layer invalidates the cache for the global Tasks archive, and how does it stay optimistic? | **The handler invalidates.** The page keeps its optimistic write and rollback in `useIndexedRunMutation`, and its request becomes `execute(TaskArchive, { taskId, projectId, archived })`. For the archive, the page's own reconcile runs only on failure (a new `reconcile: 'on-error'` option); read receipts keep `'always'`. `useCommand` is not changed. This replaces item 3's "optimistic-update hook on `useCommand`". | One invalidation per archive instead of two back-to-back index refetches. The optimistic write is page behaviour, and the helper is shared with read receipts, which are not a command. |
+| Q7 | Which layer invalidates the cache for the global Tasks archive, and how does it stay optimistic? | **The handler invalidates on success and on a 409.** The page keeps its optimistic write, rollback and failure reconcile in `useIndexedRunMutation`, which is exactly what #11's `settled` expects ("a caller that patches optimistically keeps that rollback and invalidation itself"). Its request becomes `execute(TaskArchive, { taskId, projectId, archived })`, and for the archive the page's reconcile runs only on failure (a new `reconcile: 'on-error'` option); read receipts keep `'always'`. `useCommand` is not changed. This replaces item 3's "optimistic-update hook on `useCommand`". | One invalidation per successful archive instead of two back-to-back index refetches. The optimistic write is page behaviour, and the helper is shared with read receipts, which are not a command. |
 | Q8 | What happens to `useContinueRun` in `api/queries.ts`? | **It is deleted.** Its only consumer, `ask-answer.ts`, moves to `useCommand(TaskContinue)`. | A second continue hook would be a second path to the same action. |
 | Q9 | Should other task actions move too: delete, rename, pin, read receipts, bulk archive, PR creation, finish, live messages? | **No, they are deferred** and listed under § Architecture. | The brief sets the minimum. Each of these carries its own rules (navigation on delete, optimistic receipts, `ApiError.manual`) and is a separate, small change. |
+| Q10 | When does each migrated site resolve: after the server accepts, or after the refetch? | **Each site keeps today's timing, following #11's own rule** (commit `6ff720cf`: "stop and archive still wait (their old onSuccess awaited the invalidation)"). The composer and the Ask delivery waited for the refetch today, because TanStack awaits a promise returned from `onSuccess`. They keep waiting through a cockpit-internal `useTaskRefetch()` in `useCommand`'s `onSuccess`, which joins the handler's refetch instead of starting a second one. The review panel did not wait, and #11's continue does not wait either. **The one exception is the global Tasks archive.** Today it does not wait, but `cezar.task.archive` does, so the row toggles unlock after the index refetch. | Resolving earlier would let the composer show the closed state (empty draft, enabled Continue) for a moment before the record turns live, which is the kind of lost guarantee AGENTS.md § Changing a mechanism warns about. Keeping the archive exception avoids a per-call timing option on the registry. The row itself still moves the moment it is clicked. |
 
 ## 📝 Problem Statement
 
@@ -79,7 +80,10 @@ is internal to the cockpit, and no HTTP route, state file or published surface c
 3. **Keep the status-driven recovery.** `apiErrorOf(error)` returns the `ApiError` a command
    failed with, so the composer's 409 re-route (`deliver-prompt.ts`) and the Ask delivery's
    idle-teardown retry (`isIdleTeardownRefusal`) decide exactly as they do today.
-4. **Enforce the boundary with a test.** A unit-tested source scan fails when any file other
+4. **Keep each site's timing.** A site that waited for the refetch today keeps waiting by
+   passing `useTaskRefetch()` as `useCommand`'s `onSuccess`, so it still never names a cache
+   key (Q10).
+5. **Enforce the boundary with a test.** A unit-tested source scan fails when any file other
    than `commands/core-commands.ts` imports one of the six continue, cancel or archive
    functions from the client module, whatever specifier it uses.
 
@@ -128,21 +132,25 @@ is reached only from the core handlers.
 
 | Site (today) | Action | After |
 |---|---|---|
-| `routes/task-thread/follow-up-engine.tsx` `useContinueAction` | continue with prompt, attachments, **runner, model, account** | `useCommand(TaskContinue)`. The pickers' state and the provider gate (`canContinue`) stay in the hook, which also feeds the header's engine badge. `ContinueAction.continueWith` resolves `TaskContinueResult` instead of `ContinueResponse`; its only caller, `deliver-prompt.ts`, already treats the value as `unknown`. |
+| `routes/task-thread/follow-up-engine.tsx` `useContinueAction` | continue with prompt, attachments, **runner, model, account** | `useCommand(TaskContinue, { onSuccess: (_r, input) => refetchTask(input) })`, so it still resolves on fresh caches (Q10). The pickers' state and the provider gate (`canContinue`) stay in the hook, which also feeds the header's engine badge. `ContinueAction.continueWith` resolves `TaskContinueResult` instead of `ContinueResponse`; its only caller, `deliver-prompt.ts`, already treats the value as `unknown`. |
 | `routes/task-thread/deliver-prompt.ts` | 409 → refetch → re-route | Unchanged logic. The 409 test reads `apiErrorOf(error)?.status`. |
-| `routes/task-thread/review-panel.tsx` `ReviewActions.sendBack` | continue with `Review feedback:\n…` | Its own `useMutation` (for `draft.submit`) runs `execute(TaskContinue, …)`, and its local `invalidate` on success is removed because the handler does it. |
-| `api/queries.ts` `useContinueRun` → `routes/task-thread/ask-answer.ts` `useAskAnswer` | continue with the answer, optional `projectId` | `useCommand(TaskContinue)`. `useContinueRun` is deleted, and `isIdleTeardownRefusal` reads through `apiErrorOf`. |
+| `routes/task-thread/review-panel.tsx` `ReviewActions.sendBack` | continue with `Review feedback:\n…` | Its own `useMutation` (for `draft.submit`) runs `execute(TaskContinue, …)`, and its local `invalidate` on success is removed because the handler does it. It resolves on acceptance, as it does today. |
+| `api/queries.ts` `useContinueRun` → `routes/task-thread/ask-answer.ts` `useAskAnswer` | continue with the answer, optional `projectId` | `useCommand(TaskContinue, { onSuccess: (_r, input) => refetchTask(input) })`, which keeps today's wait for the refetch (Q10). `useContinueRun` is deleted, and `isIdleTeardownRefusal` reads through `apiErrorOf`. |
 | ↳ `routes/task-thread/ask-card.tsx` | Ask answer (no `projectId`) | Unchanged: it consumes `useAskAnswer`. |
 | ↳ `components/reference-conflict-action.tsx` `ResolveConflictsButton` | "Resolve conflicts" prompt; `ResolveConflictsForRun` passes `projectId` on cross-project surfaces | Unchanged code: it consumes `useAskAnswer`. It is mounted by the run header, the global Tasks page, the tasks overview and the sidebar quick list, so their test harnesses need `CommandsProvider`. |
 | `routes/global-tasks.tsx` `useArchiveIndexedRun` | archive or restore in another project | The request inside `useIndexedRunMutation` is `execute(TaskArchive, { taskId, projectId, archived })`, with `reconcile: 'on-error'` (Q7). The optimistic patch and the rollback stay. |
-| `routes/task-thread/run-header.tsx` | Continue, Cancel, Archive | Item 3, Step 7. |
+| `routes/task-thread/run-header.tsx` | Continue, Cancel, Archive | Done in #11 (`useCommand(token, { onError: showError })` behind small `{ isPending, mutate }` wrappers). The pattern the sites above follow. |
 
 - **Placement.** `apiErrorOf` lives in `packages/web/src/commands/errors.ts` (NEW, pure; it
-  imports only `ApiError` and the extension API's `isExtensionError`). The boundary scan and
-  its test are `packages/web/src/commands/boundary.ts` and `boundary.test.ts`.
-- **Other items this depends on.** From item 3 (#11): the registry, `CommandsProvider`,
-  `useCommand`, `useCommands`, `invalidateTaskKeys` and the core validators. `main.tsx` and
-  `App` already mount the provider there, so this item adds no production wiring.
+  imports only `ApiError` and the extension API's `isExtensionError`). `useTaskRefetch` joins
+  `useCommand` in `packages/web/src/commands/provider.tsx`. The boundary scan and its test are
+  `packages/web/src/commands/boundary.ts` and `boundary.test.ts`.
+- **What #11 provides.** `createCommandRegistry` and `CommandError` (which keeps the handler's
+  error as `cause`) in `registry.ts`; `registerCoreCommands`, `invalidateTaskKeys`,
+  `settled(…, { awaitRefetch })` and the hand-written validators (`oneInput`, `taskRef`,
+  `validateContinue`) in `core-commands.ts`; `CommandsProvider`, `useCommands` and
+  `useCommand(token, options)` (options: `onSuccess`, `onError`, `onSettled`) in `provider.tsx`.
+  `main.tsx` and `App` already mount the provider, so this item adds no production wiring.
 - **Stop.** The run header is the only place in the Task UI that stops a task, and item 3
   covers it.
 - **Deferred actions** (Q9), each a candidate for its own command: `deleteRun`
@@ -204,14 +212,19 @@ two are assignable in both directions, so drift is caught at compile time.
 - The contract schemas come from `@open-mercato/cezar-api-client`, as `runnerSchema` already
   does in item 3. They are called through `.safeParse`, so `packages/web` gains no `zod`
   dependency.
-- The handler builds the same `ContinueOptions` object the composer builds today and calls
-  `continueRun(taskId, opts)` or `continueProjectRun(projectId, taskId, opts)`. Item 3's cache
-  rule is unchanged: on success it waits for the invalidation; on a 409 it invalidates, and the
-  failure is still reported.
-- **Messages never echo values.** Zod's messages can include the value that was received, so
-  the validator maps each issue to `Invalid input for cezar.task.continue: <field>: <rule>`, for
-  example `attachments[1].mediaType: unsupported type`, and never passes Zod's text through.
-  Inputs now carry prompts and file contents.
+- `validateContinue` grows in #11's style: after `oneInput` and `taskRef`, one hand-written
+  check per field, each throwing a fixed `<field> must …` message, and a fresh object returned
+  that holds only the fields present.
+- The handler builds the same `ContinueOptions` object the composer builds today, putting a key
+  in only when its field is present (as #11 already does for `runner`), and calls
+  `continueRun(taskId, opts)` or `continueProjectRun(projectId, taskId, opts)` through
+  `settled(…, { awaitRefetch: false })`. #11's cache rule is unchanged: invalidate on success
+  without waiting; on a 409, invalidate and still reject.
+- **Messages never echo values.** Inputs now carry prompts and file contents. Zod's messages can
+  include the value that was received, so the two schema checks (`runnerSchema`,
+  `attachmentInputSchema`) report a fixed message, for example `attachments[1] must be an
+  image, text, markdown or PDF attachment of at most 7,000,000 characters`, and never pass
+  Zod's text through.
 - **The server stays the authority.** A value that passes here but not there fails as
   `command-failed` with the server's own message: a model refused because models are locked
   (409), a model that belongs to another runner (409), an unknown account (400).
@@ -229,6 +242,21 @@ export function apiErrorOf(error: unknown): ApiError | undefined
 ```
 
 Only cockpit code uses it. Extensions still receive a coded `CommandError` and nothing more.
+
+### Cockpit-internal refetch hook (`packages/web/src/commands/provider.tsx`)
+
+```ts
+/**
+ * Waits until one task's caches are fresh, joining a refetch already in flight instead of
+ * cancelling it. For a site that must resolve on fresh data (Q10): call it with the command's
+ * input from `useCommand`'s `onSuccess`, which TanStack awaits.
+ */
+export function useTaskRefetch(): (task: TaskRef) => Promise<void>
+```
+
+It calls `invalidateTaskKeys(queryClient, task.projectId, { cancelRefetch: false })`, so a
+component never names a cache key. `invalidateTaskKeys` gains that optional third argument and
+passes it to each `invalidateQueries`. Without it, behaviour is unchanged.
 
 ## 📝 UI/UX
 
@@ -248,9 +276,8 @@ There are no new or changed screens, so no mockups are needed. Each migrated sit
 - **Global Tasks:** the row still moves as soon as it is clicked, and it rolls back with the
   server's reason if the request fails.
 
-Timing is the only difference: a pending state ends after the refetch instead of when the
-request returns. On global Tasks, that means the row toggles stay disabled until the fresh
-index arrives (§ Risks).
+Timing is unchanged everywhere except global Tasks: there, the row toggles stay disabled until
+the fresh index arrives, not just until the request returns (Q10, § Risks).
 
 The existing fetch-level tests for each site are the proof (§ Implementation Plan).
 
@@ -275,13 +302,15 @@ The existing fetch-level tests for each site are the proof (§ Implementation Pl
   of a continue failure. Wrapping hides it, and without `apiErrorOf` both would silently stop
   working: the reply would bounce back into the draft on every stale record, and Ask answers
   would fail during teardown. Each keeps a test that returns a real 409 from the stubbed fetch.
-- **Pending states last one refetch longer.** Item 3's handlers resolve after the refetch they
-  start (#11, `settled` in `core-commands.ts`). The run header accepted this in item 3. Here,
-  it keeps the composer's send and the review send-back pending until the runs list arrives,
-  and on global Tasks it keeps every row's Archive and Read toggle disabled (`busy`) until the
-  cross-project index arrives. No result changes, and the extra wait is one request. The
-  global Tasks test pins it: the toggles re-enable after the one index refetch, and no second
-  refetch follows.
+- **Settle timing (Q10).** #11's continue resolves on acceptance, while stop and archive wait
+  for their refetch. The composer and the Ask delivery waited for the refetch today, so they
+  keep that wait through `useTaskRefetch`. Without it, the composer would briefly show the
+  closed state with an enabled Continue before the record turns live, which leaves a
+  double-submit window. The review panel keeps resolving on acceptance. The global Tasks
+  archive is the one change: every row's Archive and Read toggle stays disabled (`busy`) until
+  the cross-project index arrives, one request later than today. The global Tasks test pins
+  that change: the toggles re-enable after the one index refetch, and no second refetch
+  follows.
 - **More refetches after some failures.** The handler's rule is broader than two of today's
   copies. The composer, review panel and Ask delivery now also invalidate `runs.all` after a
   409 (today only the header does). Resolve conflicts on cross-project surfaces now
@@ -291,9 +320,13 @@ The existing fetch-level tests for each site are the proof (§ Implementation Pl
   handlers only if an extension registers its own command. Core handlers never forward them
   anywhere except `POST /continue`. Validator messages never echo values. The loader item's
   trust model must still cover command access before third-party code runs (item 3).
-- **Test-harness ripple.** `useAskAnswer` backs the Resolve conflicts button, which is mounted
-  in four surfaces, so about eight harnesses gain `CommandsProvider`. There is no shared render
-  helper to change once (61 test files set up their own providers). Adding one is out of scope.
+- **Test-harness ripple.** #11 already gave `CommandsProvider` to six harnesses: `run-header`,
+  `task-thread`, `review-panel`, `task-changes`, `task-files` and `routes`. `useAskAnswer`
+  backs the Resolve conflicts button, which is mounted in four surfaces, so eight more gain it
+  here: `follow-up-engine`, `deliver-prompt`, `ask-card`, `reference-conflict-action`,
+  `global-tasks`, `tasks-overview`, `task-quick-list` and `app-shell-container`. There is no
+  shared render helper to change once (61 test files set up their own providers), and adding
+  one is out of scope.
 - **Contract growth.** One interface and four optional fields are added to a private package.
   The change is additive, with no runtime export.
 - **Compatibility surfaces.** None of the surfaces listed in `BACKWARD_COMPATIBILITY.md`
@@ -303,8 +336,8 @@ The existing fetch-level tests for each site are the proof (§ Implementation Pl
 
 ## 📋 Phasing
 
-1. **Phase 1: The continue input and the error helper.** The extension API fields, the core
-   validator and handler, and `apiErrorOf`. No call site changes yet.
+1. **Phase 1: The continue input and the helpers.** The extension API fields, the core
+   validator and handler, `apiErrorOf` and `useTaskRefetch`. No call site changes yet.
 2. **Phase 2: The task thread and the Ask delivery.** The composer (including the runner and
    model pickers and the header's engine badge), `deliver-prompt`, the review panel, and
    `useAskAnswer` with both of its consumers. `useContinueRun` is deleted.
@@ -318,7 +351,7 @@ Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run 
 `CommandsProvider` to their harness. That the request assertions stay unchanged is the proof
 that user-facing behaviour is the same.
 
-### Phase 1: The continue input and the error helper
+### Phase 1: The continue input and the helpers
 
 1. **Extension API fields.** `TaskAttachment` and the four optional fields on
    `TaskContinueInput`, with TSDoc. *Test:* a type test checks that a full input compiles and
@@ -327,39 +360,48 @@ that user-facing behaviour is the same.
    both directions. `surface.test.ts` does not change.
 2. **Core validator and handler.** Implement the validator and forwarding rules from § Core
    validator and handler.
-   *Test* (`core-commands.test.ts`, stubbed `fetch`):
+   *Test* (#11's `core-commands.test.ts`, stubbed `fetch`):
    - a full input posts exactly `{ text, images, runner, model, agentProfile }`, to the scoped
      route, or to the explicit one when `projectId` is given;
+   - continue still resolves without waiting for the refetch (#11's "when a command resolves"
+     case, extended to a full input);
    - blank `text` and empty `attachments` are omitted, and `model: ''` is sent as `''`;
    - each invalid field rejects with `invalid-input` and sends no request, and its message
      contains the field name but not the value;
    - an unknown key is ignored.
-3. **`apiErrorOf`.** *Test:* it returns a bare `ApiError`, the cause of a `command-failed`
-   error, and the status-0 error an unreachable server produces. It returns `undefined` for
-   `invalid-input`, `command-timeout`, a plain `Error` and a non-error value.
+3. **`apiErrorOf` and `useTaskRefetch`.**
+   - *Test* (`apiErrorOf`): it returns a bare `ApiError`, the cause of a `command-failed`
+     error, and the status-0 error an unreachable server produces. It returns `undefined` for
+     `invalid-input`, `command-timeout`, a plain `Error` and a non-error value.
+   - *Test* (`provider.test.tsx`): `useCommand(TaskContinue, { onSuccess: (_r, input) =>
+     refetchTask(input) })` resolves only after the runs refetch settles, and the stubbed `fetch` sees one runs
+     request, not two. With a `projectId`, the three project keys are covered.
 
 ### Phase 2: The task thread and the Ask delivery
 
 4. **The composer and its pickers.** `useContinueAction` runs `useCommand(TaskContinue)`. The
    pickers, `canContinue` and the rejection when no provider is available stay in the hook.
-   `deliver-prompt` decides on `apiErrorOf(error)?.status`.
+   `deliver-prompt` decides on `apiErrorOf(error)?.status`. `follow-up-engine.test.tsx` and
+   `deliver-prompt.test.tsx` gain `CommandsProvider`.
    *Test:* these pass unchanged apart from the provider:
    - `follow-up-engine.test.tsx`: "sends the chosen runner + model through to /continue", the
      untouched pills, the single backend;
    - `deliver-prompt.test.tsx`: the 409 re-route in both directions, and no retry for an empty
      draft;
-   - the 409 case in `task-thread.test.tsx`.
+   - the 409 case in `task-thread.test.tsx`, which already has the provider from #11;
+   - new: `continueWith` resolves only after the runs refetch, as it does today.
 5. **The review panel.** `sendBack` calls `execute(TaskContinue, { taskId, text:
    \`Review feedback:\n${text}\`, runner })` inside `draft.submit`, and its local `invalidate`
    is dropped. *Test:* `review-panel.test.tsx` (the request body, notes kept after a refusal, no
-   request while blocked) passes unchanged apart from the provider.
-6. **The Ask delivery.** `useAskAnswer` runs `useCommand(TaskContinue)` with
+   request while blocked) passes unchanged; it already has the provider from #11.
+6. **The Ask delivery.** `useAskAnswer` runs
+   `useCommand(TaskContinue, { onSuccess: (_r, input) => refetchTask(input) })` with
    `{ taskId, projectId, text }`, `isIdleTeardownRefusal` reads through `apiErrorOf`, and
    `useContinueRun` is removed from `api/queries.ts`.
-   - Every harness that renders a `useAskAnswer` consumer gains `CommandsProvider` in this
-     step: `ask-card`, `reference-conflict-action`, `global-tasks`, `tasks-overview`,
-     `task-quick-list` and `app-shell(-container)`. The run header and task thread harnesses
-     already have it.
+   - Every harness that renders a `useAskAnswer` consumer and lacks the provider gains it in
+     this step: `ask-card`, `reference-conflict-action`, `global-tasks`, `tasks-overview`,
+     `task-quick-list` and `app-shell-container`. The run header, task thread and review panel
+     harnesses have it from #11.
    - `ask-card.test.tsx` replaces its `useContinueRun` mock with the provider and a stubbed
      `fetch`.
    - *Test:* `ask-answer.test.ts` gains the idle-teardown retry with a wrapped 409 and keeps
@@ -391,13 +433,16 @@ that user-facing behaviour is the same.
      exempt;
    - the real scan over `packages/web/src/**/*.{ts,tsx}` (excluding tests) reports nothing.
 
-   `extensions/host.test.ts` gains a fixture extension that runs `TaskContinue` with
+   `extensions/host.test.ts` already has #11's fixture extension that runs `TaskArchive`. A
+   second case beside it runs `TaskContinue` with
    `{ taskId, projectId, runner: 'codex', model, text }` and checks the request body. This
    covers the DoD point that extensions can use the commands.
 9. **Docs.**
-   - `packages/extension-api/README.md`: the core task commands table documents the new
-     continue inputs and says that a runner or model switch is a continue argument.
-   - `AGENTS.md`: the `packages/web/src/commands/` routing row gains `apiErrorOf` and the
-     boundary scan ("Task UI never imports these client functions").
+   - `packages/extension-api/README.md`: the `TaskContinue` row of #11's core task commands
+     table lists the new inputs, and a sentence says that a runner or model switch is a
+     continue argument.
+   - `AGENTS.md`: #11's "Business actions as commands" routing row gains `apiErrorOf`,
+     `useTaskRefetch` and the boundary scan ("Task UI never imports these client
+     functions").
 
    *Test:* the validation gate.
