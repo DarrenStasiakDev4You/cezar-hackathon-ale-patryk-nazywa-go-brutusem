@@ -151,6 +151,11 @@ know the API client.
 
 ### Follow-ups: the remaining copies of these actions
 
+> **Update:** item 4, `2026-09-19-migrate-task-actions-to-command-api.md`, owns these sites.
+> It keeps the 409-driven paths on commands through a cockpit-internal `apiErrorOf(error)`,
+> not through new `CommandError` fields (§ Risks, "Errors are wrapped"), and keeps the global
+> Tasks optimistic write in the page instead of adding an optimistic hook to `useCommand`.
+
 Until these move, the same action exists twice — once as a command, once in the code below —
 and the 409/invalidate rule lives in both the core handlers and these sites. Each is a small,
 separate change on top of this item; together they make up the UI-migration follow-up spec.
