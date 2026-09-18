@@ -15,3 +15,8 @@ _Append-only. UTC timestamps. Checkpoints, blockers, decisions, and subagent del
 - **decision**: pointer-only primitives (Radix Select pointerup, Tabs mousedown, toast actions outside the shell) and the full-allow semantics of `data-edit-mode-open` are recorded as review minors and a follow-up, not fixed here. The current uses change view or form state only.
 - **blocker (host, not PR)**: `npm test` has 8 server failures on this WSL host (open-in-app, agent-profiles-api, route-parity), reproduced on origin/main. The e2e suite is red on both the PR and main (31 shared failures). No failure is attributable to this PR; see final-gate-checks.md.
 - **final gate**: typecheck, test:unit, build and test:package pass; UI verified in real Chrome (screenshots in final-gate-artifacts/).
+
+## 2026-09-18T23:14:38Z — run end (om-auto-continue-pr-loop)
+- Final status: complete. PR https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/8 is mergeable, approved on re-review, marked ready, and in `merge-queue` + `needs-qa`.
+- Carry-forward: manual QA sign-off (`qa-approved`) still gates the merge. Follow-ups: pointer-only primitives, and narrowing `data-edit-mode-open`.
+- Lock released (assignee, `in-progress`, completion comment).
