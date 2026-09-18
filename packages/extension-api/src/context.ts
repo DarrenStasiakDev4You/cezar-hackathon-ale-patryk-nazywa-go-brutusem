@@ -1,3 +1,5 @@
+import type { Commands } from './commands.ts'
+import type { Events } from './events.ts'
 import type { Disposable } from './lifecycle.ts'
 import type { ExtensionManifest } from './manifest.ts'
 
@@ -17,4 +19,6 @@ export interface ExtensionContext {
   readonly extension: Readonly<ExtensionManifest>
   /** Disposed by the host after `deactivate`. For the extension's own resources (timers, DOM listeners). */
   readonly subscriptions: Disposable[]
+  readonly commands: Commands
+  readonly events: Events
 }
