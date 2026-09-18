@@ -16,6 +16,7 @@ import { AddProjectDialog } from '@/components/add-project-dialog'
 import { CloneProjectDialog } from '@/components/clone-project-dialog'
 import { openCommandPalette } from '@/components/command-palette'
 import { GithubIcon } from '@/components/icons'
+import { EditModeControl } from '@/components/edit-mode-control'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -186,6 +187,7 @@ export const AppShell = React.memo(function AppShell({
   const activeTo = activeNavPath(areaPathname)
   const current = activeNavItem(areaPathname)
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const [editMode, setEditMode] = React.useState(false)
   const closeMenu = React.useCallback(() => setMenuOpen(false), [])
   const mainRef = React.useRef<HTMLElement>(null)
   const routeOwnsArrival = routeOwnsScrollArrival(pathname)
@@ -254,13 +256,33 @@ export const AppShell = React.memo(function AppShell({
     singleProject,
   }
 
+  const handleEditModeNavigationGuard = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!editMode) return
+      const target = event.target as HTMLElement
+      if (target.closest('[data-slot="edit-mode-banner"], [data-slot="edit-mode-control"]')) return
+      if (target.closest('a')) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    [editMode],
+  )
+
   return (
     <div
       data-slot="app-shell"
       className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+      data-edit-mode={editMode ? 'true' : 'false'}
+      onClickCapture={handleEditModeNavigationGuard}
     >
-      <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
-      <div className="grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden">
+      <div
+        data-slot="edit-mode-surface"
+        data-edit-mode={editMode ? 'true' : 'false'}
+        className="flex min-w-0 flex-1"
+      >
+        <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
+        <div className={cn('relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0', editMode && 'pt-12')}>
         {/* The Sheet root renders no DOM of its own. Keep only the mobile controls inside its
             context so a sidebar update cannot propagate through the routed view. */}
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -276,15 +298,17 @@ export const AppShell = React.memo(function AppShell({
           </div>
         ) : null}
 
-        <AppShellMain mainRef={mainRef}>{children}</AppShellMain>
+          <AppShellMain mainRef={mainRef}>{children}</AppShellMain>
 
         {/* Row 4: the composer dock (thread reply, Step R3). Empty today, but it still carries
             the bottom safe-area gutter so the scroller never runs under the home indicator. */}
-        <div
-          data-slot="composer"
-          className="row-start-4 pb-[env(safe-area-inset-bottom)]"
-        />
+          <div
+            data-slot="composer"
+            className="row-start-4 pb-[env(safe-area-inset-bottom)]"
+          />
+        </div>
       </div>
+      <EditModeControl enabled={editMode} onEnabledChange={setEditMode} />
     </div>
   )
 })
