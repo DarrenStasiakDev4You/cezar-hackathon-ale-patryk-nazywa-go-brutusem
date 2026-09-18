@@ -2,10 +2,10 @@
 
 > **Experimental and private.** The cockpit's extension registry
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
-> extensions compiled into the cockpit. The services behind `ExtensionContext` — commands, events,
-> storage and components — arrive in later items, and every host item may still revise these types
-> in the PR that implements them. The package is versioned with the release but not published to
-> npm.
+> extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands` is
+> honoured (spec `2026-09-19-command-api`); events, storage and components arrive in later items,
+> and every host item may still revise these types in the PR that implements them. The package is
+> versioned with the release but not published to npm.
 > Design: `.ai/specs/2026-09-18-extension-api-package.md`.
 
 The one package an extension imports. It holds the vocabulary Cezar and its extensions share —
@@ -84,6 +84,63 @@ How the host runs it:
 - **Page unload does not call `deactivate`.** Closing or reloading the page discards everything
   without deactivating it, so never rely on `deactivate` to save data: write it as you go.
 
+### Commands
+
+`context.commands` is the cockpit's command registry, seen from your extension:
+
+- `register(token, handler, options?)` — only ids under your own `${extension.id}.` prefix
+  (`namespace-violation` otherwise); one handler per id (`duplicate-registration`, and the first
+  registration wins). `options.title` is recorded for a future command palette. The registration is
+  disposed when you deactivate. **Validate your own input**: types do not exist at runtime, and any
+  extension may call your command.
+- `execute(token, ...args)` — runs a command and resolves with its result. You can run every other
+  extension's commands and core's **public** commands.
+- `has(token | id)` — `true` when `execute` would reach a handler you may run right now. A snapshot:
+  the provider may go away before your next call. `false` for a malformed token.
+
+**Visibility.** Core picks `public` or `internal` for each of its commands. An internal command
+does not exist as far as an extension is concerned: `has` answers `false` and `execute` rejects
+`command-not-found`, exactly as for an id nobody registered. Commands registered by extensions are
+visible to every extension.
+
+**The controlled-error rule.** `execute` never throws synchronously and only ever rejects with a
+coded error that `isExtensionError` recognises:
+
+| Code | When |
+| --- | --- |
+| `invalid-id` | The token is not `{ kind: 'command', id }` with a valid id (`register` throws it too). |
+| `command-not-found` | Nobody registered the id, or you may not run it (an internal core command). |
+| `invalid-input` | A core command's validator refused the arguments; nothing was sent. |
+| `command-failed` | The handler threw or rejected. `message` is its message, `cause` the original. A handler's own coded error is wrapped too, so the code always describes the call you made. |
+| `command-timeout` | An extension-provided handler did not settle within the host's limit (30 s in the cockpit); its late result is ignored. Core handlers are not time-limited. |
+| `disposed` | You called after your extension was deactivated (`has` and `register` throw it). |
+
+A handler that throws rejects its caller and nothing else: the providing extension stays active.
+
+**Core task commands.** Exported from this package with their input and result types, so you
+execute them with compile-time checking. Each takes one input object; unknown keys are ignored.
+`projectId` omitted means the project the cockpit is showing.
+
+| Token | Id | Input | Result |
+| --- | --- | --- | --- |
+| `TaskContinue` | `cezar.task.continue` | `{ taskId, projectId?, runner? }` | `{ taskId, continued: true }` |
+| `TaskStop` | `cezar.task.stop` | `{ taskId, projectId? }` | `{ taskId, stopped }` |
+| `TaskArchive` | `cezar.task.archive` | `{ taskId, projectId?, archived? }` (default `true`) | `{ taskId, archived }` |
+
+```ts
+import { isExtensionError, TaskArchive } from '@open-mercato/cezar-extension-api'
+
+try {
+  await context.commands.execute(TaskArchive, { taskId, projectId })
+} catch (error) {
+  if (isExtensionError(error, 'command-failed')) console.warn(error.message) // the service's own words
+}
+```
+
+Continuing a task starts an agent session. That is no new power — extension code runs in the
+cockpit's origin — but it is the reason the loader must decide who may run third-party code before
+any exists.
+
 ### Storage
 
 `context.storage` is async, private to the extension and holds JSON values. `get<T>()` is an
@@ -103,6 +160,8 @@ compiled against; a host on another major ignores it (`contract-version-mismatch
 
 `isExtensionError(error, code?)` recognises every `ExtensionErrorCode` by its `code`, never by
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
-and `invalid-id` come from this package's helpers; `namespace-violation`,
-`duplicate-registration`, `command-not-found`, `contract-version-mismatch`, `storage-quota` and
-`disposed` come from the host.
+and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
+malformed command token); `namespace-violation`, `duplicate-registration`, `command-not-found`,
+`contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
+`command-timeout` come from the host. The union grows additively: a copy of this package older than
+the host does not recognise the newer codes.
