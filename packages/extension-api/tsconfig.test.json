@@ -1,0 +1,12 @@
+{
+  // Typecheck-only view for the tests and the example. Node types are allowed HERE (the
+  // boundary test reads files) and only here — the first typecheck pass, over tsconfig.json,
+  // keeps `src` Node-free.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts"]
+}
