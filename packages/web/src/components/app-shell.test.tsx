@@ -1,5 +1,5 @@
 import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { ReactNode } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import { Link as RouterLink, MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -55,6 +55,62 @@ describe('AppShell', () => {
   it('renders the routed view in the main region', () => {
     renderShell('/', {}, <p>route content</p>)
     expect(within(screen.getByRole('main')).getByText('route content')).toBeTruthy()
+  })
+
+  describe('edit-mode interaction guard', () => {
+    it('preserves normal activation behavior when edit mode is off', () => {
+      const onClick = vi.fn()
+      renderShell('/', {}, <button onClick={onClick}>Business action</button>)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Business action' }))
+
+      expect(onClick).toHaveBeenCalledOnce()
+    })
+
+    it('blocks business links, buttons and form submits while preserving the exit action', () => {
+      const onClick = vi.fn()
+      const onSubmit = vi.fn((event: FormEvent) => event.preventDefault())
+      renderShell(
+        '/',
+        {},
+        <>
+          <RouterLink to="/github">Business link</RouterLink>
+          <button onClick={onClick}>Business action</button>
+          <form onSubmit={onSubmit}>
+            <input aria-label="Business input" />
+            <button type="submit">Submit business form</button>
+          </form>
+        </>,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+      fireEvent.click(screen.getByRole('link', { name: 'Business link' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Business action' }))
+      fireEvent.submit(screen.getByRole('button', { name: 'Submit business form' }).closest('form')!)
+
+      expect(screen.getByTestId('location').textContent).toBe('/')
+      expect(onClick).not.toHaveBeenCalled()
+      expect(onSubmit).not.toHaveBeenCalled()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Exit edit mode' }))
+      expect(screen.queryByRole('button', { name: 'Exit edit mode' })).toBeNull()
+    })
+
+    it('allows only explicitly marked editor actions', () => {
+      const onClick = vi.fn()
+      renderShell(
+        '/',
+        {},
+        <button data-edit-mode-action="allow" onClick={onClick}>
+          Editor action
+        </button>,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Editor action' }))
+
+      expect(onClick).toHaveBeenCalledOnce()
+    })
   })
 
   it('resets the main scroller to the top on navigation (#mobile-scroll-top)', () => {

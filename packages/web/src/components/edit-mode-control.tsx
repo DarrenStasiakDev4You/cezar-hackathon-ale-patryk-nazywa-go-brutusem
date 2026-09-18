@@ -14,6 +14,7 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
     return (
       <div
         data-slot="edit-mode-banner"
+        data-edit-mode-action="allow"
         role="status"
         className="fixed inset-x-0 top-0 z-[100] flex min-h-12 items-center justify-center gap-3 bg-pending px-4 py-2 text-sm font-bold text-foreground shadow-md [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))]"
       >
@@ -23,6 +24,7 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
           size="sm"
           variant="outline"
           data-slot="edit-mode-exit"
+          data-edit-mode-action="allow"
           className="border-border bg-card font-bold text-foreground hover:bg-muted"
           onClick={() => onEnabledChange(false)}
         >
@@ -35,6 +37,7 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
   return (
     <div
       data-slot="edit-mode-control"
+      data-edit-mode-action="allow"
       className="fixed top-3 right-4 z-[60] [padding-right:env(safe-area-inset-right)]"
     >
       <Button
@@ -43,6 +46,7 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
         size="default"
         aria-label="Edit mode"
         aria-pressed={false}
+        data-edit-mode-action="allow"
         title="Edit mode"
         onClick={() => onEnabledChange(true)}
         className="min-h-11 gap-2 px-3 font-semibold shadow-lg backdrop-blur-sm"

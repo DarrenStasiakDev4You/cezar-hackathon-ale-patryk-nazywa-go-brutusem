@@ -17,6 +17,7 @@ import { CloneProjectDialog } from '@/components/clone-project-dialog'
 import { openCommandPalette } from '@/components/command-palette'
 import { GithubIcon } from '@/components/icons'
 import { EditModeControl } from '@/components/edit-mode-control'
+import { shouldBlockEditModeActivation } from '@/components/edit-mode-interaction-guard'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -256,12 +257,22 @@ export const AppShell = React.memo(function AppShell({
     singleProject,
   }
 
-  const handleEditModeNavigationGuard = React.useCallback(
+  const handleEditModeActivationGuard = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
       if (!editMode) return
-      const target = event.target as HTMLElement
-      if (target.closest('[data-slot="edit-mode-banner"], [data-slot="edit-mode-control"]')) return
-      if (target.closest('a')) {
+      if (shouldBlockEditModeActivation(event.target, 'click')) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    [editMode],
+  )
+
+  const handleEditModeSubmitGuard = React.useCallback(
+    (event: React.FormEvent<HTMLDivElement>) => {
+      if (!editMode) return
+      const submitter = (event.nativeEvent as SubmitEvent).submitter
+      if (shouldBlockEditModeActivation(event.target, 'submit', submitter)) {
         event.preventDefault()
         event.stopPropagation()
       }
@@ -274,7 +285,8 @@ export const AppShell = React.memo(function AppShell({
       data-slot="app-shell"
       className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
       data-edit-mode={editMode ? 'true' : 'false'}
-      onClickCapture={handleEditModeNavigationGuard}
+      onClickCapture={handleEditModeActivationGuard}
+      onSubmitCapture={handleEditModeSubmitGuard}
     >
       <div
         data-slot="edit-mode-surface"
