@@ -94,8 +94,8 @@ name, a recording `ExtensionScope` fake, and a small `timeoutMs` or fake timers 
 
 ### Phase 2: Core commands and the extension service
 
-- [ ] 2.1 Tokens and handlers
-- [ ] 2.2 Boot wiring and the extension service
+- [x] 2.1 Tokens and handlers — 79141138
+- [x] 2.2 Boot wiring and the extension service — 8e312f8b
 
 ### Phase 3: React bindings, the first component, docs
 
