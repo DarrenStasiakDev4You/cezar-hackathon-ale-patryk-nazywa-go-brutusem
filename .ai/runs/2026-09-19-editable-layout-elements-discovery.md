@@ -37,6 +37,10 @@ Make PR #12 mergeable onto current `main`: resolve the conflicts left by the squ
 - The PR body's `Source doc:` path (`2026-09-18-…`) is a typo for the spec that exists on `main` (`2026-09-19-…`); the content is the same spec.
 - Spec step 8 stays deferred until a dashboard layout exists, as the PR body states; the author can pull it into scope by amending this plan.
 
+## Validation waiver
+
+The gate ran in Docker (`sh .ai/scripts/in-docker.sh <command>`) on 2026-09-19. `typecheck`, `build` and `test:package` pass. `npm test` and `test:unit` exit non-zero on the same failures that `main` at `52187843` shows: 2 test-env launcher tests, 1 flaky `/automations` route test and a Vitest teardown error in `packages/cezar/src/runs/store.test.ts`. This PR adds none of them. The maintainer (@DarrenStasiakDev4You) waived them for this PR; they are fixed on `main`'s side, not here.
+
 ## Risks
 
 - Low: the change is client-only, unmounted, and additive; rollback is removing the three components and the library file.
@@ -56,5 +60,6 @@ Make PR #12 mergeable onto current `main`: resolve the conflicts left by the squ
 
 ### Phase 3: Finish
 
-- [ ] 3.1 Run the full validation gate
-- [ ] 3.2 Authoritative review pass and fixes
+- [x] 3.1 Run the full validation gate — 3c5d2efe
+- [x] 3.2 Authoritative review pass and fixes — 12e62907
+- [x] Post-review fix: keep a refused layout unregister retryable — 12e62907
