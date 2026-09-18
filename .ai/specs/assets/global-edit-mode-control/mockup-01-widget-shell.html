@@ -23,8 +23,8 @@
     .exit { min-height:32px; padding:5px 12px; border:1px solid #635100; border-radius:7px; background:#fff4b5; color:#2a2100; font-weight:800; } .exit:focus-visible,.edit-control:focus-visible { outline:3px solid var(--lime); outline-offset:3px; }
     .main { min-height:0; overflow:auto; padding:34px clamp(18px,5vw,58px) 60px; } .main h1 { margin:0 0 7px; font-size:28px; letter-spacing:-.025em; } .intro { margin:0 0 26px; color:var(--muted); }
     .widgets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding-right:190px; } .widget { min-height:170px; padding:20px; border:1px solid var(--line); border-radius:10px; background:var(--card); box-shadow:0 8px 22px #0000000b; } .widget-label { color:var(--muted); font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.08em; } .value { margin-top:22px; font-size:31px; font-weight:800; } .sub { margin-top:7px; color:var(--muted); }
-    .app.editing .sidebar, .app.editing .mobile-bar, .app.editing .main > h1, .app.editing .main > .intro, .app.editing .widget { filter:grayscale(.9); opacity:.34; transition:filter 140ms ease,opacity 140ms ease; }
-    .app.editing .sidebar:hover, .app.editing .sidebar:focus-within, .app.editing .mobile-bar:hover, .app.editing .mobile-bar:focus-within, .app.editing .main > h1:hover, .app.editing .main > .intro:hover, .app.editing .widget:hover, .app.editing .widget:focus { filter:none; opacity:1; }
+    .app.editing .brand, .app.editing .new-task, .app.editing .nav a, .app.editing .quick, .app.editing .footer, .app.editing .mobile-bar > *, .app.editing .main > h1, .app.editing .main > .intro, .app.editing .widget { filter:grayscale(.9); opacity:.34; transition:filter 140ms ease,opacity 140ms ease; }
+    .app.editing .brand:hover, .app.editing .new-task:hover, .app.editing .nav a:hover, .app.editing .nav a:focus, .app.editing .quick:hover, .app.editing .footer:hover, .app.editing .mobile-bar > *:hover, .app.editing .mobile-bar > *:focus, .app.editing .main > h1:hover, .app.editing .main > .intro:hover, .app.editing .widget:hover, .app.editing .widget:focus { filter:none; opacity:1; }
     .widget:focus { outline:3px solid var(--lime); outline-offset:2px; }
     .app.editing .edit-control { display:none; }
     .edit-control { position:absolute; z-index:60; top:12px; right:max(16px,env(safe-area-inset-right)); display:inline-flex; align-items:center; gap:8px; min-height:42px; padding:8px 13px; border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink); box-shadow:0 5px 15px #00000018; font-weight:750; } .edit-control svg { width:19px; height:19px; }
@@ -54,7 +54,7 @@
     const app=document.getElementById('app'),edit=document.getElementById('edit'),exit=document.getElementById('exit');
     function setEditMode(enabled){app.classList.toggle('editing',enabled);edit.setAttribute('aria-pressed',String(enabled));}
     edit.addEventListener('click',()=>setEditMode(true)); exit.addEventListener('click',()=>{setEditMode(false);edit.focus();});
-    document.querySelectorAll('.widget').forEach((widget)=>widget.addEventListener('click',(event)=>event.preventDefault()));
+    document.querySelectorAll('.widget, .nav a').forEach((element)=>element.addEventListener('click',(event)=>event.preventDefault()));
     setEditMode(true);
   </script>
 </body>

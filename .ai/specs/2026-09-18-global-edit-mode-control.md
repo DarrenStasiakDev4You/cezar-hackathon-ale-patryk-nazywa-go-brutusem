@@ -123,7 +123,7 @@ Brak zmian. Stan jest lokalnym booleanem Reacta. Nie dodajemy endpointu, schemat
 
 ## 📋 Plan implementacji
 
-1. Dodać `EditModeControl` z ikoną `PanelsTopLeftIcon` lub `LayoutDashboardIcon`, tekstem „Edit mode” i lokalnym stanem `enabled`.
+1. Dodać `EditModeControl` z ikoną `PanelsTopLeftIcon` lub `LayoutDashboardIcon`, tekstem „Edit mode” i globalnym stanem `editMode`.
 2. Zamontować komponent w `AppShell` jako niezależny element nad głównym widokiem widgetów.
 3. Dodać pasek „You are in edit mode” z przyciskiem „Exit edit mode”; bez modala i bez funkcji edycji widgetów.
 4. Dodać responsywną rezerwację miejsca, safe-area, warstwę `z-index` oraz przesuwanie kolidującej treści w lewo.
