@@ -93,3 +93,5 @@ Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run 
 - [x] 3.1 The example and a recording fake context — 52507b4f
 - [x] 3.2 Export snapshot — c79f8c06
 - [x] 3.3 README and AGENTS.md — 50df8679
+- [x] Post-review fix: token helpers throw ExtensionDefinitionError for non-string ids and report id + version together — 300f4c75
+- [x] Post-review fix: spec and AGENTS.md aligned with the as-built signatures — 0c0ef7eb
