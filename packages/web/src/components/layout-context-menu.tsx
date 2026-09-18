@@ -171,7 +171,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
 
   return (
     <>
-      <div data-layout-context-menu-owner="true" onContextMenuCapture={onContextMenu}>
+      <div data-layout-context-menu-owner="true" className="contents" onContextMenuCapture={onContextMenu}>
         {children}
       </div>
       {content && typeof document !== 'undefined' ? createPortal(content, document.body) : null}
