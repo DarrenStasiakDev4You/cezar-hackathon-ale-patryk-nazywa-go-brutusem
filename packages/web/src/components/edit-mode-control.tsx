@@ -15,7 +15,7 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
       <div
         data-slot="edit-mode-banner"
         role="status"
-        className="fixed inset-x-0 top-0 z-[100] flex min-h-12 items-center justify-center gap-3 bg-amber-300 px-4 py-2 text-sm font-bold text-amber-950 shadow-md [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))] dark:bg-yellow-400 dark:text-yellow-950"
+        className="fixed inset-x-0 top-0 z-[100] flex min-h-12 items-center justify-center gap-3 bg-pending px-4 py-2 text-sm font-bold text-foreground shadow-md [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))]"
       >
         <span>You are in edit mode</span>
         <Button
@@ -23,7 +23,7 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
           size="sm"
           variant="outline"
           data-slot="edit-mode-exit"
-          className="border-amber-950/40 bg-amber-100 font-bold text-amber-950 hover:bg-white dark:border-yellow-950/40 dark:bg-yellow-100 dark:text-yellow-950 dark:hover:bg-white"
+          className="border-border bg-card font-bold text-foreground hover:bg-muted"
           onClick={() => onEnabledChange(false)}
         >
           Exit edit mode
