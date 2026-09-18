@@ -5,9 +5,12 @@ import { validateManifest, type ExtensionManifest, type ManifestIssue } from './
 /** An extension module's default export — usually written through {@link defineExtension}. */
 export interface Extension {
   readonly manifest: ExtensionManifest
-  /** Register everything the extension contributes. Awaited once by the host. */
+  /** Register everything the extension contributes. Awaited once per activation, limited by the host's timeout. */
   activate(context: ExtensionContext): void | Promise<void>
-  /** Release what `subscriptions` does not cover. Everything registered through the context is disposed after it anyway. */
+  /**
+   * Release what `subscriptions` does not cover. Everything registered through the context is
+   * disposed after it anyway. Limited by the host's timeout, and not called when the page unloads.
+   */
   deactivate?(): void | Promise<void>
 }
 
