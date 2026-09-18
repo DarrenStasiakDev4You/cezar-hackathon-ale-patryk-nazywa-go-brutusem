@@ -8,7 +8,8 @@
     :root { --bg:#f7f7f7; --card:#fff; --sidebar:#fff; --line:#e8e8e8; --ink:#171717; --muted:#727272; --lime:#b8ff5b; --violet:#8f86e8; --banner:#ffe05a; --banner-ink:#241d00; }
     :root.dark { --bg:#0d0d0d; --card:#171717; --sidebar:#171717; --line:#2a2a2a; --ink:#f5f5f5; --muted:#a1a1a1; --banner:#ffe477; --banner-ink:#241d00; }
     * { box-sizing:border-box; } html,body { margin:0; min-height:100%; background:var(--bg); color:var(--ink); font:14px/1.4 Inter,system-ui,sans-serif; } button { font:inherit; cursor:pointer; }
-    .app { min-height:100vh; display:grid; grid-template-columns:264px minmax(0,1fr); grid-template-rows:1fr; padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); overflow:hidden; }
+    .app { min-height:100vh; display:grid; grid-template-columns:264px minmax(0,1fr); grid-template-rows:1fr; padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); overflow:hidden; transition:padding-top 140ms ease; }
+    .app.editing { padding-top:52px; }
     .sidebar { display:flex; flex-direction:column; min-height:100vh; border-right:1px solid var(--line); background:var(--sidebar); padding:14px 12px max(14px,env(safe-area-inset-bottom)); }
     .brand { display:flex; align-items:center; gap:9px; padding:0 4px 16px; font-weight:800; } .brand-mark { display:grid; place-items:center; width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#b8ff5b,#ffe05a 52%,#9187ee); color:#172000; font-weight:900; }
     .new-task { display:flex; align-items:center; justify-content:center; gap:8px; min-height:36px; margin-bottom:13px; border:0; border-radius:7px; background:var(--ink); color:var(--bg); font-weight:750; } .new-task svg { width:15px; height:15px; }
@@ -18,15 +19,18 @@
     .footer { display:flex; align-items:center; gap:8px; border-top:1px solid var(--line); padding-top:12px; color:var(--muted); font-size:12px; } .footer .spacer { margin-left:auto; }
     .main-column { min-width:0; display:grid; grid-template-rows:auto auto 1fr auto; overflow:hidden; position:relative; }
     .mobile-bar { display:none; min-height:44px; align-items:center; gap:10px; padding:0 12px; border-bottom:1px solid var(--line); background:var(--card); } .mobile-menu { border:0; background:transparent; color:var(--ink); font-size:20px; }
-    .banner { display:none; align-items:center; justify-content:center; gap:16px; min-height:52px; padding:8px 18px; background:var(--banner); color:var(--banner-ink); font-weight:800; } .app.editing .banner { display:flex; }
+    .banner { position:fixed; z-index:100; inset:0 0 auto; display:none; align-items:center; justify-content:center; gap:16px; min-height:52px; padding:8px 18px max(8px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-left)); background:var(--banner); color:var(--banner-ink); font-weight:800; } .app.editing .banner { display:flex; }
     .exit { min-height:32px; padding:5px 12px; border:1px solid #635100; border-radius:7px; background:#fff4b5; color:#2a2100; font-weight:800; } .exit:focus-visible,.edit-control:focus-visible { outline:3px solid var(--lime); outline-offset:3px; }
     .main { min-height:0; overflow:auto; padding:34px clamp(18px,5vw,58px) 60px; } .main h1 { margin:0 0 7px; font-size:28px; letter-spacing:-.025em; } .intro { margin:0 0 26px; color:var(--muted); }
     .widgets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; padding-right:190px; } .widget { min-height:170px; padding:20px; border:1px solid var(--line); border-radius:10px; background:var(--card); box-shadow:0 8px 22px #0000000b; } .widget-label { color:var(--muted); font-size:12px; font-weight:750; text-transform:uppercase; letter-spacing:.08em; } .value { margin-top:22px; font-size:31px; font-weight:800; } .sub { margin-top:7px; color:var(--muted); }
-    .app.editing .main > * { filter:grayscale(.9); opacity:.43; transition:filter 140ms ease,opacity 140ms ease; } .app.editing .widget:hover,.app.editing .widget:focus { filter:none; opacity:1; } .widget:focus { outline:3px solid var(--lime); outline-offset:2px; }
+    .app.editing .sidebar, .app.editing .mobile-bar, .app.editing .main > h1, .app.editing .main > .intro, .app.editing .widget { filter:grayscale(.9); opacity:.34; transition:filter 140ms ease,opacity 140ms ease; }
+    .app.editing .sidebar:hover, .app.editing .sidebar:focus-within, .app.editing .mobile-bar:hover, .app.editing .mobile-bar:focus-within, .app.editing .main > h1:hover, .app.editing .main > .intro:hover, .app.editing .widget:hover, .app.editing .widget:focus { filter:none; opacity:1; }
+    .widget:focus { outline:3px solid var(--lime); outline-offset:2px; }
+    .app.editing .edit-control { display:none; }
     .edit-control { position:absolute; z-index:60; top:12px; right:max(16px,env(safe-area-inset-right)); display:inline-flex; align-items:center; gap:8px; min-height:42px; padding:8px 13px; border:1px solid var(--line); border-radius:9px; background:var(--card); color:var(--ink); box-shadow:0 5px 15px #00000018; font-weight:750; } .edit-control svg { width:19px; height:19px; }
     .composer { min-height:22px; border-top:1px solid var(--line); background:var(--card); padding-bottom:env(safe-area-inset-bottom); }
     @media (max-width:900px) { .widgets { grid-template-columns:repeat(2,minmax(0,1fr)); padding-right:145px; } }
-    @media (max-width:767px) { .app { display:block; overflow:auto; } .sidebar { display:none; } .main-column { min-height:100vh; grid-template-rows:auto auto 1fr auto; } .mobile-bar { display:flex; } .edit-control { top:56px; } .main { padding:24px 16px 48px; } .widgets { grid-template-columns:1fr; padding-right:0; } .banner { justify-content:space-between; font-size:12px; } }
+    @media (max-width:767px) { .app { display:block; overflow:auto; } .sidebar { display:none; } .main-column { min-height:100vh; grid-template-rows:auto auto 1fr auto; } .mobile-bar { display:flex; } .edit-control { top:56px; } .main { padding:24px 16px 48px; } .widgets { grid-template-columns:1fr; padding-right:0; } .banner { justify-content:space-between; font-size:12px; } .app.editing { padding-top:52px; } }
   </style>
 </head>
 <body>
@@ -51,6 +55,7 @@
     function setEditMode(enabled){app.classList.toggle('editing',enabled);edit.setAttribute('aria-pressed',String(enabled));}
     edit.addEventListener('click',()=>setEditMode(true)); exit.addEventListener('click',()=>{setEditMode(false);edit.focus();});
     document.querySelectorAll('.widget').forEach((widget)=>widget.addEventListener('click',(event)=>event.preventDefault()));
+    setEditMode(true);
   </script>
 </body>
 </html>
