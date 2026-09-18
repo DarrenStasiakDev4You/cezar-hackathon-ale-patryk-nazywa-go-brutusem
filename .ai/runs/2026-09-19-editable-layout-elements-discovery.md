@@ -52,7 +52,7 @@ Make PR #12 mergeable onto current `main`: resolve the conflicts left by the squ
 ### Phase 2: Sync with main
 
 - [x] 2.1 Merge main and resolve the edit-mode guard conflicts to main's version — e34ea7d2
-- [ ] 2.2 Drop the stale flat run plan for #8 superseded by main's run folder
+- [x] 2.2 Drop the stale flat run plan for #8 superseded by main's run folder — f179c307
 
 ### Phase 3: Finish
 
