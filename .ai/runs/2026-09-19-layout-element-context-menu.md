@@ -34,14 +34,14 @@ Engine: om-auto-create-pr (steps: 8, --loop: no)
 
 ### Phase 1: Menu and widget deletion
 
-- [ ] 1.1 Define the target type and owner callback using the discovery registry types.
-- [ ] 1.2 Implement edit-mode hit testing from the nearest `data-layout-id` and registry lookup.
-- [ ] 1.3 Render the accessible Delete menu with reserved disabled Edit/Move actions, focus management, dismissal, and viewport clamping.
-- [ ] 1.4 Delegate widget deletion to the owner callback without mutating the registry.
+- [x] 1.1 Define the target type and owner callback using the discovery registry types. — 2fd14e29
+- [x] 1.2 Implement edit-mode hit testing from the nearest `data-layout-id` and registry lookup. — 2fd14e29
+- [x] 1.3 Render the accessible Delete menu with reserved disabled Edit/Move actions, focus management, dismissal, and viewport clamping. — 2fd14e29
+- [x] 1.4 Delegate widget deletion to the owner callback without mutating the registry. — 2fd14e29
 
 ### Phase 2: Group deletion and confirmation seam
 
-- [ ] 2.1 Include deterministic full subtrees for groups, including nested groups and empty groups.
-- [ ] 2.2 Add an optional confirmation callback that defaults to allowing deletion and does not render a dialog.
-- [ ] 2.3 Keep the component scoped to the owner’s registered layout elements, with no shell/sidebar behavior.
-- [ ] 2.4 Run the configured validation gate and browser-oriented interaction checks represented by component tests.
+- [x] 2.1 Include deterministic full subtrees for groups, including nested groups and empty groups. — 2fd14e29
+- [x] 2.2 Add an optional confirmation callback that defaults to allowing deletion and does not render a dialog. — 2fd14e29
+- [x] 2.3 Keep the component scoped to the owner’s registered layout elements, with no shell/sidebar behavior. — 2fd14e29
+- [x] 2.4 Run the configured validation gate and browser-oriented interaction checks represented by component tests. — 2fd14e29
