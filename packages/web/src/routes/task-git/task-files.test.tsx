@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ApiRun, HealthResponse, WorktreeEntry } from '@open-mercato/cezar-api-client'
 
 import { TaskFilesRoute } from './task-files'
@@ -96,11 +97,13 @@ function stubFetch(overrides: Record<string, () => Response> = {}): string[] {
 function renderFilesRoute() {
   render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={['/tasks/r1/files']}>
-        <Routes>
-          <Route path="/tasks/:id/files" element={<TaskFilesRoute />} />
-        </Routes>
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={['/tasks/r1/files']}>
+          <Routes>
+            <Route path="/tasks/:id/files" element={<TaskFilesRoute />} />
+          </Routes>
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }

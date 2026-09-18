@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type {
   ApiRun,
   HealthResponse,
@@ -63,7 +64,9 @@ function renderView(
   return {
     ...render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>{ui}</MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter>{ui}</MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     ),
     queryClient,
@@ -275,12 +278,14 @@ describe('ThreadView', () => {
     )
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter>
-          <ThreadView
-            run={run('failed', { autoResumeAt: '2026-08-03T17:00:30.000Z' })}
-            thread={reduceThread(EVENTS)}
-          />
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter>
+            <ThreadView
+              run={run('failed', { autoResumeAt: '2026-08-03T17:00:30.000Z' })}
+              thread={reduceThread(EVENTS)}
+            />
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
 
@@ -491,9 +496,11 @@ describe('ThreadView', () => {
     expect(screen.getAllByLabelText('Remove message')).toHaveLength(1)
     rerender(
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter>
-          <ThreadView run={fixture} thread={thread} />
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter>
+            <ThreadView run={fixture} thread={thread} />
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
     expect(screen.getAllByLabelText('Remove message')).toHaveLength(1)
@@ -535,9 +542,11 @@ describe('ThreadView', () => {
       const queryClient = createQueryClient()
       render(
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter>
-            <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
-          </MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter>
+              <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
+            </MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
       return queryClient
@@ -582,12 +591,14 @@ describe('ThreadView', () => {
       )
       render(
         <QueryClientProvider client={createQueryClient()}>
-          <MemoryRouter>
-            <ThreadView
-              run={run('done', { steps: [{ id: 'task', kind: 'agent', sessionId: 'sess-1' }] as ApiRun['steps'] })}
-              thread={reduceThread(EVENTS)}
-            />
-          </MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter>
+              <ThreadView
+                run={run('done', { steps: [{ id: 'task', kind: 'agent', sessionId: 'sess-1' }] as ApiRun['steps'] })}
+                thread={reduceThread(EVENTS)}
+              />
+            </MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
 
@@ -648,17 +659,19 @@ describe('ThreadView', () => {
       )
       render(
         <QueryClientProvider client={createQueryClient()}>
-          <MemoryRouter>
-            <ThreadView
-              run={run('queued', {
-                queuedMessages: [
-                  { id: 'm1', text: 'first', createdAt: '2026-07-21T10:00:00.000Z' },
-                  { id: 'm2', text: 'second', createdAt: '2026-07-21T10:01:00.000Z' },
-                ],
-              })}
-              thread={reduceThread([])}
-            />
-          </MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter>
+              <ThreadView
+                run={run('queued', {
+                  queuedMessages: [
+                    { id: 'm1', text: 'first', createdAt: '2026-07-21T10:00:00.000Z' },
+                    { id: 'm2', text: 'second', createdAt: '2026-07-21T10:01:00.000Z' },
+                  ],
+                })}
+                thread={reduceThread([])}
+              />
+            </MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
 
@@ -708,7 +721,9 @@ describe('ThreadView', () => {
       const queryClient = createQueryClient()
       const { rerender } = render(
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter>{view('r1')}</MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter>{view('r1')}</MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
 
@@ -718,7 +733,9 @@ describe('ThreadView', () => {
 
       rerender(
         <QueryClientProvider client={queryClient}>
-          <MemoryRouter>{view('r2')}</MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter>{view('r2')}</MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
 
@@ -1138,11 +1155,13 @@ function historyBodyFor(path: string, id: string): unknown {
 function renderRoute(id: string) {
   render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={[`/tasks/${id}`]}>
-        <Routes>
-          <Route path="/tasks/:id" element={<TaskThreadRoute />} />
-        </Routes>
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={[`/tasks/${id}`]}>
+          <Routes>
+            <Route path="/tasks/:id" element={<TaskThreadRoute />} />
+          </Routes>
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }
@@ -1273,11 +1292,13 @@ describe('TaskThreadRoute — read receipts', () => {
   function visit(id: string, queryClient = createQueryClient()) {
     const view = render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter initialEntries={[`/tasks/${id}`]}>
-          <Routes>
-            <Route path="/tasks/:id" element={<TaskThreadRoute />} />
-          </Routes>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter initialEntries={[`/tasks/${id}`]}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskThreadRoute />} />
+            </Routes>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
     return { ...view, queryClient }

@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ApiRun, ChangesPayload, HealthResponse, RepoResponse } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import type { GitActionBar } from '@/lib/git-actions'
@@ -117,12 +118,14 @@ function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[
 function renderChangesRoute() {
   render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={['/tasks/r1/changes']}>
-        <Routes>
-          <Route path="/tasks/:id/changes" element={<TaskChangesRoute />} />
-        </Routes>
-        <Toaster />
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={['/tasks/r1/changes']}>
+          <Routes>
+            <Route path="/tasks/:id/changes" element={<TaskChangesRoute />} />
+          </Routes>
+          <Toaster />
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }
