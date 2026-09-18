@@ -86,3 +86,4 @@ name, use a recording `services` factory, and test timeouts with fake timers or 
 
 - [x] 2.1 Host and boot — 9664a6da
 - [x] 2.2 Docs — e7c67f60
+- [x] Post-review fix: clamp the registry timeout to setTimeout's ceiling (Infinity no longer times out at once) — a95aad45
