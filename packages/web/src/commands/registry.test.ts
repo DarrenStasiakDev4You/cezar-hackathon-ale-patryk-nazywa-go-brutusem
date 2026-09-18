@@ -392,23 +392,36 @@ describe('the extension view', () => {
   it('times out an extension handler that never settles, and ignores its late result', async () => {
     vi.useFakeTimers()
     const registry = createCommandRegistry({ timeoutMs: 50 })
-    let finish!: (value: string) => void
-    registry.forExtension(fakeScope('acme.beta').scope).register(BetaPing, () => new Promise<string>((resolve) => (finish = resolve)))
+    let fail!: (error: Error) => void
+    registry.forExtension(fakeScope('acme.beta').scope).register(
+      BetaPing,
+      () => new Promise<string>((_resolve, reject) => (fail = reject)),
+    )
+    const unhandled = vi.fn()
+    process.on('unhandledRejection', unhandled)
 
-    const outcome = registry.execute(BetaPing, 1).catch((error: unknown) => error)
-    await vi.advanceTimersByTimeAsync(49)
-    let settled = false
-    void outcome.then(() => (settled = true))
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    await vi.advanceTimersByTimeAsync(1)
+    try {
+      const outcome = registry.execute(BetaPing, 1).catch((error: unknown) => error)
+      await vi.advanceTimersByTimeAsync(49)
+      let settled = false
+      void outcome.then(() => (settled = true))
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
 
-    const error = (await outcome) as CommandError
-    expect(isExtensionError(error, 'command-timeout')).toBe(true)
-    expect(error.message).toBe('Command "acme.beta.ping" did not finish within 50 ms')
-    finish('too late')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(await outcome).toBe(error)
+      const error = (await outcome) as CommandError
+      expect(isExtensionError(error, 'command-timeout')).toBe(true)
+      expect(error.message).toBe('Command "acme.beta.ping" did not finish within 50 ms')
+
+      // The handler gives up after the caller has: that late failure must go nowhere — no
+      // unhandled rejection, no second answer.
+      fail(new Error('too late'))
+      vi.useRealTimers()
+      for (let i = 0; i < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(unhandled).not.toHaveBeenCalled()
+    } finally {
+      process.off('unhandledRejection', unhandled)
+    }
   })
 
   it('limits extension handlers to 30 s by default', async () => {
@@ -459,6 +472,8 @@ describe('types', () => {
       void registry.execute(EchoCommand)
       // @ts-expect-error — the handler's result must match the token
       registry.register(EchoCommand, () => 'plain', publicEcho)
+      // @ts-expect-error — and may not be WIDER than it: `string | Result` is not `Result`
+      registry.register(EchoCommand, (input) => (input.text === '' ? 'plain' : { echoed: input.text }), publicEcho)
       // @ts-expect-error — the validator must return the token's argument tuple
       registry.register(EchoCommand, () => ({ echoed: '' }), { visibility: 'public', validate: () => [42] as [number] })
       // @ts-expect-error — visibility has no default

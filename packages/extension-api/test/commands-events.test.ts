@@ -106,6 +106,8 @@ describe('types', () => {
       commands.register(SayHello, () => 42)
       // @ts-expect-error — the handler's parameter must match the token
       commands.register(SayHello, (name: number) => String(name))
+      // @ts-expect-error — nor may the result be WIDER than the token's (a union is not a string)
+      commands.register(SayHello, (name) => (name === '' ? 0 : name))
     }
     expectTypeOf(unused).toBeFunction()
   })

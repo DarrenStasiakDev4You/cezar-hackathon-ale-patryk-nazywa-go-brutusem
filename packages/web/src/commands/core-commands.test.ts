@@ -234,6 +234,43 @@ describe('failures', () => {
   })
 })
 
+describe('when a command resolves', () => {
+  /** A client whose invalidations never finish refetching. */
+  function stalledSetup() {
+    const queryClient = new QueryClient()
+    vi.spyOn(queryClient, 'invalidateQueries').mockReturnValue(new Promise<void>(() => {}))
+    const registry = createCommandRegistry()
+    registerCoreCommands(registry, { queryClient })
+    return registry
+  }
+
+  /** Whether `promise` settles within a few macrotasks. */
+  async function settlesSoon(promise: Promise<unknown>): Promise<boolean> {
+    let settled = false
+    void promise.then(
+      () => (settled = true),
+      () => (settled = true),
+    )
+    for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0))
+    return settled
+  }
+
+  it('continue resolves once the service accepts, without waiting for the refetch', async () => {
+    stubFetch()
+    const registry = stalledSetup()
+
+    expect(await settlesSoon(registry.execute(TaskContinue, { taskId: 'r1' }))).toBe(true)
+  })
+
+  it('stop and archive resolve only after the refetch, so their results arrive with fresh caches', async () => {
+    stubFetch(() => jsonResponse({ id: 'r1', archived: true, cancelled: true }))
+    const registry = stalledSetup()
+
+    expect(await settlesSoon(registry.execute(TaskStop, { taskId: 'r1' }))).toBe(false)
+    expect(await settlesSoon(registry.execute(TaskArchive, { taskId: 'r1' }))).toBe(false)
+  })
+})
+
 describe('registerCoreCommands', () => {
   it('registers all three as public, and removes all three with one Disposable', () => {
     stubFetch()

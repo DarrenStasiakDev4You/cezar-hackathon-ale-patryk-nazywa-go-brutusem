@@ -259,7 +259,36 @@ describe('cockpitServices', () => {
     expect(beta?.commands.has(Ping)).toBe(false)
   })
 
+  it('keeps its providing extension active when a handler throws — only the caller sees the failure', async () => {
+    const Broken = defineCommand<[count: number], string>('acme.alpha.broken')
+    let beta: ExtensionContext | undefined
+    const { registry, ready } = boot([
+      fixture('acme.alpha', {
+        activate(context) {
+          context.commands.register(Broken, () => {
+            throw new Error('alpha broke')
+          })
+        },
+      }),
+      fixture('acme.beta', {
+        activate(context) {
+          beta = context
+        },
+      }),
+    ])
+    await ready
+
+    const error = await beta?.commands.execute(Broken, 1).catch((reason: unknown) => reason)
+
+    expect(isExtensionError(error, 'command-failed')).toBe(true)
+    expect((error as Error).message).toBe('alpha broke')
+    expect(registry.get('acme.alpha')?.status).toBe('active')
+    expect(beta?.commands.has(Broken)).toBe(true)
+  })
+
   it('keeps events, storage and components on the placeholders', async () => {
+    const pinged = defineEvent('acme.alpha.pinged')
+    const list = defineComponentContract<Record<string, never>>('cezar.fixture.list', { version: 1 })
     let context: ExtensionContext | undefined
     const { ready } = boot([
       fixture('acme.alpha', {
@@ -269,8 +298,14 @@ describe('cockpitServices', () => {
       }),
     ])
     await ready
+    const live = context as ExtensionContext
 
-    await expect(context?.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
+    expect(() => live.events.on(pinged, () => {})).toThrow('context.events is not available in this Cezar version yet')
+    expect(() => live.events.emit(pinged)).toThrow('context.events is not available in this Cezar version yet')
+    expect(() => live.components.provide(list, { id: 'acme.alpha.list', title: 'List', component: () => null })).toThrow(
+      'context.components is not available in this Cezar version yet',
+    )
+    await expect(live.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
   })
 })
 

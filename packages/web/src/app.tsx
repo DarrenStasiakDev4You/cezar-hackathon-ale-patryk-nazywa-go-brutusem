@@ -30,7 +30,11 @@ import { AppRoutes } from './routes'
 export function App(props: {
   /** The page's client, shared with the command registry `main.tsx` built. Omitted (tests) → one of App's own. */
   readonly queryClient?: QueryClient
-  /** The page's command registry, shared with the extension host. Omitted (tests) → CommandsProvider's own. */
+  /**
+   * The page's command registry, shared with the extension host. Omitted (tests) → CommandsProvider's
+   * own. Pass it together with the `queryClient` its core commands were registered against: the
+   * handlers invalidate THAT client, so a mismatched pair would leave the UI reading stale caches.
+   */
   readonly commands?: CommandRegistry
 }) {
   // Lazy initial state rather than a module-level constant: one client per App instance, so a

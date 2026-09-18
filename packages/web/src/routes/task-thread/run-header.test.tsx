@@ -419,9 +419,14 @@ describe('Mark unread (#775)', () => {
 describe('actions run through commands (spec 2026-09-19-command-api)', () => {
   it('Continue, Cancel and Archive no longer reach for the API client', () => {
     const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-header.tsx'), 'utf8')
-    const clientImport = /import\s*\{([^}]*)\}\s*from\s*'@\/api\/client'/.exec(source)?.[1] ?? ''
-    const names = clientImport.split(',').map((name) => name.trim())
+    // Every import of the client, however many statements there are.
+    const names = [...source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'@\/api\/client'/g)]
+      .flatMap((match) => (match[1] ?? '').split(','))
+      .map((name) => name.replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim())
 
+    // A namespace or default import would hide the names from the check above.
+    expect(source).not.toMatch(/import\s+(?:\*\s*as\s+)?\w+\s*(?:,\s*\{[^}]*\})?\s*from\s*'@\/api\/client'/)
+    expect(names).toContain('deleteRun')
     expect(names).not.toContain('continueRun')
     expect(names).not.toContain('cancelRun')
     expect(names).not.toContain('archiveRun')

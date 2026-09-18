@@ -39,7 +39,7 @@ export interface CommandRegistry {
    *  `duplicate-registration`, or `invalid-input` for a non-function handler/validator. */
   register<A extends readonly unknown[], R>(
     command: CommandToken<A, R>,
-    handler: (...args: A) => R | Promise<R>,
+    handler: (...args: A) => NoInfer<R> | Promise<NoInfer<R>>,
     options: CoreCommandOptions<A>,
   ): Disposable
   /** Core execution: sees every command. Never throws; rejects only with a `CommandError`. */

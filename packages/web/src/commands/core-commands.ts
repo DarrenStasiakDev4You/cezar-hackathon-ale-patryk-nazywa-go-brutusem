@@ -55,11 +55,18 @@ export function registerCoreCommands(
   const { queryClient } = deps
 
   /**
-   * Runs one task request under the cache rule. Success invalidates (and waits for the refetch,
-   * so the result arrives with fresh caches). A 409 says the record the caller acted on is not
-   * the task the server has — refetch it so the UI redraws to the truth — and still rejects.
+   * Runs one task request under the cache rule. Success invalidates; with `awaitRefetch` the
+   * result waits for the refetch, so it arrives with fresh caches. A 409 says the record the
+   * caller acted on is not the task the server has — refetch it so the UI redraws to the truth —
+   * and still rejects. Any other failure changed nothing, so it leaves the caches alone (unlike
+   * the global Tasks page's `onSettled`, which must undo its own optimistic patch: a caller that
+   * patches optimistically keeps that rollback and invalidation itself).
    */
-  const settled = async <T>(projectId: string | undefined, request: () => Promise<T>): Promise<T> => {
+  const settled = async <T>(
+    projectId: string | undefined,
+    request: () => Promise<T>,
+    { awaitRefetch }: { readonly awaitRefetch: boolean },
+  ): Promise<T> => {
     let result: T
     try {
       result = await request()
@@ -67,7 +74,8 @@ export function registerCoreCommands(
       if (error instanceof ApiError && error.status === 409) void invalidateTaskKeys(queryClient, projectId)
       throw error
     }
-    await invalidateTaskKeys(queryClient, projectId)
+    const refetch = invalidateTaskKeys(queryClient, projectId)
+    if (awaitRefetch) await refetch
     return result
   }
 
@@ -77,8 +85,12 @@ export function registerCoreCommands(
       async ({ taskId, projectId, runner }) => {
         // The runner went through `runnerSchema` in the validator; the cast only restores its type.
         const options = runner === undefined ? {} : { runner: runner as Runner }
-        await settled(projectId, () =>
-          projectId === undefined ? continueRun(taskId, options) : continueProjectRun(projectId, taskId, options),
+        // Resolves as soon as the service accepted it — what the run header's Continue always did:
+        // the engine takes over, and the event stream reports the task running again.
+        await settled(
+          projectId,
+          () => (projectId === undefined ? continueRun(taskId, options) : continueProjectRun(projectId, taskId, options)),
+          { awaitRefetch: false },
         )
         return { taskId, continued: true as const }
       },
@@ -87,8 +99,10 @@ export function registerCoreCommands(
     registry.register(
       TaskStop,
       async ({ taskId, projectId }) => {
-        const response = await settled(projectId, () =>
-          projectId === undefined ? cancelRun(taskId) : cancelProjectRun(projectId, taskId),
+        const response = await settled(
+          projectId,
+          () => (projectId === undefined ? cancelRun(taskId) : cancelProjectRun(projectId, taskId)),
+          { awaitRefetch: true },
         )
         return { taskId, stopped: response.cancelled }
       },
@@ -97,10 +111,10 @@ export function registerCoreCommands(
     registry.register(
       TaskArchive,
       async ({ taskId, projectId, archived = true }) => {
-        const record = await settled(projectId, () =>
-          projectId === undefined
-            ? archiveRun(taskId, archived)
-            : archiveProjectRun(projectId, taskId, archived),
+        const record = await settled(
+          projectId,
+          () => (projectId === undefined ? archiveRun(taskId, archived) : archiveProjectRun(projectId, taskId, archived)),
+          { awaitRefetch: true },
         )
         return { taskId, archived: record.archived }
       },

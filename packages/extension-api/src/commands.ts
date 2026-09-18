@@ -52,7 +52,7 @@ export interface CommandOptions {
 export interface Commands {
   register<A extends readonly unknown[], R>(
     command: CommandToken<A, R>,
-    handler: (...args: A) => R | Promise<R>,
+    handler: (...args: A) => NoInfer<R> | Promise<NoInfer<R>>,
     options?: CommandOptions,
   ): Disposable
   execute<A extends readonly unknown[], R>(command: CommandToken<A, R>, ...args: A): Promise<R>
