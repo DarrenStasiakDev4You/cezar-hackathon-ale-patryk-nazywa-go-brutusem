@@ -17,7 +17,10 @@ import { CloneProjectDialog } from '@/components/clone-project-dialog'
 import { openCommandPalette } from '@/components/command-palette'
 import { GithubIcon } from '@/components/icons'
 import { EditModeControl } from '@/components/edit-mode-control'
-import { shouldBlockEditModeActivation } from '@/components/edit-mode-interaction-guard'
+import {
+  shouldBlockEditModeActivation,
+  shouldBlockEditModeKeyActivation,
+} from '@/components/edit-mode-interaction-guard'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -280,6 +283,17 @@ export const AppShell = React.memo(function AppShell({
     [editMode],
   )
 
+  const handleEditModeKeyGuard = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!editMode) return
+      if (shouldBlockEditModeKeyActivation(event.nativeEvent)) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    [editMode],
+  )
+
   return (
     <div
       data-slot="app-shell"
@@ -287,6 +301,7 @@ export const AppShell = React.memo(function AppShell({
       data-edit-mode={editMode ? 'true' : 'false'}
       onClickCapture={handleEditModeActivationGuard}
       onSubmitCapture={handleEditModeSubmitGuard}
+      onKeyDownCapture={handleEditModeKeyGuard}
     >
       <div
         data-slot="edit-mode-surface"

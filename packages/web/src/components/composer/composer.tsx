@@ -18,6 +18,7 @@ import {
 import { putUiState } from '@/api/client'
 import { queryKeys, useSkills, useUiState } from '@/api/queries'
 import type { AttachmentInput } from '@open-mercato/cezar-api-client'
+import { isEditModeActive } from '@/components/edit-mode-interaction-guard'
 import { Button } from '@/components/ui/button'
 import { Command, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -443,6 +444,9 @@ export function Composer({
       // typing, and typing always wins. The accelerator still works everywhere else — the
       // thread composer is not autofocused, which is when these replies are reached for.
       if (isEditableTarget(event.target)) return
+      // A window-global accelerator like the ⌘K family: it stands down while the shell is in
+      // edit mode, where no activation may reach the agent.
+      if (isEditModeActive()) return
       const reply = QUICK_REPLIES[event.code]
       if (reply === undefined) return
       event.preventDefault()

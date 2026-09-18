@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldBlockEditModeActivation } from './edit-mode-interaction-guard'
+import {
+  isEditModeActive,
+  shouldBlockEditModeActivation,
+  shouldBlockEditModeKeyActivation,
+  type EditModeKeyActivation,
+} from './edit-mode-interaction-guard'
 
 describe('shouldBlockEditModeActivation', () => {
   it('blocks nested targets inside links and buttons', () => {
@@ -71,5 +76,72 @@ describe('shouldBlockEditModeActivation', () => {
   it('leaves non-activating content alone', () => {
     const text = document.createElement('p')
     expect(shouldBlockEditModeActivation(text, 'click')).toBe(false)
+  })
+
+  it('blocks ARIA widget items that act on click, such as options and checkbox menu items', () => {
+    for (const role of ['option', 'menuitemcheckbox', 'menuitemradio', 'tab', 'link']) {
+      const item = document.createElement('div')
+      item.setAttribute('role', role)
+      expect(shouldBlockEditModeActivation(item, 'click')).toBe(true)
+    }
+  })
+})
+
+describe('shouldBlockEditModeKeyActivation', () => {
+  function key(overrides: Partial<EditModeKeyActivation>): EditModeKeyActivation {
+    return { key: 'Enter', shiftKey: false, target: document.createElement('button'), ...overrides }
+  }
+
+  it('blocks Enter on business controls, text fields and non-interactive targets', () => {
+    const textarea = document.createElement('textarea')
+    const option = document.createElement('div')
+    option.setAttribute('role', 'option')
+
+    expect(shouldBlockEditModeKeyActivation(key({}))).toBe(true)
+    expect(shouldBlockEditModeKeyActivation(key({ target: textarea }))).toBe(true)
+    expect(shouldBlockEditModeKeyActivation(key({ target: option }))).toBe(true)
+    expect(shouldBlockEditModeKeyActivation(key({ target: document.body }))).toBe(true)
+  })
+
+  it('keeps the newline, IME composition and editor actions available', () => {
+    const textarea = document.createElement('textarea')
+    const exit = document.createElement('button')
+    exit.dataset.editModeAction = 'allow'
+
+    expect(shouldBlockEditModeKeyActivation(key({ target: textarea, shiftKey: true }))).toBe(false)
+    expect(shouldBlockEditModeKeyActivation(key({ target: textarea, isComposing: true }))).toBe(false)
+    expect(shouldBlockEditModeKeyActivation(key({ target: exit }))).toBe(false)
+  })
+
+  it('blocks Space only where it activates rather than types', () => {
+    const input = document.createElement('input')
+    const text = document.createElement('p')
+    const exit = document.createElement('button')
+    exit.dataset.editModeAction = 'allow'
+
+    expect(shouldBlockEditModeKeyActivation(key({ key: ' ' }))).toBe(true)
+    expect(shouldBlockEditModeKeyActivation(key({ key: ' ', target: input }))).toBe(false)
+    expect(shouldBlockEditModeKeyActivation(key({ key: ' ', target: text }))).toBe(false)
+    expect(shouldBlockEditModeKeyActivation(key({ key: ' ', target: exit }))).toBe(false)
+  })
+
+  it('never touches navigation and text-entry keys', () => {
+    for (const name of ['Tab', 'Escape', 'ArrowDown', 'a']) {
+      expect(shouldBlockEditModeKeyActivation(key({ key: name }))).toBe(false)
+    }
+  })
+})
+
+describe('isEditModeActive', () => {
+  it('reads the shell marker, not any element that happens to carry data-edit-mode', () => {
+    const root = document.createElement('div')
+    root.innerHTML = '<div data-slot="edit-mode-surface" data-edit-mode="true"></div>'
+    expect(isEditModeActive(root)).toBe(false)
+
+    root.innerHTML = '<div data-slot="app-shell" data-edit-mode="false"></div>'
+    expect(isEditModeActive(root)).toBe(false)
+
+    root.innerHTML = '<div data-slot="app-shell" data-edit-mode="true"></div>'
+    expect(isEditModeActive(root)).toBe(true)
   })
 })
