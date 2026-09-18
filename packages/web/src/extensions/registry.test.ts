@@ -46,14 +46,14 @@ describe('register', () => {
   it('records a valid extension as registered, and `{ enabled: false }` as disabled', () => {
     const registry = createExtensionRegistry({ services: noServices })
 
-    const a = registry.register(fixture('acme.alpha'))
-    const b = registry.register(fixture('acme.beta'), { enabled: false })
+    const enabled = registry.register(fixture('acme.alpha'))
+    const disabled = registry.register(fixture('acme.beta'), { enabled: false })
 
-    expect(a).toEqual({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
-    expect(b.status).toBe('disabled')
-    expect(a).not.toHaveProperty('error')
-    expect(registry.get('acme.alpha')).toBe(a)
-    expect(registry.get('acme.beta')).toBe(b)
+    expect(enabled).toEqual({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
+    expect(disabled.status).toBe('disabled')
+    expect(enabled).not.toHaveProperty('error')
+    expect(registry.get('acme.alpha')).toBe(enabled)
+    expect(registry.get('acme.beta')).toBe(disabled)
     expect(registry.get('acme.nobody')).toBeUndefined()
   })
 
@@ -279,6 +279,16 @@ describe('activate', () => {
     const retry = await registry.activate('acme.slow')
     expect(retry.status).toBe('active')
     expect(activate).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats an unbounded `timeoutMs` as no practical limit rather than an instant timeout', async () => {
+    // Real timers on purpose: an unclamped `setTimeout(…, Infinity)` fires at once.
+    const registry = createExtensionRegistry({ ...recordingServices(), timeoutMs: Infinity })
+    registry.register(fixture('acme.patient', { activate: () => new Promise<void>((done) => setTimeout(done, 20)) }))
+
+    const record = await registry.activate('acme.patient')
+
+    expect(record.status).toBe('active')
   })
 
   it('runs `activate` once for two overlapping calls', async () => {

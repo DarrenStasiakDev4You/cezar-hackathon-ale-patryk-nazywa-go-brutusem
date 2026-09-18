@@ -64,7 +64,10 @@ export interface ExtensionErrorReport {
 export interface ExtensionRegistryOptions {
   /** Builds the service half of one activation's context. Called once per activation. */
   readonly services: (scope: ExtensionScope) => ExtensionServices
-  /** Limit on each `activate()` and `deactivate()` call. Default 10_000 ms. */
+  /**
+   * Limit on each `activate()` and `deactivate()` call. Default 10_000 ms. Clamped to what
+   * `setTimeout` supports (about 24.8 days), so `Infinity` means no practical limit.
+   */
   readonly timeoutMs?: number
   /**
    * Every isolated failure. Default: {@link logExtensionError}.
@@ -119,6 +122,8 @@ export function logExtensionError(report: ExtensionErrorReport): void {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000
+/** `setTimeout`'s ceiling: a longer delay — `Infinity` included — overflows and fires at once. */
+const MAX_TIMEOUT_MS = 2_147_483_647
 
 /** `activate(id)` retries a failure; `activateAll()` never does, so a crash is not re-run automatically. */
 const ACTIVATABLE: readonly ExtensionStatus[] = ['registered', 'failed']
@@ -141,7 +146,7 @@ interface Entry {
 }
 
 export function createExtensionRegistry(options: ExtensionRegistryOptions): ExtensionRegistry {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const timeoutMs = resolveTimeout(options.timeoutMs)
   const onError = options.onError ?? logExtensionError
   const entries = new Map<ExtensionId, Entry>()
 
@@ -423,6 +428,11 @@ function toFailure(error: unknown): ExtensionFailure {
     // A throwing getter or `toString`: the failure is still recorded.
     return Object.freeze({ message: 'the extension threw a value that cannot be read' })
   }
+}
+
+function resolveTimeout(timeoutMs: number | undefined): number {
+  if (timeoutMs === undefined || Number.isNaN(timeoutMs)) return DEFAULT_TIMEOUT_MS
+  return Math.min(Math.max(timeoutMs, 0), MAX_TIMEOUT_MS)
 }
 
 function isArrayIndex(key: string | symbol): boolean {
