@@ -99,6 +99,6 @@ name, a recording `ExtensionScope` fake, and a small `timeoutMs` or fake timers 
 
 ### Phase 3: React bindings, the first component, docs
 
-- [ ] 3.1 Provider and hooks
-- [ ] 3.2 Migrate the run header
-- [ ] 3.3 Docs
+- [x] 3.1 Provider and hooks — 84f643b7
+- [x] 3.2 Migrate the run header — 036843c8
+- [x] 3.3 Docs — 7effb0d4
