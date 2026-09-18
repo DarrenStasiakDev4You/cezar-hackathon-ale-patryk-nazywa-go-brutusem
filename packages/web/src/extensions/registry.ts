@@ -206,6 +206,26 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
     return setRecord(entry, 'failed', toFailure(outcome.error))
   }
 
+  // § Deactivation and disposal, precisely.
+  const deactivateStep = async (entry: Entry): Promise<ExtensionRecord> => {
+    const { activation } = entry
+    if (entry.record.status !== 'active' || activation === undefined) return entry.record
+
+    const { id } = entry.manifest
+    const call = invoke(() => entry.extension.deactivate?.())
+    const outcome = await settleWithin(call, timeoutMs, () =>
+      timeoutError('deactivation-timeout', `Extension "${id}" did not finish deactivating within ${timeoutMs} ms`),
+    )
+    // Reported, never fatal: disposal still runs and the extension still leaves `active`.
+    if (!outcome.ok) {
+      if (outcome.timedOut) abandon(entry, call)
+      report(id, 'deactivate', outcome.error)
+    }
+    entry.activation = undefined
+    activation.end()
+    return setRecord(entry, 'registered')
+  }
+
   return {
     register(extension, registerOptions) {
       let manifest: Readonly<ExtensionManifest>
@@ -256,7 +276,10 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
       return list()
     },
 
-    deactivate: () => Promise.reject(new Error('deactivate is not implemented yet')),
+    async deactivate(id) {
+      const entry = lookup(id)
+      return enqueue(entry, () => deactivateStep(entry))
+    },
   }
 }
 

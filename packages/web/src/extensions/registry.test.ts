@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  defineEvent,
   defineExtension,
   isExtensionError,
+  type Disposable,
   type Extension,
   type ExtensionContext,
   type ExtensionManifest,
@@ -442,5 +444,247 @@ describe('activate', () => {
     expect(seen?.subscriptions).toHaveLength(0)
     expect(recording.scopes).toHaveLength(1)
     expect(recording.scopes[0]?.extension).toBe(record.manifest)
+  })
+})
+
+describe('deactivate', () => {
+  it('awaits `deactivate` once, then disposes subscriptions and tracked registrations, each newest first', async () => {
+    const log: string[] = []
+    const deactivate = vi.fn(async () => {
+      log.push('deactivate start')
+      await Promise.resolve()
+      log.push('deactivate end')
+    })
+    const registry = createExtensionRegistry(recordingServices(log))
+    registry.register(
+      fixture('acme.alpha', {
+        activate(context) {
+          context.commands.register(pingCommand('acme.alpha'), () => {})
+          context.events.on(defineEvent('acme.alpha.tick'), () => {})
+          context.subscriptions.push(disposable(log, 'dispose timer 1'), disposable(log, 'dispose timer 2'))
+        },
+        deactivate,
+      }),
+    )
+    await registry.activate('acme.alpha')
+
+    const record = await registry.deactivate('acme.alpha')
+
+    expect(record).toEqual({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
+    expect(deactivate).toHaveBeenCalledTimes(1)
+    expect(log).toEqual([
+      'deactivate start',
+      'deactivate end',
+      'dispose timer 2',
+      'dispose timer 1',
+      'dispose listener acme.alpha.tick',
+      'dispose command acme.alpha.ping',
+    ])
+    expect(registry.listActive()).toEqual([])
+  })
+
+  it('reports a throwing deactivate, a hanging one and a throwing dispose, and still completes disposal', async () => {
+    vi.useFakeTimers()
+    const log: string[] = []
+    const reports: ExtensionErrorReport[] = []
+    const registry = createExtensionRegistry({
+      ...recordingServices(log),
+      timeoutMs: 50,
+      onError: (report) => reports.push(report),
+    })
+    const withSubscription = (id: string, deactivate: Extension['deactivate']) =>
+      fixture(id, {
+        activate: (context) => void context.subscriptions.push(disposable(log, `dispose ${id}`)),
+        deactivate,
+      })
+    registry.register(
+      withSubscription('acme.throws', () => {
+        throw new Error('goodbye failed')
+      }),
+    )
+    registry.register(withSubscription('acme.hangs', () => new Promise<void>(() => {})))
+    registry.register(
+      fixture('acme.leaky', {
+        activate(context) {
+          context.subscriptions.push(disposable(log, 'dispose acme.leaky older'), {
+            dispose() {
+              throw new Error('dispose failed')
+            },
+          })
+        },
+      }),
+    )
+    await registry.activateAll()
+
+    const throws = await registry.deactivate('acme.throws')
+    const hanging = registry.deactivate('acme.hangs')
+    await vi.advanceTimersByTimeAsync(50)
+    const hangs = await hanging
+    const leaky = await registry.deactivate('acme.leaky')
+
+    expect([throws.status, hangs.status, leaky.status]).toEqual(['registered', 'registered', 'registered'])
+    expect(log).toEqual(['dispose acme.throws', 'dispose acme.hangs', 'dispose acme.leaky older'])
+    expect(reports.map((report) => [report.id, report.phase])).toEqual([
+      ['acme.throws', 'deactivate'],
+      ['acme.hangs', 'deactivate'],
+      ['acme.leaky', 'dispose'],
+    ])
+    expect(reports[1]?.error).toMatchObject({
+      code: 'deactivation-timeout',
+      message: 'Extension "acme.hangs" did not finish deactivating within 50 ms',
+    })
+  })
+
+  it('makes every later call through the scope or the context fail with `disposed`, disposing what it was handed', async () => {
+    const log: string[] = []
+    const recording = recordingServices(log)
+    let context: ExtensionContext | undefined
+    const registry = createExtensionRegistry(recording)
+    registry.register(
+      fixture('acme.alpha', {
+        activate(ctx) {
+          context = ctx
+        },
+      }),
+    )
+    await registry.activate('acme.alpha')
+    await registry.deactivate('acme.alpha')
+    const scope = recording.scopes[0]
+
+    expectDisposed(() => scope?.assertLive())
+    expectDisposed(() => scope?.track(disposable(log, 'dispose late registration')))
+    expectDisposed(() => context?.subscriptions.push(disposable(log, 'dispose late subscription')))
+    expectDisposed(() => context?.commands.register(pingCommand('acme.alpha'), () => {}))
+    expect(isExtensionError(await context?.storage.get('key').catch((error: unknown) => error), 'disposed')).toBe(true)
+
+    expect(log).toEqual(['dispose late registration', 'dispose late subscription'])
+    expect(context?.subscriptions).toHaveLength(0)
+  })
+
+  it('lets a tracked registration be disposed early, and never disposes it a second time', async () => {
+    const log: string[] = []
+    let registration: Disposable | undefined
+    const registry = createExtensionRegistry(recordingServices(log))
+    registry.register(
+      fixture('acme.alpha', {
+        activate(context) {
+          registration = context.commands.register(pingCommand('acme.alpha'), () => {})
+        },
+      }),
+    )
+    await registry.activate('acme.alpha')
+
+    registration?.dispose()
+    registration?.dispose()
+    await registry.deactivate('acme.alpha')
+
+    expect(log).toEqual(['dispose command acme.alpha.ping'])
+  })
+
+  it('gives a re-activation a fresh context and scope', async () => {
+    const contexts: ExtensionContext[] = []
+    const recording = recordingServices()
+    const registry = createExtensionRegistry(recording)
+    registry.register(
+      fixture('acme.alpha', {
+        activate(context) {
+          contexts.push(context)
+          context.subscriptions.push(disposable([], 'timer'))
+        },
+      }),
+    )
+
+    await registry.activate('acme.alpha')
+    await registry.deactivate('acme.alpha')
+    await registry.activate('acme.alpha')
+
+    expect(contexts).toHaveLength(2)
+    expect(contexts[1]).not.toBe(contexts[0])
+    expect(contexts[1]?.subscriptions).not.toBe(contexts[0]?.subscriptions)
+    expect(contexts[1]?.subscriptions).toHaveLength(1)
+    expect(recording.scopes).toHaveLength(2)
+    expect(() => recording.scopes[1]?.assertLive()).not.toThrow()
+  })
+
+  it('runs `deactivate` once for two overlapping calls', async () => {
+    const deactivate = vi.fn()
+    const registry = createExtensionRegistry(recordingServices())
+    registry.register(fixture('acme.alpha', { deactivate }))
+    await registry.activate('acme.alpha')
+
+    const [first, second] = await Promise.all([registry.deactivate('acme.alpha'), registry.deactivate('acme.alpha')])
+
+    expect(deactivate).toHaveBeenCalledTimes(1)
+    expect(first.status).toBe('registered')
+    expect(second).toBe(first)
+  })
+
+  it('rejects an unknown id with unknown-extension', async () => {
+    const registry = createExtensionRegistry(recordingServices())
+
+    await expect(registry.deactivate('acme.nobody')).rejects.toMatchObject({
+      name: 'ExtensionRegistryError',
+      code: 'unknown-extension',
+    })
+  })
+})
+
+// § State machine. Rows not repeated here are covered above: register → registered/disabled
+// ("register"), registered/failed → active and → failed, and the abandoned `activate` ("activate"),
+// active → registered ("deactivate").
+describe('state machine', () => {
+  it('resolves a call that does not apply with the current record and no side effect', async () => {
+    const calls: string[] = []
+    const spy = (id: string, activate: Extension['activate'] = () => void calls.push(`activate ${id}`)) =>
+      fixture(id, { activate, deactivate: () => void calls.push(`deactivate ${id}`) })
+    const registry = createExtensionRegistry({ ...recordingServices(), onError: () => {} })
+    registry.register(spy('acme.active'))
+    registry.register(spy('acme.registered'))
+    registry.register(spy('acme.off'), { enabled: false })
+    registry.register(
+      spy('acme.failed', () => {
+        throw new Error('crash')
+      }),
+    )
+    await registry.activate('acme.active')
+    await registry.activate('acme.failed')
+    calls.length = 0
+    const before = new Map(registry.list().map((record) => [record.id, record]))
+
+    const noOps = [
+      ['activate', 'acme.active'],
+      ['activate', 'acme.off'],
+      ['deactivate', 'acme.registered'],
+      ['deactivate', 'acme.failed'],
+      ['deactivate', 'acme.off'],
+    ] as const
+    for (const [call, id] of noOps) {
+      expect(await registry[call](id), `${call} on ${id}`).toBe(before.get(id))
+    }
+
+    expect(calls).toEqual([])
+    expect(registry.list()).toEqual([...before.values()])
+  })
+
+  it('refuses to re-activate until a timed-out `deactivate` settles', async () => {
+    vi.useFakeTimers()
+    const hang = deferred()
+    const activate = vi.fn()
+    const registry = createExtensionRegistry({ ...recordingServices(), timeoutMs: 50, onError: () => {} })
+    registry.register(fixture('acme.slow', { activate, deactivate: () => hang.promise }))
+    await registry.activate('acme.slow')
+
+    const pending = registry.deactivate('acme.slow')
+    await vi.advanceTimersByTimeAsync(50)
+    expect((await pending).status).toBe('registered')
+
+    expect((await registry.activate('acme.slow')).status).toBe('registered')
+    expect(activate).toHaveBeenCalledTimes(1)
+
+    hang.resolve()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect((await registry.activate('acme.slow')).status).toBe('active')
+    expect(activate).toHaveBeenCalledTimes(2)
   })
 })
