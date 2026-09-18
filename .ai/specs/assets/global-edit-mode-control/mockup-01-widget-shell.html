@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Edit mode — widget shell mockup</title>
+  <style>
+    :root { color-scheme: light; --bg:#f5f6f8; --surface:#fff; --border:#dfe3e8; --text:#17191c; --muted:#69727d; --accent:#b7ff55; --accent-ink:#132000; --banner:#ffd84d; --banner-ink:#211b00; }
+    :root[data-theme="dark"] { color-scheme: dark; --bg:#101214; --surface:#191c20; --border:#30363d; --text:#f3f5f7; --muted:#a3adb8; --accent:#b7ff55; --accent-ink:#132000; --banner:#ffe16b; --banner-ink:#221c00; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--text); font:14px/1.4 Inter, system-ui, sans-serif; }
+    .shell { min-height:100vh; display:grid; grid-template-rows:auto 1fr; padding-top:env(safe-area-inset-top); }
+    .topbar { min-height:64px; display:flex; align-items:center; gap:20px; padding:12px max(24px, env(safe-area-inset-right)) 12px 28px; border-bottom:1px solid var(--border); background:var(--surface); }
+    .brand { font-weight:800; letter-spacing:.02em; }
+    .crumb { color:var(--muted); }
+    .mode-control { margin-left:auto; min-height:44px; display:inline-flex; align-items:center; gap:9px; padding:8px 13px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font-weight:750; box-shadow:0 5px 16px #00000012; }
+    .mode-control svg { width:20px; height:20px; }
+    .mode-control:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+    .banner { display:flex; justify-content:center; align-items:center; gap:18px; min-height:54px; padding:9px 18px; background:var(--banner); color:var(--banner-ink); font-weight:800; }
+    .banner button { min-height:34px; border:1px solid #5d4a00; border-radius:7px; padding:6px 12px; background:#fff4b4; color:#2b2200; font-weight:800; }
+    .content { padding:34px clamp(18px,5vw,72px) 72px; }
+    .content h1 { margin:0 0 7px; font-size:28px; }
+    .content p { margin:0 0 24px; color:var(--muted); }
+    .widgets { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; padding-right:190px; }
+    .widget { min-height:180px; padding:20px; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:0 7px 20px #0000000d; }
+    .widget strong { display:block; margin-bottom:18px; }
+    .metric { font-size:31px; font-weight:800; }
+    .hint { margin-top:8px; color:var(--muted); }
+    .annotation { position:fixed; right:max(18px, env(safe-area-inset-right)); top:84px; width:160px; padding:13px; border:1px dashed var(--muted); border-radius:10px; color:var(--muted); font-size:12px; background:color-mix(in srgb, var(--surface) 92%, transparent); }
+    @media (max-width:900px) { .widgets { grid-template-columns:repeat(2,minmax(0,1fr)); padding-right:170px; } }
+    @media (max-width:620px) { .topbar { padding-left:16px; gap:10px; } .crumb { display:none; } .mode-control { padding:8px 10px; } .mode-control span { display:none; } .content { padding:24px 16px 48px; } .widgets { grid-template-columns:1fr; padding-right:0; } .annotation { position:static; width:auto; margin:0 16px 20px; } .banner { justify-content:space-between; gap:10px; font-size:12px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <span class="brand">cezar</span><span class="crumb">/ Widgets overview</span>
+      <button class="mode-control" aria-label="Edit mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="8" height="7" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/><rect x="3" y="13" width="8" height="7" rx="1"/></svg>
+        <span>Edit mode</span>
+      </button>
+    </header>
+    <main>
+      <div class="banner">You are in edit mode <button type="button">Exit edit mode</button></div>
+      <section class="content">
+        <h1>Widgets overview</h1><p>Main widget view — the reserved top-right area keeps content clear of the edit control.</p>
+        <div class="widgets">
+          <article class="widget"><strong>Active tasks</strong><div class="metric">24</div><div class="hint">+8% this week</div></article>
+          <article class="widget"><strong>Agent activity</strong><div class="metric">78%</div><div class="hint">Across 6 workspaces</div></article>
+          <article class="widget"><strong>Review queue</strong><div class="metric">7</div><div class="hint">2 need attention</div></article>
+        </div>
+      </section>
+      <aside class="annotation">Reserved safe area<br/>Widget content shifts left here.</aside>
+    </main>
+  </div>
+</body>
+</html>
