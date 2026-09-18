@@ -16,7 +16,7 @@ Source doc: `.ai/specs/2026-09-18-global-edit-mode-interaction-guard.md`
 | 2 | 2.2 | Add AppShell tests for normal behavior, blocked business actions, forms, and exit behavior | inline | done | b8a5eab |
 | 3 | 3.1 | Run targeted web tests, typecheck, build, and configured repository gate | inline | done | b8a5eab |
 | 4 | 4.1 | Merge origin/main and resolve conflicts with the edit-mode control landed via #4 | inline | done | 7467f9f |
-| 4 | 4.1-review-fix | Guard keyboard activations and suspend global accelerators in edit mode | inline | done | — |
+| 4 | 4.1-review-fix | Guard keyboard activations and suspend global accelerators in edit mode | inline | done | f628550 |
 
 ## Goal
 
