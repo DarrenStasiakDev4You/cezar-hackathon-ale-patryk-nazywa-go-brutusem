@@ -78,9 +78,9 @@ name, use a recording `services` factory, and test timeouts with fake timers or 
 
 ### Phase 1: The registry
 
-- [ ] 1.1 Wire the package, then registration and records
-- [ ] 1.2 Activation
-- [ ] 1.3 Deactivation and disposal
+- [x] 1.1 Wire the package, then registration and records — a5b4224a
+- [x] 1.2 Activation — f2fe6088
+- [x] 1.3 Deactivation and disposal — 2f6bcaf3
 
 ### Phase 2: Cockpit boot and docs
 
