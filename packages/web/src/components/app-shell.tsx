@@ -18,6 +18,8 @@ import { openCommandPalette } from '@/components/command-palette'
 import { GithubIcon } from '@/components/icons'
 import { EditModeControl } from '@/components/edit-mode-control'
 import { shouldBlockEditModeActivation } from '@/components/edit-mode-interaction-guard'
+import { LayoutElementContextMenu, type LayoutContextMenuTarget } from '@/components/layout-context-menu'
+import { LayoutRegistryProvider } from '@/components/layout-registry'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -280,14 +282,22 @@ export const AppShell = React.memo(function AppShell({
     [editMode],
   )
 
+  const handleLayoutElementDelete = React.useCallback((target: LayoutContextMenuTarget) => {
+    // The current cockpit has no persisted dashboard model yet. Generic targets are therefore
+    // removed from the live DOM as the first usable delete behavior.
+    target.domNode?.remove()
+  }, [])
+
   return (
-    <div
-      data-slot="app-shell"
-      className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
-      data-edit-mode={editMode ? 'true' : 'false'}
-      onClickCapture={handleEditModeActivationGuard}
-      onSubmitCapture={handleEditModeSubmitGuard}
-    >
+    <LayoutRegistryProvider>
+      <LayoutElementContextMenu enabled={editMode} allowAnyElement onDelete={handleLayoutElementDelete}>
+        <div
+          data-slot="app-shell"
+          className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+          data-edit-mode={editMode ? 'true' : 'false'}
+          onClickCapture={handleEditModeActivationGuard}
+          onSubmitCapture={handleEditModeSubmitGuard}
+        >
       <div
         data-slot="edit-mode-surface"
         data-edit-mode={editMode ? 'true' : 'false'}
@@ -321,7 +331,9 @@ export const AppShell = React.memo(function AppShell({
         </div>
       </div>
       <EditModeControl enabled={editMode} onEnabledChange={setEditMode} />
-    </div>
+        </div>
+      </LayoutElementContextMenu>
+    </LayoutRegistryProvider>
   )
 })
 

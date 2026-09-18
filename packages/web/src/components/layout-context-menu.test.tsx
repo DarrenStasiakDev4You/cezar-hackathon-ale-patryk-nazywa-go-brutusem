@@ -23,6 +23,21 @@ function renderLayout(props: { enabled?: boolean; onDelete?: (target: LayoutCont
 describe('LayoutElementContextMenu', () => {
   afterEach(() => cleanup())
 
+  it('opens for an ordinary UI element when generic targets are enabled', () => {
+    render(
+      <LayoutRegistryProvider>
+        <LayoutElementContextMenu enabled allowAnyElement onDelete={vi.fn()}>
+          <button type="button">Ordinary action</button>
+        </LayoutElementContextMenu>
+      </LayoutRegistryProvider>,
+    )
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Ordinary action' }), { clientX: 40, clientY: 40 })
+
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Delete layout element' })).toBeTruthy()
+  })
+
   it('opens only for the nearest registered element and passes a widget target to delete', async () => {
     const onDelete = vi.fn()
     renderLayout({ onDelete })

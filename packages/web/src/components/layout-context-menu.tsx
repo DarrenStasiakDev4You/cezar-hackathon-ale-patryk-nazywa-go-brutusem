@@ -9,11 +9,13 @@ export type LayoutContextMenuTarget = {
   id: string
   kind: LayoutElementKind
   subtreeIds: string[]
+  domNode?: Element
 }
 
 export type LayoutElementContextMenuProps = {
   enabled: boolean
   onDelete: (target: LayoutContextMenuTarget) => void
+  allowAnyElement?: boolean
   /** Reserved for the future confirmation phase. Returning false cancels deletion. */
   confirmDelete?: (target: LayoutContextMenuTarget) => boolean | Promise<boolean>
   children: React.ReactNode
@@ -25,29 +27,40 @@ const MENU_WIDTH = 176
 const MENU_HEIGHT = 112
 const VIEWPORT_PADDING = 8
 
+const genericTargetIds = new WeakMap<Element, string>()
+let nextGenericTargetId = 1
+
+const genericTargetId = (element: Element): string => {
+  const existing = genericTargetIds.get(element)
+  if (existing) return existing
+  const id = `dom-${nextGenericTargetId++}`
+  genericTargetIds.set(element, id)
+  return id
+}
+
 const targetFromElement = (
   element: Element,
   registry: ReturnType<typeof useLayoutRegistry>,
+  allowAnyElement: boolean,
 ): LayoutContextMenuTarget | null => {
   const id = element.getAttribute('data-layout-id')
-  if (!id || element.getAttribute('data-layout-element') !== 'true') return null
-
-  const registered = registry.get(id)
-  if (!registered || !registered.domNode || !registered.domNode.contains(element)) return null
-
-  return {
-    id: registered.id,
-    kind: registered.kind,
-    subtreeIds: registry.getSubtree(registered.id).map((item) => item.id),
+  if (id && element.getAttribute('data-layout-element') === 'true') {
+    const registered = registry.get(id)
+    if (!registered || !registered.domNode || !registered.domNode.contains(element)) return null
+    return { id: registered.id, kind: registered.kind, subtreeIds: registry.getSubtree(registered.id).map((item) => item.id) }
   }
+  if (!allowAnyElement || element.closest('[data-layout-context-menu="true"]')) return null
+  return { id: genericTargetId(element), kind: 'widget', subtreeIds: [], domNode: element }
 }
 
-const getLayoutTarget = (eventTarget: EventTarget | null, registry: ReturnType<typeof useLayoutRegistry>) => {
+const getLayoutTarget = (eventTarget: EventTarget | null, registry: ReturnType<typeof useLayoutRegistry>, allowAnyElement: boolean) => {
   if (!(eventTarget instanceof Element)) return null
-  return targetFromElement(eventTarget.closest('[data-layout-element="true"][data-layout-id]') ?? eventTarget, registry)
+  const layoutElement = eventTarget.closest('[data-layout-element="true"][data-layout-id]')
+  const targetElement = layoutElement ?? eventTarget.closest('a,button,input,select,textarea,[role],section,article,li,td,th,div') ?? eventTarget
+  return targetFromElement(targetElement, registry, allowAnyElement)
 }
 
-export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, children }: LayoutElementContextMenuProps) {
+export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, allowAnyElement = false, children }: LayoutElementContextMenuProps) {
   const registry = useLayoutRegistry()
   const registrySnapshot = registry.getExternalSnapshot()
   const [target, setTarget] = React.useState<LayoutContextMenuTarget | null>(null)
@@ -107,7 +120,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!enabled) return
-    const nextTarget = getLayoutTarget(event.target, registry)
+    const nextTarget = getLayoutTarget(event.target, registry, allowAnyElement)
     if (!nextTarget) return
     event.preventDefault()
     event.stopPropagation()
@@ -118,7 +131,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
   const handleDelete = async () => {
     if (!target || deletingRef.current) return
     const current = registry.get(target.id)
-    if (!current?.domNode) {
+    if (!current?.domNode && !target.domNode?.isConnected) {
       close()
       return
     }
