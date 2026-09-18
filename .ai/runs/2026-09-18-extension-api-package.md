@@ -90,6 +90,6 @@ Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run 
 
 ### Phase 3: Proof and documentation
 
-- [ ] 3.1 The example and a recording fake context
-- [ ] 3.2 Export snapshot
-- [ ] 3.3 README and AGENTS.md
+- [x] 3.1 The example and a recording fake context — 52507b4f
+- [x] 3.2 Export snapshot — c79f8c06
+- [x] 3.3 README and AGENTS.md — 50df8679
