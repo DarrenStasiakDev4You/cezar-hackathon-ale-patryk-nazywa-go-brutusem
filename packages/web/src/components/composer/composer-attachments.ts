@@ -47,6 +47,8 @@ export function attachmentMediaType(file: File): string | null {
 
 /** A pending attachment: the wire shape, plus what the composer's row needs to show it. */
 export interface PendingAttachment extends AttachmentInput {
+  /** Stable in-memory key used by the prop-only view; never sent on the wire. */
+  key?: string
   /** Server-minted id when this attachment is backed by the in-task draft store. */
   id?: string
   /** Data-URL for the thumbnail — images only; a file has nothing to preview. */
@@ -92,6 +94,7 @@ export async function fileToPendingAttachment(file: File, source: 'file' | 'clip
   // Clipboard image names may be synthesized by the browser (for example image.png).
   const originalName = source === 'clipboard' && isImage ? undefined : file.name
   return {
+    key: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
     mediaType,
     data,
     ...(isImage ? { preview: `data:${mediaType};base64,${data}` } : {}),
