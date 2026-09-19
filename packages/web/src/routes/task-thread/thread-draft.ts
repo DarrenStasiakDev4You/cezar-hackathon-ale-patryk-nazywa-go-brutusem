@@ -68,6 +68,8 @@ export interface Draft {
    * persisted rather than lost.
    */
   submit: <T>(action: () => Promise<T>) => Promise<T>
+  /** Restore a failed message into its own task, even when another task is on screen. */
+  restoreTo: (runId: string, text: string, images: readonly PendingAttachment[]) => void
   /** Drop this surface's draft now — an explicit Cancel, or a host that finished another way. */
   clear: () => void
 }
@@ -314,12 +316,20 @@ export function useDraft(runId: string, surface: string, { enabled = true }: Dra
 
   const submit = useCallback(
     async <T,>(action: () => Promise<T>): Promise<T> => {
+      const submittedRunId = runId
       sending.current = true
       cancelPending()
       try {
         const result = await action()
         sending.current = false
-        clear()
+        if (latest.current.runId === submittedRunId && latest.current.surface === surface) {
+          clear()
+        } else {
+          // The thread remains mounted while the user changes tasks. A send that belonged to the
+          // old task must never clear the newly visible task's local state.
+          cache(submittedRunId, surface, null)
+          write(submittedRunId, surface, { text: '', images: [] })
+        }
         return result
       } catch (error) {
         sending.current = false
@@ -327,11 +337,32 @@ export function useDraft(runId: string, surface: string, { enabled = true }: Dra
         // propagates (the composer's own `restoreOnError`), so writing right here would persist
         // the optimistic clear and only correct it a beat later. One debounce lets the restore
         // land first, and the draft is written once, holding what the input actually shows.
-        schedule()
+        if (latest.current.runId === submittedRunId && latest.current.surface === surface) schedule()
         throw error
       }
     },
-    [cancelPending, clear, schedule],
+    [cache, cancelPending, clear, key, runId, schedule, surface, write],
+  )
+
+  const restoreTo = useCallback(
+    (forRunId: string, nextText: string, nextImages: readonly PendingAttachment[]) => {
+      const currentEntry = queryClient.getQueryData<RunDraftsResponse>(queryKeys.runs.drafts(forRunId))?.surfaces?.[surface]
+      const currentImages = draftImages(nextImages)
+      const existingImages = currentEntry?.images ?? []
+      const sameTask = latest.current.runId === forRunId && latest.current.surface === surface
+      const text = sameTask && latest.current.text !== '' ? `${nextText}\n${latest.current.text}` : nextText
+      const images = [...currentImages, ...existingImages.filter((image) => !currentImages.some((next) => next.id === image.id))]
+      cache(forRunId, surface, { text, images })
+      write(forRunId, surface, { text, images: images.map((image) => image.id) })
+      if (latest.current.runId === forRunId && latest.current.surface === surface) {
+        const localImages = [...nextImages, ...latest.current.images.filter((image) => !nextImages.includes(image))]
+        setTextState(text)
+        setImagesState(localImages)
+        latest.current = { ...latest.current, text, images: localImages }
+        dirty.current = true
+      }
+    },
+    [cache, queryClient, surface, write],
   )
 
   // Drain whatever the surface swap left behind, once the render that queued it has committed.
@@ -432,6 +463,7 @@ export function useDraft(runId: string, surface: string, { enabled = true }: Dra
     images,
     setImages,
     submit,
+    restoreTo,
     clear,
   }
 }
