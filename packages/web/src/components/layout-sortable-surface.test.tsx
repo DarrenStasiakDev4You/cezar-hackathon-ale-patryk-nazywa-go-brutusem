@@ -30,9 +30,12 @@ describe('LayoutSortableSurface', () => {
   it('exposes an explicit accessible handle only in edit mode', () => {
     renderSurface(true)
 
-    expect(screen.getAllByRole('button', { name: /przenieś/i })).toHaveLength(2)
-    expect(screen.getAllByRole('button', { name: /przenieś/i })[0]?.getAttribute('data-edit-mode-action')).toBe('allow')
-    expect(screen.getByText('First').closest('[data-layout-element]')?.getAttribute('data-layout-sortable')).toBe('true')
+    const first = screen.getByText('First').closest('[data-layout-element]')
+    expect(first?.getAttribute('role')).toBe('button')
+    expect(first?.getAttribute('aria-roledescription')).toBe('sortable')
+    expect(first?.getAttribute('data-edit-mode-action')).toBe('allow')
+    expect(first?.getAttribute('data-layout-sortable')).toBe('true')
+    expect(first?.querySelector('[data-layout-drag-handle]')).not.toBeNull()
   })
 
   it('resolves only same-parent drop targets and derives direction from sibling order', () => {
