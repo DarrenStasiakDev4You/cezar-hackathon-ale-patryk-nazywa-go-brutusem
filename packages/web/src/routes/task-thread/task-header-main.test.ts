@@ -586,7 +586,7 @@ describe('useTaskHeaderModel: the intents', () => {
       const { result } = renderModel(automated, { path: '/p/web/tasks/r1' })
       await waitFor(() => expect(result.current.props.meta.automation?.href).toBeDefined())
 
-      for (const href of ['javascript:alert(1)', '//evil.example', '/p/web/tasks/other', 'javascript:alert(1)']) {
+      for (const href of ['javascript:void(0)', '//evil.example', '/p/web/tasks/other', 'javascript:void(0)']) {
         act(() => result.current.props.onNavigate(href))
       }
       expect(location).toBe('/p/web/tasks/r1')

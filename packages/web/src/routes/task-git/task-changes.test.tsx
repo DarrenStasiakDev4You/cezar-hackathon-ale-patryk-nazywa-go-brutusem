@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
+import { ComponentsProvider } from '@/component-registry/provider'
 import type { ApiRun, ChangesPayload, HealthResponse, RepoResponse } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import type { GitActionBar } from '@/lib/git-actions'
@@ -119,12 +120,14 @@ function renderChangesRoute() {
   render(
     <QueryClientProvider client={createQueryClient()}>
       <CommandsProvider>
-        <MemoryRouter initialEntries={['/tasks/r1/changes']}>
-          <Routes>
-            <Route path="/tasks/:id/changes" element={<TaskChangesRoute />} />
-          </Routes>
-          <Toaster />
-        </MemoryRouter>
+        <ComponentsProvider>
+          <MemoryRouter initialEntries={['/tasks/r1/changes']}>
+            <Routes>
+              <Route path="/tasks/:id/changes" element={<TaskChangesRoute />} />
+            </Routes>
+            <Toaster />
+          </MemoryRouter>
+        </ComponentsProvider>
       </CommandsProvider>
     </QueryClientProvider>,
   )

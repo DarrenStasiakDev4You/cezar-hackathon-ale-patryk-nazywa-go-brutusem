@@ -318,10 +318,11 @@ export function ThreadView({
         run={run}
         planTally={planTally}
         onMarkedUnread={markedUnread}
-        // The badge the user already opens to inspect runner/account/model now edits the SAME
-        // continuation choice as the dock. One hook owns both renderings, so a header pick is
-        // exactly what the next composer submission sends — no second, drifting engine state.
-        continuationEngine={continuable ? continueAction.pills : undefined}
+        // The badge the user already opens to inspect runner/account/model offers a way to the
+        // dock's picker for the next continuation (spec 2026-09-19-task-header-contract, Q7). The
+        // picker itself lives in the dock only, so a header pick and the next composer submission
+        // are one engine state. Offered exactly while the dock shows the pills.
+        onChooseEngine={continuable ? continueAction.focusPicker : undefined}
       />
 
       {/* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);

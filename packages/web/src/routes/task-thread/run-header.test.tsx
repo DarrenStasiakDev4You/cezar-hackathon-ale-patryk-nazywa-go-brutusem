@@ -6,10 +6,10 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ReactNode } from 'react'
 
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
+import { ComponentsProvider } from '@/component-registry/provider'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
@@ -72,7 +72,7 @@ const jsonResponse = (body: unknown, status = 200) =>
 
 /** Stubs fetch, records every request, and lets a test override specific paths. Defaults:
  *  the runs list is empty, every mutation succeeds with `{}`. */
-function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[] {
+function stubFetch(overrides: Record<string, () => Response | Promise<Response>> = {}): SentRequest[] {
   const sent: SentRequest[] = []
   vi.stubGlobal(
     'fetch',
@@ -106,28 +106,30 @@ function renderHeader(
   record: ApiRun,
   onMarkedUnread?: () => void,
   planTally?: { done: number; total: number },
-  continuationEngine?: ReactNode,
+  onChooseEngine?: () => void,
 ) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
       <CommandsProvider>
-        <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
-          <Routes>
-            <Route
-              path="/tasks/:id"
-              element={
-                <RunHeader
-                  run={record}
-                  onMarkedUnread={onMarkedUnread}
-                  planTally={planTally}
-                  continuationEngine={continuationEngine}
-                />
-              }
-            />
-            <Route path="/" element={<div data-slot="home-probe" />} />
-          </Routes>
-          <Toaster />
-        </MemoryRouter>
+        <ComponentsProvider>
+          <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
+            <Routes>
+              <Route
+                path="/tasks/:id"
+                element={
+                  <RunHeader
+                    run={record}
+                    onMarkedUnread={onMarkedUnread}
+                    planTally={planTally}
+                    onChooseEngine={onChooseEngine}
+                  />
+                }
+              />
+              <Route path="/" element={<div data-slot="home-probe" />} />
+            </Routes>
+            <Toaster />
+          </MemoryRouter>
+        </ComponentsProvider>
       </CommandsProvider>
     </QueryClientProvider>,
   )
@@ -418,19 +420,26 @@ describe('Mark unread (#775)', () => {
 
 describe('actions run through commands (spec 2026-09-19-command-api)', () => {
   it('Continue, Cancel and Archive no longer reach for the API client', () => {
-    const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-header.tsx'), 'utf8')
+    const read = (file: string) => readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), file), 'utf8')
+    // The header's own actions stay in run-header.tsx; Continue, Cancel and Archive run through
+    // the header's model after the split (spec 2026-09-19-task-header-contract), where `useCommand` lives.
+    const shell = read('run-header.tsx')
+    const model = read('task-header-main.ts')
     // Every import of the client, however many statements there are.
-    const names = [...source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'@\/api\/client'/g)]
-      .flatMap((match) => (match[1] ?? '').split(','))
-      .map((name) => name.replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim())
+    const clientNames = (source: string) =>
+      [...source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'@\/api\/client'/g)]
+        .flatMap((match) => (match[1] ?? '').split(','))
+        .map((name) => name.replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim())
 
-    // A namespace or default import would hide the names from the check above.
-    expect(source).not.toMatch(/import\s+(?:\*\s*as\s+)?\w+\s*(?:,\s*\{[^}]*\})?\s*from\s*'@\/api\/client'/)
-    expect(names).toContain('deleteRun')
-    expect(names).not.toContain('continueRun')
-    expect(names).not.toContain('cancelRun')
-    expect(names).not.toContain('archiveRun')
-    expect(source).toContain("from '@/commands/provider'")
+    for (const source of [shell, model]) {
+      // A namespace or default import would hide the names from the check below.
+      expect(source).not.toMatch(/import\s+(?:\*\s*as\s+)?\w+\s*(?:,\s*\{[^}]*\})?\s*from\s*'@\/api\/client'/)
+      expect(clientNames(source)).not.toContain('continueRun')
+      expect(clientNames(source)).not.toContain('cancelRun')
+      expect(clientNames(source)).not.toContain('archiveRun')
+    }
+    expect(clientNames(shell)).toContain('deleteRun')
+    expect(model).toContain("from '@/commands/provider'")
   })
 })
 
@@ -966,14 +975,16 @@ describe('meta line, tabs, pill and resume hint', () => {
     render(
       <QueryClientProvider client={createQueryClient()}>
         <CommandsProvider>
-          <MemoryRouter initialEntries={['/tasks/r1']}>
-            <Routes>
-              <Route
-                path="/tasks/:id"
-                element={<RunHeader run={run('running')} planTally={{ done: 2, total: 5 }} />}
-              />
-            </Routes>
-          </MemoryRouter>
+          <ComponentsProvider>
+            <MemoryRouter initialEntries={['/tasks/r1']}>
+              <Routes>
+                <Route
+                  path="/tasks/:id"
+                  element={<RunHeader run={run('running')} planTally={{ done: 2, total: 5 }} />}
+                />
+              </Routes>
+            </MemoryRouter>
+          </ComponentsProvider>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -1262,20 +1273,18 @@ describe('meta line, tabs, pill and resume hint', () => {
     expect(within(menu).getByText('model: auto')).not.toBeNull()
   })
 
-  it('offers the next-continuation engine picker inside the existing agent badge', async () => {
+  // Spec 2026-09-19-task-header-contract, Q7: the badge keeps a way in to the next continuation's
+  // engine, as an intent. The picker itself lives in the dock only.
+  it('the badge menu offers Choose engine for the next continuation…, which calls onChooseEngine', async () => {
     stubFetch()
-    renderHeader(
-      run('done', { runner: 'claude', model: 'sonnet' }),
-      undefined,
-      undefined,
-      <button type="button" aria-label="Model">sonnet</button>,
-    )
+    const onChooseEngine = vi.fn()
+    renderHeader(run('done', { runner: 'claude', model: 'sonnet' }), undefined, undefined, onChooseEngine)
 
     const meta = document.querySelector('[data-slot="run-meta"]') as HTMLElement
     fireEvent.pointerDown(within(meta).getByRole('button', { name: /Agent: claude/ }))
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getByText('Next continuation')).not.toBeNull()
-    expect(within(menu).getByRole('button', { name: 'Model' }).textContent).toBe('sonnet')
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Choose engine for the next continuation…' }))
+    await waitFor(() => expect(onChooseEngine).toHaveBeenCalledTimes(1))
   })
 
   it('keeps the historical badge read-only when no continuation picker is owned by the view', async () => {
@@ -1284,7 +1293,7 @@ describe('meta line, tabs, pill and resume hint', () => {
     const meta = document.querySelector('[data-slot="run-meta"]') as HTMLElement
     fireEvent.pointerDown(within(meta).getByRole('button', { name: /Agent: claude/ }))
     const menu = await screen.findByRole('menu')
-    expect(within(menu).queryByText('Next continuation')).toBeNull()
+    expect(within(menu).queryByRole('menuitem', { name: /Choose engine/ })).toBeNull()
   })
 
   // #416: the record persists only the runner the caller ASKED for (`src/runs/store.ts`), while
@@ -1604,5 +1613,100 @@ describe('dispatch lines', () => {
     renderHeader(run('running', { dispatch: { rootRunId: 'r1' } }))
     await waitFor(() => expect(document.querySelector('[data-slot="run-actions"]')).not.toBeNull())
     expect(document.querySelector('[data-slot="unit-role"]')).toBeNull()
+  })
+})
+
+/** The shell around the replaceable part (spec 2026-09-19-task-header-contract, § The split). */
+describe('the shell around the task header part', () => {
+  it('renders the part through the component host, with the Run actions menu beside it', () => {
+    stubFetch()
+    renderHeader(run('waiting'))
+
+    const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
+    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
+    expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
+    const menu = screen.getByRole('button', { name: 'Run actions' })
+    expect(box?.contains(menu)).toBe(false)
+  })
+
+  it('shows the diff with its file count and the #751 caveat in the meta row', () => {
+    stubFetch()
+    renderHeader(run('done', { diffStat: { adds: 12, dels: 3, files: 4, repointed: true } }))
+
+    const diff = document.querySelector('[data-slot="run-meta"] [data-slot="diff-stat"]') as HTMLElement
+    expect(diff.textContent).toBe('+12 −3')
+    expect(diff.getAttribute('title')).toMatch(/^\+12 −3 across 4 files — measured against another branch/)
+    expect(diff.getAttribute('data-repointed')).toBe('true')
+    expect(diff.getAttribute('aria-label')).toBe(diff.getAttribute('title'))
+  })
+
+  it('opens core’s title editor over the part’s top 30 px, keeping the part mounted and inert', async () => {
+    const sent = stubFetch()
+    renderHeader(run('waiting'))
+    const part = document.querySelector('[data-slot="task-header-main"]') as HTMLElement
+    expect(part.hasAttribute('inert')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename task' }))
+    const band = document.querySelector('[data-slot="title-editor"]') as HTMLElement
+    expect(band.className).toContain('h-[30px]')
+    expect(band.contains(screen.getByLabelText('Task title'))).toBe(true)
+    expect(part.hasAttribute('inert')).toBe(true)
+    expect(part.querySelector('h1')).not.toBeNull()
+
+    fireEvent.keyDown(screen.getByLabelText('Task title'), { key: 'Escape' })
+    expect(document.querySelector('[data-slot="title-editor"]')).toBeNull()
+    expect(part.hasAttribute('inert')).toBe(false)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rename task' }))
+    fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'A better name' } })
+    fireEvent.keyDown(screen.getByLabelText('Task title'), { key: 'Enter' })
+    await waitFor(() => expect(sent.find((r) => r.method === 'PATCH')?.body).toEqual({ title: 'A better name' }))
+    expect(part.hasAttribute('inert')).toBe(false)
+  })
+
+  it('opens the editor over the part for a saved draft on mount', async () => {
+    stubFetch({
+      '/api/v1/runs/r1/drafts': () =>
+        jsonResponse({ surfaces: { title: { text: 'Half a new na', images: [], updatedAt: '2026-08-30T00:00:00.000Z' } } }),
+    })
+    renderHeader(run('waiting'))
+
+    const input = (await screen.findByLabelText('Task title')) as HTMLInputElement
+    expect(input.value).toBe('Half a new na')
+    expect(document.querySelector('[data-slot="task-header-main"]')?.hasAttribute('inert')).toBe(true)
+  })
+
+  it('Cancel in the Run actions menu asks first, and only Cancel the run stops the task', async () => {
+    const sent = stubFetch()
+    renderHeader(run('running'))
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Run actions' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cancel' }))
+    const dialog = await screen.findByRole('alertdialog')
+    expect(sent.some((r) => r.path === '/api/v1/runs/r1/cancel')).toBe(false)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel the run' }))
+    await waitFor(() => expect(sent.filter((r) => r.method === 'POST' && r.path === '/api/v1/runs/r1/cancel')).toHaveLength(1))
+  })
+
+  it('disables Archive while its request is pending', async () => {
+    const sent = stubFetch({ '/api/v1/runs/r1/archive': () => new Promise<Response>(() => {}) })
+    renderHeader(run('done'))
+
+    const archive = actionBar().getByRole<HTMLButtonElement>('button', { name: 'Archive' })
+    fireEvent.click(archive)
+    await waitFor(() => expect(archive.disabled).toBe(true))
+    fireEvent.click(archive)
+    expect(sent.filter((r) => r.path === '/api/v1/runs/r1/archive')).toHaveLength(1)
+  })
+
+  it('disables Cancel while the stop is pending', async () => {
+    const sent = stubFetch({ '/api/v1/runs/r1/cancel': () => new Promise<Response>(() => {}) })
+    renderHeader(run('running'))
+
+    const cancel = actionBar().getByRole<HTMLButtonElement>('button', { name: 'Cancel' })
+    fireEvent.click(cancel)
+    fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel the run' }))
+    await waitFor(() => expect(cancel.disabled).toBe(true))
+    expect(sent.filter((r) => r.path === '/api/v1/runs/r1/cancel')).toHaveLength(1)
   })
 })

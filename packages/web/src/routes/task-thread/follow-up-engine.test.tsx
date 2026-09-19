@@ -599,3 +599,74 @@ describe('the follow-up runner pill carries the account', () => {
     expect(runnerPill()).toBeNull()
   })
 })
+
+/** The dock's pills plus the header's way in (spec 2026-09-19-task-header-contract, Q7). */
+function FocusHarness({ run }: { run: ApiRun }) {
+  const action = useContinueAction(run)
+  return (
+    <>
+      {action.pills}
+      <button type="button" onClick={action.focusPicker}>
+        Choose engine
+      </button>
+    </>
+  )
+}
+
+function renderFocus(record: ApiRun) {
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <CommandsProvider>
+        <MemoryRouter>
+          <FocusHarness run={record} />
+        </MemoryRouter>
+      </CommandsProvider>
+    </QueryClientProvider>,
+  )
+}
+
+describe('focusPicker', () => {
+  it('focuses the runner pill when there is a choice of runner', async () => {
+    serve()
+    renderFocus(makeRun())
+    const runner = await screen.findByRole('button', { name: 'Runner' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose engine' }))
+    expect(document.activeElement).toBe(runner)
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('focuses the model pill when there is no choice of runner or login', async () => {
+    serve({
+      ...HEALTH_MULTI,
+      checks: [
+        { name: 'claude', available: true },
+        { name: 'git', available: true },
+      ],
+    })
+    renderFocus(makeRun())
+    const model = await screen.findByRole('button', { name: 'Model' })
+    await waitFor(() => expect(requests.some((request) => request.url === '/api/v1/providers/status')).toBe(true))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose engine' }))
+    expect(screen.queryByRole('button', { name: 'Runner' })).toBeNull()
+    expect(document.activeElement).toBe(model)
+  })
+
+  it('keeps one identity across renders', async () => {
+    serve()
+    const { result, rerender } = renderHook(({ record }: { record: ApiRun }) => useContinueAction(record), {
+      initialProps: { record: makeRun() },
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={createQueryClient()}>
+          <CommandsProvider>
+            <MemoryRouter>{children}</MemoryRouter>
+          </CommandsProvider>
+        </QueryClientProvider>
+      ),
+    })
+    const first = result.current.focusPicker
+    rerender({ record: makeRun({ id: 'r2' }) })
+    expect(result.current.focusPicker).toBe(first)
+  })
+})
