@@ -21,7 +21,8 @@ import { useLocation } from 'react-router'
 
 import { useHealth, usePinRun, useProjectRuns } from '@/api/queries'
 import type { ProjectListEntry, RunRecord } from '@open-mercato/cezar-api-client'
-import { useSidebarNavigate } from '@/components/app-shell'
+import { sidebarLayoutId, useSidebarLayoutNamespace, useSidebarNavigate } from '@/components/app-shell'
+import { LayoutElement } from '@/components/layout-element'
 import { useListView } from '@/components/list-view'
 import { activeNavPath, visibleNavItems } from '@/components/nav-items'
 import { ReferenceStatusProvider } from '@/components/reference-status'
@@ -51,6 +52,11 @@ import { cn } from '@/lib/utils'
 /** The spec's "10 most recent tasks", counted ACROSS buckets — a collapsed variant tile is one
  *  row, because it occupies one row of sidebar. */
 const RECENT_LIMIT = 10
+
+const projectLayoutId = (namespace: 'desktop' | 'mobile', projectId: string): string =>
+  sidebarLayoutId(namespace, `project-${encodeURIComponent(projectId)}`)
+const projectChildLayoutId = (namespace: 'desktop' | 'mobile', projectId: string, child: string): string =>
+  `${projectLayoutId(namespace, projectId)}-${encodeURIComponent(child)}`
 
 /**
  * Read + write of the per-project collapse map (`lib/sidebar-collapse.ts`), which lives in
@@ -103,6 +109,7 @@ export function ProjectGroups({
   inboxCount?: number | null
   skillsUpdateAvailable?: boolean
 }) {
+  const layoutNamespace = useSidebarLayoutNamespace()
   const { pathname } = useLocation()
   // The shell renders outside the routes, so there is no `ProjectScopeProvider` above it — the
   // URL's own prefix is the scope, exactly as `project-router` resolves it for links.
@@ -222,6 +229,7 @@ export function ProjectGroups({
       sortable={sortable}
       position={orderedIds.indexOf(project.id) + 1}
       total={orderedIds.length}
+      layoutNamespace={layoutNamespace}
     />
   ))
 
@@ -327,6 +335,7 @@ function ProjectGroup({
   sortable,
   position,
   total,
+  layoutNamespace,
 }: {
   project: ProjectListEntry
   /** The boot project's runs cache lives under the `'default'` scope key (it mounts
@@ -352,6 +361,7 @@ function ProjectGroup({
   /** 1-based, for the grip's label — a screen-reader user needs to know where the row starts. */
   position: number
   total: number
+  layoutNamespace: 'desktop' | 'mobile'
 }) {
   const missing = project.status === 'missing'
   // A missing project holds its place in the order but is not draggable: its row is deliberately
@@ -428,42 +438,53 @@ function ProjectGroup({
   // there is nothing behind the chevron — the row renders greyed and inert rather than
   // pretending to expand into a nav whose every link is a dead end. Unregistering lives in
   // Global settings → Projects; the row says so instead of growing its own destructive button.
+  const layoutId = projectLayoutId(layoutNamespace, project.id)
   if (missing) {
     return (
-      <div
-        ref={setNodeRef}
-        style={dragStyle}
-        data-slot="project-group"
-        data-project={project.id}
-        data-status="missing"
-        className={cn('mb-1', isDragging && 'relative z-10 opacity-40')}
-      >
-        <div className="flex items-center">
+      <LayoutElement id={layoutId} kind="group" parentId={sidebarLayoutId(layoutNamespace, 'project-groups')} className="contents">
+        <div
+          ref={setNodeRef}
+          style={dragStyle}
+          data-slot="project-group"
+          data-project={project.id}
+          data-status="missing"
+          className={cn('mb-1', isDragging && 'relative z-10 opacity-40')}
+        >
+          <div className="flex items-center">
           {/* The grip's column, empty: the row stays inert (no control that does nothing) while
               its name still lines up with every other project's. */}
           <span aria-hidden="true" className="w-6 shrink-0 md:w-4" />
-          <div
-            data-slot="project-group-header"
-            title={`${project.root} is gone — remove it in Global settings → Projects`}
-            className="flex h-11 min-w-0 flex-1 items-center gap-[7px] rounded-lg px-2 text-[13px] font-semibold opacity-55 md:h-[34px]"
+          <LayoutElement
+            id={projectChildLayoutId(layoutNamespace, project.id, 'header')}
+            kind="widget"
+            parentId={layoutId}
+            className="contents"
           >
-            <span className="w-3 shrink-0" aria-hidden="true" />
-            <span className="truncate">{project.name}</span>
-            <span
-              data-slot="project-missing"
-              className="ml-auto shrink-0 rounded-full bg-danger/15 px-[7px] py-px text-[10px] font-medium text-danger"
+            <div
+              data-slot="project-group-header"
+              title={`${project.root} is gone — remove it in Global settings → Projects`}
+              className="flex h-11 min-w-0 flex-1 items-center gap-[7px] rounded-lg px-2 text-[13px] font-semibold opacity-55 md:h-[34px]"
             >
-              folder not found
-            </span>
+              <span className="w-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">{project.name}</span>
+              <span
+                data-slot="project-missing"
+                className="ml-auto shrink-0 rounded-full bg-danger/15 px-[7px] py-px text-[10px] font-medium text-danger"
+              >
+                folder not found
+              </span>
+            </div>
+          </LayoutElement>
           </div>
         </div>
-      </div>
+      </LayoutElement>
     )
   }
 
   const bodyId = `project-group-${project.id}`
 
   return (
+    <LayoutElement id={layoutId} kind="group" parentId={sidebarLayoutId(layoutNamespace, 'project-groups')} className="contents">
     <div
       ref={setNodeRef}
       style={dragStyle}
@@ -485,6 +506,12 @@ function ProjectGroup({
           invalid, and dnd-kit's keyboard path has to lift from a real focusable control. */}
       <div className="group/row flex items-center">
         {grip}
+        <LayoutElement
+          id={projectChildLayoutId(layoutNamespace, project.id, 'header')}
+          kind="widget"
+          parentId={layoutId}
+          className="contents"
+        >
         <button
           type="button"
           onClick={() => onToggle(project.id)}
@@ -536,6 +563,7 @@ function ProjectGroup({
             </span>
           ) : null}
         </button>
+        </LayoutElement>
       </div>
 
       {collapsed ? null : (
@@ -566,8 +594,14 @@ function ProjectGroup({
               // Explicitly scoped (`/p/<id>/…`) rather than left to the wrapper's active-project
               // prefix: a group's whole point is linking into a project that is NOT active.
               return (
-                <Link
+                <LayoutElement
                   key={item.to}
+                  id={projectChildLayoutId(layoutNamespace, project.id, item.to)}
+                  kind="widget"
+                  parentId={layoutId}
+                  className="contents"
+                >
+                <Link
                   to={scopeTo(project.id, item.to)}
                   onClick={onNavigate}
                   aria-current={isActive ? 'page' : undefined}
@@ -596,6 +630,7 @@ function ProjectGroup({
                     </span>
                   ) : null}
                 </Link>
+                </LayoutElement>
               )
             })}
           </nav>
@@ -622,16 +657,24 @@ function ProjectGroup({
 
           {/* Always present, not only past the cap: it is this group's door into the project's
               tasks pane (`/p/<id>/`), which is worth an affordance even with two tasks listed. */}
-          <Link
-            to={scopeTo(project.id, '/')}
-            onClick={onNavigate}
-            data-slot="project-group-more"
-            className="flex h-9 items-center rounded-md px-3 text-[12px] text-muted-foreground transition-colors hover:text-foreground md:h-7"
+          <LayoutElement
+            id={projectChildLayoutId(layoutNamespace, project.id, 'more')}
+            kind="widget"
+            parentId={layoutId}
+            className="contents"
           >
-            More…
-          </Link>
+            <Link
+              to={scopeTo(project.id, '/')}
+              onClick={onNavigate}
+              data-slot="project-group-more"
+              className="flex h-9 items-center rounded-md px-3 text-[12px] text-muted-foreground transition-colors hover:text-foreground md:h-7"
+            >
+              More…
+            </Link>
+          </LayoutElement>
         </div>
       )}
     </div>
+    </LayoutElement>
   )
 }

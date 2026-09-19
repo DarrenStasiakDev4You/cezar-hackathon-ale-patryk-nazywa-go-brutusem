@@ -176,6 +176,18 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - [x] 4.2 Preserve concrete child identity in the context menu and expand regression coverage for subtree deletion and multi-level tree operations. — 54d7616c
 - [x] 4.3 Keep drag-over state-only and apply cross-parent, before/after, and interior moves once on drag end; verify the focused web surface. — 54d7616c
 
+### Phase 5: editable navigation tree
+
+- [x] 5.1 Register the visible sidebar header, actions, project navigation rows, and footer controls as distinct nested layout nodes. — 54b88baf
+- [x] 5.2 Make context-menu deletion remove the exact navigation node while preserving its parent and sibling rows; cover the primary Tasks scenario. — 54b88baf
+- [x] 5.3 Keep desktop and mobile sidebar instances on unique stable IDs and preserve existing navigation layout tests. — 54b88baf
+
+### Editable navigation validation — 2026-09-19
+
+- Focused layout/navigation tests: passed — 5 files, 123 tests.
+- Full configured gate passed: `npm run typecheck`, `npm test` (416 files, 7723 tests), `npm run test:unit` (36 tests after a transient launcher-reuse rerun), `npm run build`/`check:pack`, and `npm run test:package` (16 tests).
+- Added an AppShell regression proving context-menu Delete on the primary `Tasks` row removes only that row and preserves the main navigation parent and siblings.
+
 ### Nested tree continuation validation — 2026-09-19
 
 - Focused layout tests: passed — 4 files, 27 tests.

@@ -50,6 +50,7 @@ describe('LayoutElementContextMenu', () => {
     expect(onDelete).toHaveBeenCalledTimes(1)
     expect(onDelete).toHaveBeenCalledWith({ id: 'card', kind: 'widget', subtreeIds: ['card'] })
     expect(screen.queryByText('Revenue')).toBeNull()
+    expect(document.querySelector('[data-layout-id="group"]')).not.toBeNull()
     expect(screen.queryByRole('menu')).toBeNull()
   })
 

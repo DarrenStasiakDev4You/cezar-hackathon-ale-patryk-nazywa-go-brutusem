@@ -56,6 +56,16 @@ import { cn } from '@/lib/utils'
 // Its own gradient + rounded corners ARE the tile.
 const brandLogoUrl = '/open-mercato.svg'
 
+export type SidebarLayoutNamespace = 'desktop' | 'mobile'
+const SidebarLayoutNamespaceContext = React.createContext<SidebarLayoutNamespace>('desktop')
+
+export const sidebarLayoutId = (namespace: SidebarLayoutNamespace, id: string): string =>
+  `sidebar-${namespace}-${id}`
+
+export function useSidebarLayoutNamespace(): SidebarLayoutNamespace {
+  return React.useContext(SidebarLayoutNamespaceContext)
+}
+
 /** Tailwind's `md`. The drawer is the `<md` affordance, so this must stay in step with the
  *  `md:hidden` / `md:flex` classes below — they are the same breakpoint expressed twice, once
  *  for CSS and once for the state machine. */
@@ -418,7 +428,7 @@ const Sidebar = React.memo(function Sidebar({ width, onWidthChange, ...props }: 
       style={{ width }}
       className="relative hidden shrink-0 flex-col border-r border-border bg-sidebar md:flex"
     >
-      <SidebarContent {...props} />
+      <SidebarContent {...props} layoutNamespace="desktop" />
       <SidebarResizeHandle width={width} onWidthChange={onWidthChange} />
     </aside>
   )
@@ -545,6 +555,7 @@ const MobileNavDrawer = React.memo(function MobileNavDrawer({ onNavigate, ...pro
       <SheetTitle className="sr-only">Navigation</SheetTitle>
       <SidebarContent
         {...props}
+        layoutNamespace="mobile"
         onNavigate={onNavigate}
         headerAction={
           <SheetClose asChild>
@@ -582,6 +593,7 @@ function SidebarContent({
   singleProject,
   onNavigate,
   headerAction,
+  layoutNamespace,
 }: NavProps & {
   /** Fires on any in-drawer navigation. The route-change effect already closes the drawer for
    *  every *changed* route; this also covers re-clicking the active item (per the spec, Tasks
@@ -589,8 +601,12 @@ function SidebarContent({
   onNavigate?: () => void
   /** The drawer's close button. Absent on desktop, which has nothing to close. */
   headerAction?: ReactNode
+  layoutNamespace: SidebarLayoutNamespace
 }) {
+  const layout = React.useCallback((id: string) => sidebarLayoutId(layoutNamespace, id), [layoutNamespace])
+  const rootId = layoutNamespace === 'desktop' ? 'shell-sidebar' : 'shell-main'
   return (
+    <SidebarLayoutNamespaceContext.Provider value={layoutNamespace}>
     <div
       data-slot="sidebar-content"
       // `@container/sidebar` (#788): the sidebar is no longer one fixed width, so what its rows
@@ -599,9 +615,14 @@ function SidebarContent({
       // an `@min-[…]/sidebar:` query and returns when the user drags the column wider.
       className="@container/sidebar flex min-h-0 flex-1 flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
     >
+      <LayoutElement id={layout('header')} kind="group" parentId={rootId} className="contents">
       <div className="flex items-center gap-[9px] px-3.5 pt-3.5 pb-2.5">
-        <BrandTile />
-        <span className="text-[15px] font-semibold">cezar</span>
+        <LayoutElement id={layout('logo')} kind="widget" parentId={layout('header')} className="contents">
+          <div className="flex min-w-0 items-center gap-[9px]">
+            <BrandTile />
+            <span className="text-[15px] font-semibold">cezar</span>
+          </div>
+        </LayoutElement>
         {/* With project groups mounted the boot repo/branch is one group header among many —
             a chip repeating it up here would just be the first group's header said twice. */}
         {repo && !projectGroups ? (
@@ -616,8 +637,11 @@ function SidebarContent({
           <div className={cn('shrink-0', (!repo || projectGroups) && 'ml-auto')}>{headerAction}</div>
         ) : null}
       </div>
+      </LayoutElement>
 
+      <LayoutElement id={layout('actions')} kind="group" parentId={rootId} className="contents">
       <div className="flex gap-1.5 px-2.5 pt-1 pb-2">
+        <LayoutElement id={layout('new-task')} kind="widget" parentId={layout('actions')} className="contents">
         <Button asChild variant="contrast" className="relative min-w-0 flex-1 justify-center">
           {/* A Router Link since R4 Step 1.1: the React /new composer is real, so deliberate
               New task affordances stay inside the SPA. Full document loads of /new (the
@@ -637,8 +661,14 @@ function SidebarContent({
             </kbd>
           </Link>
         </Button>
-        {singleProject ? null : <AddProjectMenu />}
+        </LayoutElement>
+        {singleProject ? null : (
+          <LayoutElement id={layout('add-project')} kind="widget" parentId={layout('actions')} className="contents">
+            <AddProjectMenu />
+          </LayoutElement>
+        )}
       </div>
+      </LayoutElement>
 
       {projectGroups ? (
         <>
@@ -648,22 +678,27 @@ function SidebarContent({
               what stops it reading as an unusually-worded project. Only in a multi-project
               workspace: with one project the page would be that project's own Tasks table
               wearing a second name. */}
-          <div className="shrink-0 border-b border-border px-1.5 pt-0.5 pb-2">
-            <AllTasksLink onNavigate={onNavigate} />
-          </div>
+          <LayoutElement id={layout('all-tasks')} kind="widget" parentId={rootId} className="contents">
+            <div className="shrink-0 border-b border-border px-1.5 pt-0.5 pb-2">
+              <AllTasksLink onNavigate={onNavigate} />
+            </div>
+          </LayoutElement>
           {/* Step 3.3: one collapsible group per registered project — nav + task list per group.
               The whole area scrolls as one (per the sidebar mockup); collapsed groups are one row. */}
-          <div
-            data-slot="project-groups"
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 pt-1.5 pb-2"
-          >
-            <SidebarNavigateContext.Provider value={onNavigate}>
-              {projectGroups}
-            </SidebarNavigateContext.Provider>
-          </div>
+          <LayoutElement id={layout('project-groups')} kind="group" parentId={rootId} className="contents">
+            <div
+              data-slot="project-groups"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1.5 pt-1.5 pb-2"
+            >
+              <SidebarNavigateContext.Provider value={onNavigate}>
+                {projectGroups}
+              </SidebarNavigateContext.Provider>
+            </div>
+          </LayoutElement>
         </>
       ) : (
         <>
+          <LayoutElement id={layout('main-nav')} kind="group" parentId={rootId} className="contents">
           <nav aria-label="Main" className="px-2.5 py-1.5">
             {items.map((item) => {
               const isActive = item.to === activeTo
@@ -673,8 +708,14 @@ function SidebarContent({
               // /tasks/:id — which the spec requires. `aria-current` cannot be forced past NavLink's
               // own matching, so the area rule lives in `activeNavPath` and this is a plain Link.
               return (
-                <Link
+                <LayoutElement
                   key={item.to}
+                  id={layout(`nav-${encodeURIComponent(item.to)}`)}
+                  kind="widget"
+                  parentId={layout('main-nav')}
+                  className="contents"
+                >
+                <Link
                   to={item.to}
                   onClick={onNavigate}
                   aria-current={isActive ? 'page' : undefined}
@@ -716,9 +757,11 @@ function SidebarContent({
                     </span>
                   ) : null}
                 </Link>
+                </LayoutElement>
               )
             })}
           </nav>
+          </LayoutElement>
 
           {/* The single-project quick-list (Needs you / Working / Recent). */}
           <div
@@ -734,22 +777,39 @@ function SidebarContent({
        *  line 2. `flex-col` rather than `flex-wrap` on purpose — the previous single wrapping row
        *  overflowed the 264px column and silently stranded the theme toggle on a line of its own,
        *  and a column cannot regress into that no matter what a future control's width is. */}
-      <div
-        data-slot="sidebar-footer"
-        className="flex flex-col gap-1.5 border-t border-border px-3.5 py-2.5"
-      >
-        <CommandPaletteHint />
-        <div data-slot="sidebar-footer-controls" className="flex items-center gap-2">
-          {/* SLOT — Step 4.2 mounts the Tools dropdown (aggregate status dot + tool versions) here. */}
-          <div data-slot="tools-menu" className="shrink-0">
-            {toolsMenu}
-          </div>
-          {version ? <VersionChip version={version} latestVersion={latestVersion} /> : null}
-          <GlobalSettingsLink onNavigate={onNavigate} className="ml-auto" />
-          <ThemeToggle />
+      <LayoutElement id={layout('footer')} kind="group" parentId={rootId} className="contents">
+        <div
+          data-slot="sidebar-footer"
+          className="flex flex-col gap-1.5 border-t border-border px-3.5 py-2.5"
+        >
+          <LayoutElement id={layout('search')} kind="widget" parentId={layout('footer')} className="contents">
+            <CommandPaletteHint />
+          </LayoutElement>
+          <LayoutElement id={layout('footer-controls')} kind="group" parentId={layout('footer')} className="contents">
+            <div data-slot="sidebar-footer-controls" className="flex items-center gap-2">
+              {/* SLOT — Step 4.2 mounts the Tools dropdown (aggregate status dot + tool versions) here. */}
+              <LayoutElement id={layout('tools')} kind="widget" parentId={layout('footer-controls')} className="contents">
+                <div data-slot="tools-menu" className="shrink-0">
+                  {toolsMenu}
+                </div>
+              </LayoutElement>
+              {version ? (
+                <LayoutElement id={layout('version')} kind="widget" parentId={layout('footer-controls')} className="contents">
+                  <VersionChip version={version} latestVersion={latestVersion} />
+                </LayoutElement>
+              ) : null}
+              <LayoutElement id={layout('settings')} kind="widget" parentId={layout('footer-controls')} className="contents">
+                <GlobalSettingsLink onNavigate={onNavigate} className="ml-auto" />
+              </LayoutElement>
+              <LayoutElement id={layout('theme')} kind="widget" parentId={layout('footer-controls')} className="contents">
+                <ThemeToggle />
+              </LayoutElement>
+            </div>
+          </LayoutElement>
         </div>
-      </div>
+      </LayoutElement>
     </div>
+    </SidebarLayoutNamespaceContext.Provider>
   )
 }
 

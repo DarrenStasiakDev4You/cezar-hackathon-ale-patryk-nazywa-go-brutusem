@@ -158,8 +158,12 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
       close()
       return
     }
+    if (current) {
+      registry.removeNode(target.id)
+    } else {
+      target.domNode?.remove()
+    }
     close()
-    if (registry.get(target.id)) registry.removeSubtree(target.id)
     onDelete(target)
   }
 

@@ -225,6 +225,30 @@ describe('AppShell', () => {
     ])
   })
 
+  it('gives each primary navigation row its own nested layout identity', () => {
+    renderShell()
+
+    for (const item of NAV_ITEMS) {
+      const link = within(nav()).getByRole('link', { name: item.label })
+      const layoutNode = link.closest('[data-layout-element="true"]')
+      expect(layoutNode?.getAttribute('data-layout-id')).toBe(`sidebar-desktop-nav-${encodeURIComponent(item.to)}`)
+      expect(layoutNode?.getAttribute('data-layout-parent-id')).toBe('sidebar-desktop-main-nav')
+    }
+  })
+
+  it('deletes only the clicked primary navigation row', () => {
+    renderShell()
+    fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+
+    const tasks = within(nav()).getByRole('link', { name: 'Tasks' })
+    fireEvent.contextMenu(tasks, { clientX: 40, clientY: 40 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
+
+    expect(within(nav()).queryByRole('link', { name: 'Tasks' })).toBeNull()
+    expect(within(nav()).getByRole('link', { name: 'Git' })).toBeTruthy()
+    expect(document.querySelector('[data-layout-id="sidebar-desktop-main-nav"]')).not.toBeNull()
+  })
+
   // R6 Step 1.1: no forge, no GitHub tab — the nav item disappears entirely (spec's
   // degradation table), it does not render disabled.
   it('drops the GitHub item when the forge is unavailable', () => {
@@ -322,10 +346,9 @@ describe('AppShell', () => {
     it('has exactly two children: the search bar, then the controls row', () => {
       renderShell('/', { version: '1.2.3' })
       const children = Array.from(footer().children) as HTMLElement[]
-      expect(children.map((child) => child.dataset.slot)).toEqual([
-        'command-palette-hint',
-        'sidebar-footer-controls',
-      ])
+      expect(children).toHaveLength(2)
+      expect(children[0]?.querySelector('[data-slot="command-palette-hint"]')).not.toBeNull()
+      expect(children[1]?.querySelector('[data-slot="sidebar-footer-controls"]')).not.toBeNull()
     })
 
     it('keeps every control a sibling inside the one controls row', () => {
@@ -339,7 +362,8 @@ describe('AppShell', () => {
       expect(row.querySelector('[data-slot="version-chip"]')).not.toBeNull()
       // The gear pushes itself right; the toggle rides along at the end of the same row.
       const gear = row.querySelector('[data-slot="global-settings-link"]') as HTMLElement
-      expect(gear.closest('a,button')?.parentElement).toBe(row)
+      expect(gear.closest('a,button')?.parentElement).not.toBe(row)
+      expect(gear.closest('[data-layout-id="sidebar-desktop-settings"]')).not.toBeNull()
     })
 
     it('renders search as a full-width launcher that still opens the palette', () => {
