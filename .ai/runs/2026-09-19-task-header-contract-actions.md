@@ -81,3 +81,5 @@ spec's own decision, not a duplicate.
 - [x] 2.3 The example — e6922620
 - [x] 2.4 The proof on the task page — da9b353e
 - [x] 2.5 The README and AGENTS.md — 3376f544
+- [x] Post-review fix: tighter tests (a positive control for the non-offering row, checked-not-declared capabilities, a restored console spy) — f9c6e2dc
+- [x] Merged #37's review fix (`3264d447`) — 9404452c
