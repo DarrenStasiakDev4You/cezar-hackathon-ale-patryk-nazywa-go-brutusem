@@ -74,7 +74,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
  </div>
  <div class="kebab" style="visibility:hidden">⋮</div>
 </div>
-<div class="coretag mono" style="margin-top:12px">core shell ↓ places both boxes, owns the space between them, and renders box 2 unless the hosted header declares shows-meta</div>
+<div class="coretag mono" style="margin-top:12px">core shell = the page's layout ↓ places both boxes, owns the space between them, and decides whether box 2 is visible — no contract does</div>
 <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="btn">▶ Continue</span><span>Archive</span><span>Open in ▾</span><span>Notes</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
 <div class="rail"><span class="dot"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar"></span></div>
 </div></div><div class="thread"><div class="measure"><p class="note">· run started — workflow "quick-task" (runner: claude)</p><p>Okay — looking into: Summarize the README</p><div class="tool"><b>Ran</b> <span class="mono">git status --short</span></div><p>Done — the summary is in <span class="mono">SUMMARY.md</span> and a draft PR is open.</p></div></div></main>
@@ -83,7 +83,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
  <div style="flex:1;min-width:0"><div class="hostbox"><div class="t1"><h1 style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Summarize the README</h1><span class="pill"><span class="dot"></span>done</span></div><span class="tag mono">box 1</span></div></div>
  <div class="chev">⌃</div><div class="kebab">⋮</div>
 </div>
-<div class="shelltag mono" style="text-align:right;margin-top:4px">details toggle: now the shell's (Q7), same place on screen</div>
+<div class="shelltag mono" style="text-align:right;margin-top:4px">details toggle: layout state, so the shell's (Q4, Q7) — same place on screen</div>
 <div class="hostbox meta2"><div class="meta wrap"><span>quick-task</span><span>·</span><span class="chip mono">cez/965e8a21</span><span>·</span><span class="chip">PR #412 · ready</span><span>·</span><span><span class="plus">+48</span> <span class="minus">−6</span> · 3 files</span><span class="badge"><span>12.4k ↑ 3.1k ↓</span><span>·</span><span>$0.42</span><span class="agent">claude · auto ▾</span></span></div><span class="tag mono">box 2 · wraps at any width</span></div>
 <div class="tabs" style="gap:14px;margin-top:16px"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span></div>
 </div><div class="thread" style="padding:14px 12px"><p class="note">· run started — workflow "quick-task"</p><p>Okay — looking into: Summarize the README</p></div></div></body></html>

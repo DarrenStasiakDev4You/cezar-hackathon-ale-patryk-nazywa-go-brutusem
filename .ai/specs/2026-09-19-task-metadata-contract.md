@@ -1,71 +1,80 @@
-# Task Metadata Contract — the header's meta row as a second public contract, on a platform shown to be generic
+# Task Metadata Contract — the task's metadata as a second public contract, on a platform shown to be generic
 
 > Slug: `task-metadata-contract` · Status: **designed, awaiting implementation** · Epic 2 (Component
 > Platform), item 16: "Create `task.metadata@1` contract". Builds on
 > `2026-09-19-task-header-contract.md` (item 11: `cezar.task.header.main@1`, `useTaskHeaderModel`,
-> `CoreTaskHeaderMain`, `useHostedComponent`), `2026-09-19-component-host.md` (`ComponentHost`,
+> `CoreTaskHeaderMain`, on `main` since #37), `2026-09-19-component-host.md` (`ComponentHost`,
 > `ComponentsProvider`) and `2026-09-19-component-contract-api.md` (capabilities, `layout`, the bump
-> table). **Starts from `main` once #38's changes are on it** (Q10). #37 is on `main`. #38 (the
-> `offers-*` capabilities, `useHostedComponent`, `examples/compact-task-header/`) was merged into
-> its parent branch 21 seconds after that branch was squash-merged, so none of it is on `main`.
-> Re-landing it is a prerequisite and not part of this item. Delivery: one PR to `main`, touching
-> `packages/extension-api` and `packages/web`.
+> table). **Starts from `main` as #37 left it** and depends on no open PR (Q10). Delivery: one
+> spec, three PRs to `main`, one after another (Q1), touching `packages/extension-api` and
+> `packages/web`. *Revised 2026-09-20 with the owner's answers on PR #41.*
 
 ## 📝 TLDR
 
 After item 11, the cockpit serves one component contract, `cezar.task.header.main@1`. One contract
 cannot show whether the contract, registry, resolver and host are a platform, or a mechanism that
 happens to fit the task header. The brief asks for a second, simpler component to find out.
-(#38's part of item 11 still has to be re-landed on `main`: Q10.)
 
-The proposal carves the task header's **meta row** out of core's header part and serves it as its
-own public contract, `cezar.task.metadata@1`. The row is the line under the title: workflow,
-branch, pull requests and issue, diff, automation, tokens and cost, and the agent badge. Core's
-shell renders it in a second `ComponentHost`, under the title part. Core's default renders from
-its props alone, and a new example extension, which imports nothing from `packages/web`, replaces
-the row while core's title part stays. The registry, the resolver, the host and the provider are
-**not edited, with one exception**: the host's failure notice carries the header's 30 px as a
-constant, which is the kind of thing the brief's check is for. The second component also exposes
-five hand-kept places that know the header by name. This item turns them into lists the gate
-checks, and adds one conformance test that runs over every served contract. The part is built so
-that a later item can make it a drag-and-drop element: it owns no spacing, reads no header
-context, and renders at any width.
+The proposal makes the **task's metadata** its own public contract, `cezar.task.metadata@1`. `@1`
+is the version of the contract, not of an extension. The metadata is what the header's meta row
+shows today: workflow, branch, pull request and issue references, diff summary, automation, usage
+and cost, and the agent the task runs on. The status, the plan progress, and the monitoring and
+dispatch lines are not metadata. The contract is defined by what those facts mean, not by where
+they sit, so it still makes sense the day the component moves to a sidebar.
 
-## Resolved assumptions (autonomous defaults)
+A new controller builds one shared `TaskMetadataModel` from the run. The metadata contract takes
+that model, and the task header reads its own `meta` and `engine` from the same model, so the
+metadata contract does not depend on the header. Core's shell renders the metadata in a second
+`ComponentHost`. **Where the component sits and whether it is visible belong to the page's layout,
+not to either contract**: `shows-meta` leaves the header contract, and the phone-width toggle moves
+to the shell. A second, test implementation, written against the public contract alone, renders
+through the same host. The registry, the resolver and the provider are not edited, and the host
+loses the one header constant it carried.
 
-The brief left these open. Each answer is the most reversible choice that meets the brief's
-Definition of Done. All are autonomous defaults, each reversible before implementation starts.
+## Resolved assumptions
+
+The brief left these open. The owner answered Q1–Q6, Q10 and Q11 on PR #41 on 2026-09-19, and
+those rows record the decisions, mapped onto this repository's names. Q7–Q9 are still autonomous
+defaults, each reversible before implementation starts.
 
 | # | Question | Answer | Why | Status |
 |---|---|---|---|---|
-| Q1 | The brief bundles the contract, core's row moving onto it, the proof that another implementation works, and the check that the platform is generic. Split into several specs? | **One spec, two phases, one PR.** Phase 1 ships the slot and the platform checks. Phase 2 adds the example extension and the cockpit test that uses it. | None of them works alone: a contract core does not render proves nothing, and the proof needs the slot. Item 11 used two stacked PRs, and item 10's second PR (#33) was lost to a squash-merge of its parent. This item is about a third of item 11's size (one row moves, no action changes hands), so one PR with two phases as commits is cheaper and safer. #38 then met the same fate as #33, a second reason to avoid a stack. Splitting at implementation time stays possible: step 3 (the source list) changes no behavior and can merge on its own first. | default, reversible |
-| Q2 | Which id? The brief says `task.metadata@1`. Item 10 named the header's parts `cezar.task.header.<part>`. | **`cezar.task.metadata@1`.** The brief's name with core's `cezar.` prefix. Not `cezar.task.header.meta`. | The brief wants the part to become a drag-and-drop element later, so it may leave the header, and an id that says `header` would then be wrong. Item 11 mapped the brief's `task.header@1` onto an id that already existed. No id exists for this part. The package is private and `BUILTIN_EXTENSIONS` is empty, so the id can still change before an extension outside the repository uses it. | default, reversible |
-| Q3 | What is "Task Metadata"? | **The header's meta row, exactly as core renders it after #37:** workflow, branch chip, reference chips (with live state and **Resolve conflicts**), diff, automation chip, tokens and cost, and the agent badge with its menu. Not the status pill, the plan mirror, the monitoring line or the dispatch lines. | It is the block #37 already models as `meta` plus `engine`, and the code already draws this line: `run-header.tsx` keeps the monitoring and dispatch lines outside the part because they are "status, not metadata". | default, reversible |
-| Q4 | `cezar.task.header.main@1` already carries `meta` and `engine`, and its optional capability `shows-meta` says an implementation shows them. How do the two contracts relate? | **The header contract does not change. Core's header default stops rendering the row and stops declaring `shows-meta`. The shell renders the metadata slot unless the header implementation it hosts declares `shows-meta`.** A header that shows the meta itself keeps doing so, and core then leaves its slot out, so the row never appears twice. `shows-meta` stays all-or-nothing: it means the whole of `meta` and `engine`. A header that shows one fact without declaring it (the compact example's `runner · model`) gets core's row under it, and that fact shows twice. | This is the `offers-*` rule from item 11 applied to the meta row: what the part declares, the part renders, and core renders the rest beside it. It needs no bump (a default may declare fewer optional capabilities), it keeps item 10's owner decision on `shows-meta`, and it reuses `useHostedComponent`. Removing `shows-meta` from the token was the alternative: simpler, but it edits an owner-decided contract and lets no header own its meta. | default, reversible |
-| Q5 | What do the props carry, and under which type names? | **The same facts and intents core's row uses today, under the types #37 already exports:** `meta: TaskHeaderMeta`, `engine: TaskHeaderEngine`, two action states (`resolveConflicts`, `chooseEngine`) and the intents `onResolveConflicts`, `onNavigate` and `onChooseEngine`, plus a three-field `task` (`taskId`, `projectId`, `title`). No new name for an existing shape. | Without the three intents, core's row would lose **Resolve conflicts**, the automation link and the badge's **Choose engine…** (AGENTS.md § Changing a mechanism that already works). One shape per fact means an extension that implements both contracts reads one set of types. `TaskHeader…` in a metadata contract's types is a naming wart, not a coupling: neutral aliases can be added later without a bump. | default, reversible |
-| Q6 | Which capabilities does the contract declare? | **None, required or optional.** | Nothing about the row protects control of a task: **Resolve conflicts** is also offered in the Tasks table, the engine picker lives in the dock, and the rest are facts. An implementation that shows three facts is a valid one. Optional capabilities can be added later without a bump, when the picker item needs words for them. A contract with no capabilities is also a useful second case for the platform: item 11's has three on `main`, and six with #38. | default, reversible |
-| Q7 | The phone-width toggle that shows and hides the row sits in the title row, inside the header part. Who owns it once the row is another part? | **Core's shell.** The chevron moves out of `CoreTaskHeaderMain` to the shell, between the title part's box and the Run actions menu, with its per-task state. It is rendered whenever the shell renders the metadata slot. | State shared between two replaceable parts would need a side channel between contracts. The shell already decides whether the slot renders (Q4), so it also decides whether it is collapsed. On screen the chevron stays where it is: last in the title line, left of the ⋮ menu. | default, reversible |
-| Q8 | How is "the system is not written specially for Task Header" proven? | **Three ways.** (1) The PR does not edit `registry.ts`, `resolve.ts`, `provider.tsx` or `component-host.tsx`, except for the one finding this spec already made: `FailedNotice` in `component-host.tsx` has `min-h-[30px]`, the header's row height, inside a box that already reserves the contract's own `minBlockSize`. The constant goes. Any further edit there is reported in the PR body as a finding. (2) The five places that know the header by name (§ Problem Statement) become lists, and the gate fails when the lists disagree. (3) A conformance test runs the same checks over every contract in `CORE_COMPONENT_CONTRACTS`, and fails when a served contract has no fixture. | "Generic" is a claim about the next component, so it has to be something the gate can check when component three arrives, not a sentence in a spec. | default, reversible |
-| Q9 | The brief says the component "is later also a candidate for drag-and-drop". Does this item register it as a layout element? | **No. This item only keeps the part ready for it** (§ Ready for drag-and-drop): one box, no spacing of its own, props only, no position assumptions. No `LayoutElement`, no drop target, no persistence. | The brief says "later". The layout editor covers the sidebar only, and its order lives in memory (spec `2026-09-19-przesuwanie-elementow`, Q2). A drop target on the task page and building the props outside `RunHeader` are their own capability. | default, reversible |
-| Q10 | #37 is on `main` (`d298b017`). #38 was merged into `feat/task-header-contract` 21 seconds after #37's squash, so its changes are on no branch that reaches `main`. Build on #38, or stand alone? | **Build on it: #38's changes are re-landed on `main` first, as their own PR, and this item starts after that.** This item does not re-land them. If the owner drops #38 instead, this item brings `useHostedComponent` (item 11's step 7) and the examples' `react` rule (the boundary part of its step 9) in its own step 0, and the proof loses its two-extension case. | Q4 needs `useHostedComponent`, the example needs the `react` devDependency and boundary rule, and the two-extension proof needs the compact header. All three are reviewed, QA'd code that the owner already merged. Copying them into this PR would hide a lost merge inside an unrelated change. | default, reversible. **Needs the owner's action on #38 before implementation** |
-| Q11 | How is "an alternative implementation can be created" proven? | **A third worked example, `packages/extension-api/examples/plain-task-metadata/`:** one line of plain text, importing only the extension API and `react`. A cockpit test activates it through the real extension registry and prefers it for `cezar.task.metadata`. | It is item 11's precedent (`examples/compact-task-header/`, Q9 there), including the `react` devDependency and the boundary rule that #38 already put in place. | default, reversible |
+| Q1 | The brief bundles the contract, core's row moving onto it, the proof that another implementation works, and the check that the platform is generic. Split? | **One spec, three PRs.** PR 1: the contract, the public types and the controller that prepares the data. PR 2: core's implementation is registered and today's UI moves onto `ComponentHost`. PR 3: the alternative implementation and the conformance tests. Each PR is opened against `main` after the one before it has merged. None is based on another PR's branch. | The owner: each PR has one concrete goal, and a simple feature is not broken into independent tickets. Sequential PRs to `main`, because both stacked children so far (#33, #38) were merged into a parent branch that had already been squashed, and never reached `main`. | ✅ owner, 2026-09-19 (three PRs); the "never stacked" rule is a default |
+| Q2 | Which id, and what does `@1` mean? | **`cezar.task.metadata@1`.** `@1` is the major version of the **contract** (`version: 1` on the token). It is not the version of an extension or of an implementation: those carry their own `manifest.version`. | The owner confirmed the reading. The id does not say `header`, because the component may later leave the header (Q9). | ✅ owner, 2026-09-19 |
+| Q3 | What is "Task Metadata"? | **The task-detail metadata currently rendered in the header's meta row after #37: workflow, branch, references, diff summary, automation, usage and cost, and agent/engine metadata. It explicitly excludes task status, plan and progress presentation, and the monitoring and dispatch surfaces.** The agent badge is in: it answers "which agent and engine belong to this task?", and its one action crosses the contract as an intent (`chooseEngine`), so core keeps the engine picker's logic. | The owner: the contract defines the task's metadata, not "the elements of the header's second row", so the name and the contract still hold when the component sits in a sidebar. Status is the task's primary state and belongs to its main representation. The plan mirror presents progress. Monitoring and dispatch are runtime surfaces with their own lifecycle, left for later slots. | ✅ owner, 2026-09-19 |
+| Q4 | `cezar.task.header.main@1` carries `meta` and `engine`, and its optional capability `shows-meta`. How do the two contracts relate? | **`meta` becomes a shared data model, and `shows-meta` leaves the header contract.** `TaskMetadataModel` is declared once, and both contracts use it: the metadata contract takes the whole model, and the header keeps `meta` and `engine`, now typed as parts of it. Whether the metadata is shown is layout state, so core's shell always decides it, and no header capability can switch the slot off. A header that needs a control for it gets an intent (`onOpenMetadata()`), never the state. This item adds no such intent, because the toggle is the shell's (Q7). | The owner: whether metadata is currently shown is a state of the layout, not a property of the task header. Removing an optional capability needs no bump (contract-api spec, the bump table), and `checkComponentCompatibility` ignores a name the contract no longer lists, so an implementation that still declares `shows-meta` keeps working. | ✅ owner, 2026-09-19 |
+| Q5 | What do the props carry, and under which names? | **Data and intents, never UI or internals:** `task` (a `TaskMetadataTaskRef`: `id`, `projectId`, `title`), `metadata` (the `TaskMetadataModel`), `actions` (whether each action can run now) and `intents` (an object of optional callbacks). The public types are neutral (`TaskMetadata…`, `TaskActionState`), and the header's `TaskHeaderMeta`, `TaskHeaderEngine`, `TaskHeaderReference` and `TaskHeaderActionState` become aliases of them. The intents are the three behaviors core's row has today: `resolveConflicts`, `navigate` and `chooseEngine`. | The owner's shape (`task`, `metadata`, `intents`) and rule: no query client, router, mutation, backend task record or layout callback. The owner's example intents (`openBranch`, `copyTaskId`, …) are mapped to what the row really does: copying the branch needs no intent, and dropping one of the three would remove a working behavior from the default page (AGENTS.md § Changing a mechanism that already works). `title` joins the task ref because core's chips name the task in their accessible labels. | ✅ owner, 2026-09-19 (shape and rule); the intent list and `title` are defaults |
+| Q6 | Which capabilities? | **One required: `shows-metadata`**, "this implementation presents the mandatory set of metadata" (workflow, branch, references, diff and engine, whenever the model carries them). **Two optional: `offers-links`** (references and the automation open as links) **and `offers-copy`** (the branch name can be copied). No capability per field. | The owner: a capability names a function, not the structure of the props, and the set stays small. Their `task-metadata`, `task-metadata-links` and `task-metadata-copy` are written in the repository's form (item 10, Q4c: names are local to their contract and start with a verb, as `shows-title` does). An extension's own capability (`jira-task-metadata`) needs nothing from the contract: names it does not list are ignored. | ✅ owner, 2026-09-19 |
+| Q7 | The phone-width toggle that shows and hides the metadata sits in the title row, inside the header part. Who owns it? | **Core's shell**, which is the task page's layout today. The chevron and its per-task state move out of `CoreTaskHeaderMain`. | It follows from Q4: visibility is layout state. On screen the chevron stays where it is: last in the title line, left of the ⋮ menu. | default, reversible |
+| Q8 | How is "the system is not written specially for Task Header" proven? | **Three ways.** (1) The PRs do not edit `registry.ts`, `resolve.ts` or `provider.tsx`, and edit `component-host.tsx` only to remove the header constant this spec found (`FailedNotice`'s `min-h-[30px]`). Any further edit there is reported in the PR body as a finding. (2) The five places that know the header by name (§ Problem Statement) become lists, and the gate fails when they disagree. (3) A conformance test runs the same checks over every contract in `CORE_COMPONENT_CONTRACTS`, and fails when a served contract has no fixture. | "Generic" is a claim about the next component, so it has to be something the gate checks when component three arrives. | default, reversible |
+| Q9 | The brief says the component "is later also a candidate for drag-and-drop". Register it as a layout element now? | **No. This item keeps the component ready for it** (§ Contract and layout): one box, no outer spacing, props only, no assumption about its position. | The brief says "later". The layout editor covers the sidebar only, and its order lives in memory (spec `2026-09-19-przesuwanie-elementow`, Q2). | default, reversible |
+| Q10 | #38 (item 11's `offers-*` capabilities, `useHostedComponent`, the compact example) never reached `main`. Build on it, or stand alone? | **Stand alone.** Nothing in this design needs #38 any more: `shows-meta` is gone (Q4), so the shell does not ask which header is hosted, and the second implementation is not an example extension (Q11). | The owner answered that #38 is merged to `main`. **Observed on 2026-09-20: it is not.** Its changes are in PR #49 (`feat/task-header-contract-actions` → `main`), which is open, and `main` has no `useHostedComponent` and no `examples/compact-task-header/`. Standing alone makes the order of #49 and this item irrelevant. They touch the same files (`run-header.tsx`, the token's capability list), so the second to land rebases. | ✅ owner's intent; the facts are as observed |
+| Q11 | How is "an alternative implementation can be created" proven? | **A second, working implementation of `cezar.task.metadata@1`, not a production extension.** It lives outside core's metadata module, imports only the public contract and `react`, and an import scan holds it to that. A test registers core's default and this one, points the resolver at it, and checks that `ComponentHost` renders it. | The owner: that is enough to show the mechanism is not hard-coded for core. Their `core.task-metadata` and `test.compact-task-metadata` are `cezar.task.metadata.default` (the id `coreDefaultComponentId` gives every core default) and `test.compact-task-metadata.line` (an extension's component id must sit under its extension id). | ✅ owner, 2026-09-19 |
 
 ## 📝 Problem Statement
 
 The brief's goal is to "check whether the architecture works for a simpler, second component".
-With #37 on `main` and #38's changes re-landed (Q10), this is what one served contract leaves
-unproven:
+On `main` after #37, this is what one served contract leaves unproven:
 
 - **Every generic module has been exercised by one real contract.** `registry.ts`, `resolve.ts`,
   `component-host.tsx` and `provider.tsx` take any contract, and their tests use fixture contracts.
   In production they have only ever held `cezar.task.header.main`: one host per page, one core
   default, one subject. Two hosts on one page, each with its own error boundary and failure record,
   have never run together.
+- **The task's metadata exists only as a piece of the header.** Its facts are declared as
+  `TaskHeaderMeta` and `TaskHeaderEngine`, derived inside the header's adapter
+  (`task-header-main.ts`: `referencesOf`, `lookupOf`, `engineOf`) and rendered inside
+  `CoreTaskHeaderMain`. An extension that wants different metadata has to replace the title and
+  status too. Nothing can render the metadata on its own.
+- **Layout state sits in a contract.** `shows-meta` is a capability of the header, and the
+  phone-width toggle is state inside the header part. Whether metadata is visible is therefore
+  decided by whichever header is hosted, and a layout editor could not pick the row up as one
+  element: it also carries its own top margin.
 - **The generic host carries one header constant.** `FailedNotice` (`component-host.tsx`) has
   `min-h-[30px]`: the title row's height, written into the module every contract shares. In a
   20 px slot the notice would reserve another contract's row.
-- **Five more places know the header by name**, each as a hand-kept single entry. A second component
-  has to find and edit all five, and nothing fails when it misses one of the last three:
+- **Five more places know the header by name**, each as a hand-kept single entry. A second
+  component has to find and edit all five, and nothing fails when it misses one of the last three:
 
   | Place | What it holds today | What goes wrong if component two skips it |
   |---|---|---|
@@ -75,173 +84,186 @@ unproven:
   | `vite.config.ts`, `entryChunkRules.eager` | one path pattern | **Nothing.** The new default may drag the markdown stack into the first paint. |
   | `routes/task-thread/core-task-header-boundary.test.ts` | a props-only import scan of one file, with the header's adapter in its forbidden list | **Nothing.** The new default may read queries, and no test says so. |
 
-- **The meta row cannot be replaced on its own.** It lives inside `CoreTaskHeaderMain`. An
-  extension that wants a different row has to replace the title and status too, and declare
-  `shows-meta`. A header that does not declare it (the compact example) drops the row from the
-  page altogether: branch, references, diff and cost disappear.
-- **The row could not move.** It carries its own top margin, and its phone-width visibility is
-  state inside the title row. A layout editor could not pick it up as one element.
-
-The brief's Definition of Done, and where this item proves each point:
+The Definition of Done. The first three rows are the brief's. The owner refined them on PR #41
+into the rows that follow, and this item is held to all of them:
 
 | Definition of Done | How this item meets it | Proven by |
 |---|---|---|
-| Core metadata works through `ComponentHost`. | The shell renders `<ComponentHost contract={TaskMetadata} …>`. `CoreTaskMetadata`, registered as `cezar.task.metadata.default`, renders today's row from its props alone. | `run-header.test.tsx` (the row is inside `data-component="cezar.task.metadata.default"`), `core-task-metadata.test.tsx` (renders with no provider above it), the conformance test |
-| An alternative implementation can be created. | `examples/plain-task-metadata/` implements the contract importing only the extension API and `react`. Preferred on the task page, it replaces the row while core's title part stays. | `extension-api/test/plain-task-metadata.test.ts`, `test/boundary.test.ts`, `web/src/routes/task-thread/external-task-metadata.test.tsx` |
-| The system is not written specially for Task Header. | The four generic modules are not edited, beyond removing the one header constant. The five single entries become checked lists. One conformance test covers every served contract. Both contracts can be replaced on one page by two extensions, and one failing does not touch the other. | the PR's diff (Q8), `core-sources.test.ts`, `core-conformance.test.tsx`, `external-task-metadata.test.tsx` |
+| Core metadata works through `ComponentHost`. | The shell renders `<ComponentHost contract={TaskMetadata} …>`. `CoreTaskMetadata` is registered as `cezar.task.metadata.default`. | `run-header.test.tsx`, the gate test, the conformance test |
+| An alternative implementation can be created. | `test.compact-task-metadata.line` implements the same contract outside core's module. With the resolver pointed at it, the host renders it, on its own and on the task page. | `compact-task-metadata.test.tsx`, `external-task-metadata.test.tsx` |
+| The system is not written specially for Task Header. | Q8: three generic modules not edited and the host's header constant removed, five single entries turned into checked lists, one conformance test over every served contract. | the PRs' diffs, `core-sources.test.ts`, `core-conformance.test.tsx` |
+| The public contract `cezar.task.metadata@1` exists in the Extension API. | The token, `TaskMetadataProps` and the shared model are exported from `packages/extension-api`. | `test/core-components.test.ts`, `test/surface.test.ts` |
+| Core's Task Metadata implements only the public contract. | `CoreTaskMetadata` renders from its props alone: no run record, query, router, command or core-only context. | `core-task-metadata.test.tsx` (no provider above it), `core-props-only.test.ts` |
+| The contract does not depend on Task Header or its private types and state. | The model and the action state are declared under neutral names, and the header's types become aliases of them. The controller does not import the header's adapter; the header's adapter reads the controller's model. No state is shared between the two parts. | the type tests in `packages/extension-api/test`, `task-metadata.test.ts`, `core-props-only.test.ts` |
+| Task Metadata can be rendered on its own. | A host for `TaskMetadata` with fixture props renders under `ComponentsProvider` alone, with no `RunHeader` around it. | `core-conformance.test.tsx`, `compact-task-metadata.test.tsx` |
+| The component makes no assumption about its position, so it can later be marked movable. | § Contract and layout: one box, no outer spacing, no `sticky`, wraps at any width, visibility owned by the layout. | `core-task-metadata.test.tsx` (no margin on the root), review against the table in that section |
 
 ## 📝 Proposed Solution
 
-1. **Declare the contract** (`packages/extension-api/src/core-components.ts`). `TaskMetadata` is
-   `cezar.task.metadata@1`: no capabilities, `layout: { minBlockSize: 20 }`, and
-   `TaskMetadataProps` (§ API Contracts). It reuses #37's `TaskHeaderMeta`, `TaskHeaderEngine` and
-   `TaskHeaderActionState` (Q5).
-2. **Project the props from the header's model** (`routes/task-thread/task-metadata.ts`, new).
-   `useTaskMetadataProps(header)` takes the props `useTaskHeaderModel` built and returns the
-   metadata props: the header's `meta`, `engine` and two action states, its three callbacks, and a
-   `task` of three fields. It reads no run, query or router, so `useTaskHeaderModel` stays the only
-   reader of the run behind both parts, and one fact has one derivation. The header's data is
-   re-frozen as a whole whenever any of it changes (`useFrozenJson`), so the projection keeps its
-   own result by the JSON of its own data, the same way: a status change alone gives the row the
-   same props object.
-3. **Core's row becomes its own default** (`routes/task-thread/core-task-metadata.tsx`, new).
-   `MetaRow`, `CopyBranchChip`, `AgentBadge`, `ResolveConflictsAction` and `conflictActionFor`
-   move out of `core-task-header-main.tsx`, unchanged except that they read `TaskMetadataProps`
-   and that the row's top margin stays behind with the shell. `CoreTaskHeaderMain` keeps the title
-   row and declares `['shows-title', 'shows-status']`.
+1. **Declare the shared model and the contract** (`packages/extension-api/src/core-components.ts`).
+   `TaskMetadataModel`, `TaskMetadataReference`, `TaskMetadataEngine` and `TaskActionState` are the
+   declarations. `TaskHeaderMeta`, `TaskHeaderEngine`, `TaskHeaderReference` and
+   `TaskHeaderActionState` become aliases of them, with the same members, so the header contract
+   needs no bump. `TaskMetadata` is `cezar.task.metadata@1` (§ API Contracts).
+2. **A controller builds the model** (`routes/task-thread/task-metadata.ts`, new).
+   `useTaskMetadataController(run, options)` is the only code that reads the run, the queries and
+   the router for the task's metadata, and it returns the contract's props. The derivations move
+   here from `task-header-main.ts`, unchanged: the references with their look-ups, the engine, the
+   usage the server shows, the automation link, **Resolve conflicts** through the task's delivery
+   seam, the `href` allow-list, and the engine picker's focus move. `useTaskHeaderModel` takes the
+   controller's result as an option and builds the header's `meta`, `engine`, two action states and
+   three callbacks from it. One fact keeps one derivation, and the dependency points from the
+   header to the metadata, not the other way.
+3. **Core's row becomes its own implementation** (`routes/task-thread/core-task-metadata.tsx`,
+   new). `MetaRow`, `CopyBranchChip`, `AgentBadge`, `ResolveConflictsAction` and
+   `conflictActionFor` move out of `core-task-header-main.tsx`. They read `TaskMetadataProps`, and
+   the row's top margin stays behind with the shell. `CoreTaskHeaderMain` keeps the title row.
 4. **The shell hosts the slot and owns its visibility** (`run-header.tsx`). Under the title part's
    box, in the same column left of the ⋮ menu, it renders
-   `<ComponentHost contract={TaskMetadata} subject={run.id} props={…} />` inside a
+   `<ComponentHost contract={TaskMetadata} subject={run.id} props={metadata} />` inside a
    `data-slot="run-details"` wrapper, which carries the margin. The wrapper, its `useId`, the
    phone-width chevron, the per-task map (`detailsOpenByTask`) and the re-render bump all move from
    `CoreTaskHeaderMain` to the shell (Q7). The bump is local state of `RunHeaderView`, so
-   `RunHeader`'s `memo` comparator does not stand in its way. When
-   `useHostedComponent(TaskHeaderMain, run.id)` names an implementation whose checked capabilities
-   include `shows-meta`, the shell renders neither the slot nor the chevron (Q4).
-5. **One list per fact about core's defaults** (Q8). `component-registry/core-sources.ts` (new,
+   `RunHeader`'s `memo` comparator does not stand in its way. The slot always renders: no header
+   capability switches it off (Q4).
+5. **`shows-meta` leaves the header contract** (Q4). The token's `optionalCapabilities` becomes
+   `[]`, core's default declares `['shows-title', 'shows-status']`, and the token's TSDoc says that
+   core renders the task's metadata in its own slot, so a header shows at most a summary of it.
+6. **One list per fact about core's defaults** (Q8). `component-registry/core-sources.ts` (new,
    pure data) names, per served contract id, the source file of core's default. `boundary.ts`
    derives `CORE_IMPLEMENTATIONS` from it, `vite.config.ts` derives `entryChunkRules.eager` from
    it, and the props-only import scan becomes one test over every source in it. A test fails when
    its contract ids differ from `CORE_COMPONENT_CONTRACTS`. `FailedNotice` loses `min-h-[30px]`:
    the host's box already reserves the contract's `minBlockSize`.
-6. **One conformance test for every served contract** (`component-registry/core-conformance.test.tsx`,
-   new). For each entry of `CORE_COMPONENT_CONTRACTS`, with fixture props per contract id: core's
-   default renders through the host with no other provider, the box reserves the contract's
-   `minBlockSize`, a preferred implementation that throws is replaced by core's default and
-   reported once, an implementation of another major is never rendered, and a disposed
+7. **A second implementation, and one conformance test** (PR 3). `compact-task-metadata.tsx`
+   renders the metadata as one line of text against the public contract alone. The conformance
+   test runs over every entry of `CORE_COMPONENT_CONTRACTS`: core's default renders through the
+   host with no other provider, the box reserves the contract's `minBlockSize`, a preferred
+   implementation that throws is replaced by core's default and reported once, an implementation
+   of another major or without a required capability is never rendered, and a disposed
    implementation gives way to core's default. A served contract without fixture props fails the
    test, so component three cannot skip it.
-7. **The proof (phase 2).** `examples/plain-task-metadata/` renders the facts as one line of text
-   and calls `onChooseEngine()` from its engine label. A cockpit test activates it, prefers it and
-   uses it, alone and together with the compact header.
 
 ### Prior art
 
 - **VS Code views.** A view can be dragged between the side bar, the panel and the secondary bar
   because it owns nothing about its position: the workbench owns the container, the title bar and
-  the collapsed state, and the view renders into whatever box it is given. We take that split for
-  the part (§ Ready for drag-and-drop) and for the phone-width toggle (Q7). We skip `when` clauses
-  and per-view persisted state.
+  the collapsed state, and the view renders into whatever box it is given. That is the owner's
+  split between the contract and the layout, and the reason the toggle leaves the header.
 - **Grafana dashboards.** The dashboard owns each panel's grid position and size, and the panel
-  plugin receives data and callbacks (`PanelProps`). Position is never the plugin's concern. We
-  skip passing `width` and `height`: the row wraps with CSS.
-- **Backstage entity cards.** Cards are extensions, and the app (not the card) decides the grid
-  they sit in. Its cards read `useEntity()` from context. We keep props instead, for the reason
-  item 11 gave: a hook ties an implementation to the host's React tree.
-- **Plugin-API conformance suites** (Terraform's provider acceptance tests, the Language Server
-  Protocol's test harnesses): one suite that every implementation of an interface runs. Our
-  conformance test is the small version: every served contract, the same five checks.
+  plugin receives data and callbacks (`PanelProps`). We skip passing `width` and `height`: the row
+  wraps with CSS.
+- **Backstage entity cards.** Cards are extensions, and the app decides the grid they sit in. Its
+  cards read `useEntity()` from context. We keep props, for the reason item 11 gave: a hook ties an
+  implementation to the host's React tree.
+- **Controller and view (MVC, "headless" UI kits).** One controller turns stores into a model, and
+  any number of views render it. `TaskMetadataModel` is that model, with two consumers from day
+  one: the metadata contract and the header.
+- **Plugin-API conformance suites** (Terraform's provider acceptance tests, Language Server
+  Protocol harnesses): one suite that every implementation of an interface runs. Ours is the small
+  version: every served contract, the same checks.
 
 ### Alternatives considered
 
-- **`cezar.task.header.meta@1`, a part of the header** (Q2). Not chosen: the id would be wrong the
-  day the part is dropped outside the header.
-- **Remove `shows-meta` from the header contract** (Q4). Simpler: the slot always renders and no
-  header shows meta. Not chosen as the default, because it edits an owner-decided contract the day
-  it merges, and it removes a header's option to lay the facts out its own way.
-- **Always render the slot, whatever the header declares.** Rejected: a header that declares
-  `shows-meta` would show the row twice.
+- **`cezar.task.header.meta@1`, a part of the header** (Q2). Rejected: the id would be wrong the
+  day the component is placed outside the header.
+- **Keep `shows-meta`, and let the shell leave the slot out when the hosted header declares it.**
+  This was the first default. The owner rejected it: it keeps layout state inside a contract, and
+  it made the shell depend on `useHostedComponent` (#38).
+- **Project the metadata props from the header's model.** This was the first default. Rejected
+  with the owner's diagram: the metadata would depend on the header's adapter, the opposite of
+  what the item has to prove.
+- **Remove `meta` and `engine` from the header's props.** Not now. It removes props, so it needs
+  `cezar.task.header.main@2`, and the compact example (#49) reads `engine` for its one-word
+  summary. The owner's "only the summary it needs" is reachable later as `@2`.
+- **Add `onOpenMetadata()` to the header contract now** (Q4). Not yet. With the toggle in the
+  shell, a second control in the header would need the shell to know about it, which is a
+  capability again. It is the named way in, the day a header needs one.
 - **Let core's header default render a nested `ComponentHost` for the row.** Rejected. Core's
   default must render from its props alone (item 11, Q5), and an extension's header could not do
-  the same: it cannot import the host.
-- **A second adapter that reads the run for the metadata.** Rejected: two readers mean two
-  derivations of the same fact, and they drift. The projection keeps one.
-- **A facts-only contract, with no intents.** It would be the simplest contract. Rejected: core's
-  row would lose Resolve conflicts, the automation link and Choose engine on the default page.
-- **New neutral type names** (`TaskMeta`, `TaskEngine`) with the `TaskHeader…` names as aliases
-  (Q5). Not chosen now: it doubles the public type names for no behavior. It stays possible.
+  the same.
+- **A facts-only contract, with no intents.** Rejected: core's row would lose Resolve conflicts,
+  the automation link and Choose engine on the default page.
+- **A capability per fact** (`shows-branch`, `shows-usage`, …). Rejected by the owner: a capability
+  names a function, not the structure of the props.
+- **A production example extension as the proof** (`examples/plain-task-metadata/`, the first
+  default). Replaced by the owner's smaller proof (Q11). It also needed the `react` rule for
+  examples, which is part of #49.
 - **Derive `CORE_COMPONENT_CONTRACTS` and the registrations from one table.** Rejected.
   `core-contracts.ts` must stay free of React so that `registry.test.ts` and `resolve.ts` can use
   it, and `core-components.ts` must stay the one importer of the implementations. Two lists with a
   test that they agree keep both rules.
-- **Prove genericity with a fixture contract only.** That is what the host's tests already do. The
-  brief asks for a second real component.
 
 ## 📝 Architecture
 
 ```mermaid
-flowchart LR
-  shell["RunHeader, core's shell<br/>(changed: second host, owns the toggle)"] -->|"run"| model["useTaskHeaderModel<br/>(existing, #37: the only reader of the run)"]
-  model -->|"TaskHeaderMainProps"| shell
-  shell -->|"header props"| proj["useTaskMetadataProps<br/>(new: pure projection)"]
-  proj -->|"TaskMetadataProps"| shell
-  shell -->|"TaskHeaderMain + props"| host1["ComponentHost<br/>(existing; one header constant removed)"]
-  shell -->|"TaskMetadata + props"| host2["ComponentHost<br/>(same module)"]
-  shell -->|"useHostedComponent: shows-meta?"| host1
-  host1 --> reg["registry + resolver + provider<br/>(existing, not edited)"]
-  host2 --> reg
-  coremain["CoreTaskHeaderMain<br/>(changed: title row only)"] -->|"registerCoreComponents"| reg
+flowchart TD
+  data["run record, queries, router<br/>(existing)"] --> ctrl["useTaskMetadataController<br/>(new: the only reader behind the metadata)"]
+  ctrl -->|"TaskMetadataModel + actions + intents"| contract["cezar.task.metadata@1<br/>(new, extension-api)"]
+  ctrl -->|"the same model"| hmodel["useTaskHeaderModel<br/>(changed: meta and engine come from the model)"]
+  hmodel --> hcontract["cezar.task.header.main@1<br/>(existing; shows-meta removed)"]
+  contract --> host["ComponentHost<br/>(existing; one header constant removed)"]
+  hcontract --> host
+  host --> reg["registry, resolver, provider<br/>(existing, not edited)"]
   coremeta["CoreTaskMetadata<br/>(new: today's row, props only)"] -->|"registerCoreComponents"| reg
-  example["examples/plain-task-metadata<br/>(new, extension-api)"] -.->|"context.components.provide"| reg
-  sources["core-sources.ts<br/>(new: one list)"] --> checks["boundary scan · entry-chunk check ·<br/>props-only scan · conformance test<br/>(changed: run over the list)"]
+  alt["test.compact-task-metadata.line<br/>(new: public contract only)"] -.->|"registered in tests"| reg
+  layout["RunHeader shell = the task page's layout<br/>(changed)"] -->|"where the box is, whether it is visible,<br/>the phone toggle, later drag-and-drop"| host
+  sources["core-sources.ts (new: one list)"] --> checks["boundary scan, entry-chunk check,<br/>props-only scan, conformance test<br/>(changed: run over the list)"]
 ```
 
-- **New in `packages/extension-api`:** the `TaskMetadata` token and its three interfaces in
-  `src/core-components.ts`, re-exported from `src/index.ts`, with `test/surface.test.ts` listing
-  `TaskMetadata`; in phase 2, `examples/plain-task-metadata/index.ts` and
-  `test/plain-task-metadata.test.ts`.
-- **Changed in `packages/extension-api`:** `README.md` ("Replacing a component" gains the metadata
-  row and the rule for `shows-meta`), `test/core-components.test.ts`.
-- **New in `packages/web/src/routes/task-thread/`:** `task-metadata.ts` (`useTaskMetadataProps`),
-  `core-task-metadata.tsx` (`CoreTaskMetadata`).
+The contract says what the component receives and what it must be able to do. The layout says
+where the component is and how it is presented. Neither knows the other's half.
+
+- **New in `packages/extension-api`:** in `src/core-components.ts`, the `TaskMetadata` token,
+  `TaskMetadataProps`, `TaskMetadataTaskRef`, `TaskMetadataModel`, `TaskMetadataReference`,
+  `TaskMetadataEngine`, `TaskMetadataActions`, `TaskMetadataIntents` and `TaskActionState`,
+  re-exported from `src/index.ts`, with `test/surface.test.ts` listing `TaskMetadata`.
+- **Changed in `packages/extension-api`:** the four `TaskHeader…` types become aliases, the header
+  token loses `shows-meta` (PR 2), `README.md` ("Replacing a component"),
+  `test/core-components.test.ts`.
+- **New in `packages/web/src/routes/task-thread/`:** `task-metadata.ts`
+  (`useTaskMetadataController`), `core-task-metadata.tsx` (`CoreTaskMetadata`).
+- **New in `packages/web/src/lib/`:** `use-frozen-json.ts`, holding `useFrozenJson` and
+  `deepFreeze` from `task-header-main.ts`, so both adapters freeze their data the same way.
 - **New in `packages/web/src/component-registry/`:** `core-sources.ts`, `core-sources.test.ts`,
-  `core-conformance.test.tsx` with `core-conformance-fixtures.ts`, and `core-props-only.test.ts`
-  (the props-only scan over every source; it replaces
-  `routes/task-thread/core-task-header-boundary.test.ts`, keeping its cases).
-- **Changed in `packages/web`:** `core-task-header-main.tsx` (loses the row and the toggle),
-  `run-header.tsx` (the second host, the toggle, the `shows-meta` rule), `core-contracts.ts`
+  `core-props-only.test.ts` (it replaces `routes/task-thread/core-task-header-boundary.test.ts`,
+  keeping its cases), and in PR 3 `core-conformance.test.tsx` with
+  `core-conformance-fixtures.ts`, plus `testing/compact-task-metadata.tsx` with its test.
+- **Changed in `packages/web`:** `task-header-main.ts` (reads the controller's result; its
+  metadata derivations move out), `core-task-header-main.tsx` (loses the row and the toggle),
+  `run-header.tsx` (calls the controller, the second host, the toggle), `core-contracts.ts`
   (`[TaskHeaderMain, TaskMetadata]`), `core-components.ts` (the second registration; the header
   default's capabilities), `boundary.ts` and `vite.config.ts` (derive from `core-sources.ts`),
   `component-host.tsx` (`FailedNotice` loses `min-h-[30px]`, nothing else), and the tests that
-  place the meta row inside the header's box or expect `shows-meta` on core's header default
-  (§ Implementation Plan, step 4).
+  place the meta row inside the header's box or expect `shows-meta` (§ Implementation Plan).
 - **Not touched:** `registry.ts`, `resolve.ts`, `provider.tsx`, and `component-host.tsx` beyond
-  that one class name (Q8),
-  `task-header-main.ts` (`useTaskHeaderModel` keeps building `meta` and `engine`, which the header
-  contract still carries), the `TaskHeaderMain` token, the extension host, the commands, the event
-  bus, the HTTP contract, the service and the api-client. No `BACKWARD_COMPATIBILITY.md` surface
-  moves.
+  that one class name (Q8); the header contract's props; the extension host, the commands, the
+  event bus, the HTTP contract, the service and the api-client. No `BACKWARD_COMPATIBILITY.md`
+  surface moves.
 
-In short: the second component arrives as data (a token, a registration, a source path) plus its
-own two files, and the platform's code does not change.
+### Contract and layout
 
-### Ready for drag-and-drop
+The owner's boundary, and how this item keeps each side of it:
 
-A later item makes this part a layout element. This item guarantees what that needs, and a review
-checks each line:
+| Belongs to the contract | Belongs to the task page's layout (the shell today) |
+|---|---|
+| The task ref, the `TaskMetadataModel`, the action states and the intents | Where the component's box is |
+| What an implementation must be able to do (`shows-metadata`) | Whether the box is visible, and the phone-width toggle with its per-task memory |
+| 20 px reserved while an implementation loads, fails or is swapped | The space around the box |
+| | Later: a mobile drawer, a desktop sidebar, drag-and-drop |
+
+What this guarantees for the later drag-and-drop item, and how a review checks it:
 
 | Rule | How it is kept |
 |---|---|
-| The part is one box. | `ComponentHost` renders one element per host (`data-contract="cezar.task.metadata"`), so a `LayoutElement` can wrap it without reaching inside. |
-| The part owns no outer spacing. | The row's `mt-1 md:mt-1.5` moves to the shell's wrapper. `CoreTaskMetadata`'s root has no margin. |
-| The part does not know where it is. | Props only: no header context, no sibling state, no `sticky`. `sizing` stays `content`. The phone-width toggle is the shell's (Q7). |
-| The part renders at any width. | Core's row keeps `flex-wrap`. The contract's TSDoc tells implementations to wrap or truncate instead of assuming the header's width. |
-| The part's identity is stable. | The host's `subject` is the run id, as for the title part. |
+| The component is one box. | `ComponentHost` renders one element per host (`data-contract="cezar.task.metadata"`), so a `LayoutElement` can wrap it without reaching inside. |
+| The component owns no outer spacing. | The row's `mt-1 md:mt-1.5` moves to the shell's wrapper. `CoreTaskMetadata`'s root has no margin. |
+| The component does not know where it is. | Props only: no header context, no sibling state, no `sticky`. `sizing` stays `content`. |
+| The component renders at any width. | Core's row keeps `flex-wrap`. The contract's TSDoc tells implementations to wrap or truncate instead of assuming the header's width. |
+| The component can be built anywhere on the task page. | The controller takes the run and one option. It does not need `RunHeader` or the header's adapter. |
 
-Left to that item: wrapping the host in a `LayoutElement`, a drop target on the task page,
-persisting the position (the layout order is in memory today), and building the two parts' props
-above `RunHeader` once the row can leave it. `useTaskMetadataProps` takes the header's props as its
-only input, so it moves with them.
+Left to that item: wrapping the host in a `LayoutElement`, a drop target on the task page, and
+persisting the position (the layout order is in memory today).
 
 ## 📝 Data Model
 
@@ -250,85 +272,133 @@ Nothing is persisted. The toggle's per-task state is the in-memory map #37 keeps
 
 ## 📝 API Contracts
 
-Signatures are normative. `TaskHeaderMeta`, `TaskHeaderEngine`, `TaskHeaderReference` and
-`TaskHeaderActionState` are #37's, unchanged.
+Signatures are normative.
 
-### `packages/extension-api/src/core-components.ts` (public, additive)
+### `packages/extension-api/src/core-components.ts` (public)
+
+The members of `TaskMetadataReference`, `TaskMetadataEngine` and `TaskActionState` are exactly
+those #37 declared as `TaskHeaderReference`, `TaskHeaderEngine` and `TaskHeaderActionState`, with
+their TSDoc. They are not repeated here.
 
 ```ts
-/** The task a metadata row belongs to. JSON. */
-export interface TaskMetadataTask {
-  readonly taskId: string
+/** A pull request or issue the task points at. JSON. */
+export interface TaskMetadataReference { /* #37's TaskHeaderReference, moved */ }
+/** The agent the task runs on. JSON. */
+export interface TaskMetadataEngine { /* #37's TaskHeaderEngine, moved */ }
+/** Whether an action is offered, and whether it can run now. JSON. */
+export interface TaskActionState { /* #37's TaskHeaderActionState, moved */ }
+
+/** The task's metadata: the facts about how it was started, where it works and what it cost. JSON. */
+export interface TaskMetadataModel {
+  /** The workflow's display name, e.g. `quick-task`. */
+  readonly workflow: string
+  readonly branch?: string
+  /** Lines added and removed on the task's branch, and the number of files, once known (#37's TSDoc). */
+  readonly diff?: { readonly added: number; readonly removed: number; readonly files: number; readonly repointed?: boolean }
+  /** Every pull request, then the issue, in the order the Tasks table shows them. */
+  readonly references?: readonly TaskMetadataReference[]
+  /** The automation that launched the task. `href` is set while the automations page is available. */
+  readonly automation?: { readonly automationId: string; readonly href?: string }
+  /** The usage this server shows. A metric the server hides (`CEZ_HIDE_TOKEN_METRICS`) is absent. */
+  readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number }
+  readonly engine: TaskMetadataEngine
+}
+
+// The header's names stay, as parts of the shared model. Same members: no bump.
+export type TaskHeaderMeta = Omit<TaskMetadataModel, 'engine'>
+export type TaskHeaderEngine = TaskMetadataEngine
+export type TaskHeaderReference = TaskMetadataReference
+export type TaskHeaderActionState = TaskActionState
+
+/** The task the metadata belongs to. JSON. */
+export interface TaskMetadataTaskRef {
+  readonly id: string
   /** The registered project that owns the task. Pass it as `TaskRef.projectId`. */
   readonly projectId: string
   /** The title the cockpit shows for the task. Core uses it in its chips' accessible names. */
   readonly title: string
 }
 
+/** Whether each action can run now. JSON. */
 export interface TaskMetadataActions {
   /** Ask the task's agent to resolve a pull request's merge conflicts. Offer it on a numbered, `conflicting` reference. */
-  readonly resolveConflicts: TaskHeaderActionState
-  /** Choose the runner and model the next continuation uses. Available on the Session tab, for a task that can be continued. */
-  readonly chooseEngine: TaskHeaderActionState
-}
-
-export interface TaskMetadataProps {
-  readonly task: TaskMetadataTask
-  /** Workflow, branch, diff, references, automation and usage. A metric the server hides is absent. */
-  readonly meta: TaskHeaderMeta
-  /** The agent the task runs on. */
-  readonly engine: TaskHeaderEngine
-  readonly actions: TaskMetadataActions
-  /** The user asked the agent to resolve conflicts in pull request `prNumber`, a `conflicting` reference. */
-  readonly onResolveConflicts: (prNumber: number) => void
-  /** The user followed an in-app link from these props (`meta.automation.href`). */
-  readonly onNavigate: (href: string) => void
-  /** The user asked to choose the engine for the next continuation. Core moves focus to its engine picker. */
-  readonly onChooseEngine: () => void
+  readonly resolveConflicts: TaskActionState
+  /** Choose the runner and model the next continuation uses. */
+  readonly chooseEngine: TaskActionState
 }
 
 /**
- * The task's basic facts: workflow, branch, references, diff, automation, usage and engine. On the
- * task page core renders it under the title part, unless the hosted `cezar.task.header.main`
- * implementation declares `shows-meta` and so shows these facts itself.
- * - No capabilities: an implementation may show any subset of the facts.
- * - Intents: before acting on `onResolveConflicts` or `onChooseEngine`, core checks the action's
- *   current state. A call does nothing unless the action is `available` and `enabled`.
- *   `onNavigate` follows only an `href` core put into these props.
+ * What the user can ask core to do. An intent is absent where core does not offer it at all (a page
+ * without an engine picker has no `chooseEngine`). When it is present, its state in `actions` says
+ * whether it can run now, and core checks that state again on every call.
+ */
+export interface TaskMetadataIntents {
+  /** The user asked the agent to resolve conflicts in pull request `prNumber`, a `conflicting` reference. */
+  readonly resolveConflicts?: (prNumber: number) => void
+  /** The user followed an in-app link from these props (`metadata.automation.href`). Any other value does nothing. */
+  readonly navigate?: (href: string) => void
+  /** The user asked to choose the engine for the next continuation. Core moves focus to its engine picker. */
+  readonly chooseEngine?: () => void
+}
+
+export interface TaskMetadataProps {
+  readonly task: TaskMetadataTaskRef
+  readonly metadata: TaskMetadataModel
+  readonly actions: TaskMetadataActions
+  readonly intents: TaskMetadataIntents
+}
+
+/**
+ * The task's metadata: workflow, branch, references, diff summary, automation, usage and cost, and
+ * the agent it runs on. Not the task's status, its plan progress, or its monitoring and dispatch
+ * lines. `@1` is the version of this contract.
+ * - `shows-metadata` (required): shows workflow, branch, references, diff and engine, whenever the
+ *   model carries them.
+ * - `offers-links` (optional): references and the automation open as links (`intents.navigate`
+ *   for the in-app one).
+ * - `offers-copy` (optional): the branch name can be copied.
  * - Layout: 20 CSS pixels (one row) are reserved while an implementation loads, fails or is
- *   swapped. Core places the box and owns the space around it. Do not assume its width or its
- *   position on the page: wrap or truncate. On a phone core may keep the box hidden until the user
- *   asks for the details, with the implementation mounted.
+ *   swapped. Core places the box, owns the space around it and decides whether it is visible. Do
+ *   not assume its width or its position on the page: wrap or truncate. Core may keep the box
+ *   hidden with the implementation mounted.
  */
 export const TaskMetadata = defineComponentContract<TaskMetadataProps>('cezar.task.metadata', {
   version: 1,
+  requiredCapabilities: ['shows-metadata'],
+  optionalCapabilities: ['offers-links', 'offers-copy'],
   layout: { minBlockSize: 20 },
 })
 ```
 
-The three intents are the same functions the header's props carry, so what core does for each is
-item 11's table, unchanged: the state check, the delivery seam and toasts for
-`onResolveConflicts`, the `href` allow-list and the one warning per foreign value for
-`onNavigate`, and the focus move for `onChooseEngine`.
+`TaskHeaderMain` (PR 2): `optionalCapabilities` becomes `[]`. Its TSDoc loses the `shows-meta`
+line and gains: "Core renders the task's metadata in its own slot (`cezar.task.metadata`), so a
+header shows at most a summary of `meta` and `engine`." Its props do not change.
 
-`TaskHeaderMain`'s TSDoc for `shows-meta` gains one sentence: "Core then leaves its
-`cezar.task.metadata` slot out of the task page." The token does not change.
+What core does for each intent is what item 11's table says for `onResolveConflicts`, `onNavigate`
+and `onChooseEngine`, word for word: they are the same functions.
 
 ### `packages/web/src/routes/task-thread/task-metadata.ts` (new)
 
 ```ts
-/** `header`'s metadata, as `cezar.task.metadata@1` props. Pure: the header's `meta`, `engine`, two
- *  action states and three callbacks, and a `task` of three fields. */
-export function taskMetadataPropsOf(header: TaskHeaderMainProps): TaskMetadataProps
-
 /**
- * {@link taskMetadataPropsOf}, frozen, keeping the previous object while the JSON of its data is
- * the same and the callbacks are the same functions (they keep one identity for the life of the
- * header). The header's own data is re-frozen as a whole on any change, so this compares by JSON,
- * as `useFrozenJson` does: a status or prompt change alone does not re-render a memoized row.
+ * The only reader of the run behind the task's metadata. Returns `cezar.task.metadata@1` props:
+ * the data frozen and kept while its JSON is the same (`useFrozenJson`), and one `intents` object
+ * for the life of the caller, whose functions read the latest run through a ref.
  */
-export function useTaskMetadataProps(header: TaskHeaderMainProps): TaskMetadataProps
+export function useTaskMetadataController(
+  run: ApiRun,
+  options?: {
+    /** The Session tab's dock picker focus (`useContinueAction().focusPicker`). Absent on the Git tabs: no `intents.chooseEngine`. */
+    readonly chooseEngine?: () => void
+  },
+): TaskMetadataProps
 ```
+
+`useTaskHeaderModel`'s options lose `chooseEngine` and gain `metadata: TaskMetadataProps`. The
+header's `meta` is the model without `engine`, `engine` is the model's, `actions.resolveConflicts`
+and `actions.chooseEngine` are the controller's states, and `onResolveConflicts`, `onNavigate`
+and `onChooseEngine` call the controller's intents (an absent intent is a call that does nothing,
+as today).
 
 ### `packages/web/src/component-registry/core-sources.ts` (new)
 
@@ -352,80 +422,78 @@ one:
 const coreTaskMetadata: ComponentImplementation<TaskMetadataProps> = Object.freeze({
   id: coreDefaultComponentId(TaskMetadata.id), // cezar.task.metadata.default
   title: 'Task metadata',
-  description: 'Cezar’s own meta row: workflow, branch, references, diff, usage and agent',
-  capabilities: Object.freeze([]),
+  description: 'Cezar’s own metadata row: workflow, branch, references, diff, usage and agent',
+  capabilities: Object.freeze(['shows-metadata', 'offers-links', 'offers-copy']),
   component: CoreTaskMetadata,
 })
 ```
 
-### `packages/extension-api/examples/plain-task-metadata/index.ts` (new, phase 2)
+### `packages/web/src/component-registry/testing/compact-task-metadata.tsx` (new, PR 3)
 
 ```ts
-import { createElement as h } from 'react'
-import { defineExtension, TaskMetadata, type ComponentProps } from '@open-mercato/cezar-extension-api'
+import type { ComponentImplementation, ComponentProps, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 /** One line of text: workflow · branch · +added −removed · #references · runner/model. */
-function PlainTaskMetadata(props: ComponentProps<typeof TaskMetadata>) { /* h('div', …) */ }
+function CompactTaskMetadata(props: ComponentProps<typeof TaskMetadata>) { /* … */ }
 
-export default defineExtension({
-  manifest: { id: 'example.plain-metadata', name: 'Plain task metadata', version: '1.0.0', engines: { cezar: '>=<the release that ships this>' } },
-  activate(context) {
-    context.components.provide(TaskMetadata, {
-      id: 'example.plain-metadata.line',
-      title: 'Plain line',
-      capabilities: [],
-      component: PlainTaskMetadata,
-    })
-  },
-})
+/** A second implementation of `cezar.task.metadata@1`, for tests. Not registered in the app. */
+export const compactTaskMetadata: ComponentImplementation<ComponentProps<typeof TaskMetadata>> = {
+  id: 'test.compact-task-metadata.line',
+  title: 'Compact line',
+  capabilities: ['shows-metadata'],
+  component: CompactTaskMetadata,
+}
 ```
 
-The engine label is a button while `actions.chooseEngine.available`, and it calls
-`onChooseEngine()`. That is the one intent the example uses, so the proof covers a callback
-crossing the second contract too.
+Its imports are `react` and `@open-mercato/cezar-extension-api`, and nothing else: a test scans the
+file with `lib/import-scan.ts`. The engine label is a button while `intents.chooseEngine` exists
+and `actions.chooseEngine.available`, so the proof covers a callback crossing the contract too.
+Tests register it through the registry's extension path, as extension `test.compact-task-metadata`.
 
 ## 📝 UI/UX
 
 **The default page looks as it does on `main` after #37, with two differences:**
 
-1. **While renaming, the meta row stays visible.** After #37, core's title editor covers the top
+1. **While renaming, the metadata stays visible.** After #37, core's title editor covers the top
    of the header part and the rest of the part, the row included, is hidden until the user saves
-   or cancels. The row is now another part, so only the title row is hidden. This is the behavior
-   from before #37, including its blur rule: a click on the row commits the rename, as a click
-   anywhere else does (`editable-title.tsx`).
+   or cancels. The row is now another component, so only the title row is hidden. This is the
+   behavior from before #37, including its blur rule: a click on the row commits the rename, as a
+   click anywhere else does (`editable-title.tsx`).
 2. **On phones, the details chevron belongs to the shell.** It keeps its place (last in the title
    line, left of the ⋮ menu), its labels (**Show run details** / **Hide run details**),
    `aria-expanded` and `aria-controls`. It moves from inside the title part's box to beside it, so
    on a phone the title part's box is narrower by that one button.
 
-Where each of the row's behaviors lives after this item:
+Where each behavior lives after this item:
 
 | Behavior after #37 | After this item |
 |---|---|
-| Workflow, branch chip (copy), diff with file count and the `repointed` caveat | `CoreTaskMetadata`, from `meta` |
-| PR and issue chips with live status, tooltips, conflict warning, **Resolve conflicts** | `CoreTaskMetadata`, from `meta.references` and `actions.resolveConflicts`, calling `onResolveConflicts` |
-| Automation chip, a link while automations are on | `CoreTaskMetadata`, from `meta.automation`, calling `onNavigate` |
-| Tokens and cost (hidden per `CEZ_HIDE_TOKEN_METRICS`) | `CoreTaskMetadata`, from `meta.usage` |
-| Agent badge, its menu, **Choose engine for the next continuation…** | `CoreTaskMetadata`, from `engine` and `actions.chooseEngine`, calling `onChooseEngine` |
+| Workflow, branch chip (copy), diff with file count and the `repointed` caveat | `CoreTaskMetadata`, from `metadata` |
+| PR and issue chips with live status, tooltips, conflict warning, **Resolve conflicts** | `CoreTaskMetadata`, from `metadata.references` and `actions.resolveConflicts`, calling `intents.resolveConflicts` |
+| Automation chip, a link while automations are on | `CoreTaskMetadata`, from `metadata.automation`, calling `intents.navigate` |
+| Tokens and cost (hidden per `CEZ_HIDE_TOKEN_METRICS`) | `CoreTaskMetadata`, from `metadata.usage` |
+| Agent badge, its menu, **Choose engine for the next continuation…** | `CoreTaskMetadata`, from `metadata.engine` and `actions.chooseEngine`, calling `intents.chooseEngine` |
 | Phone-width details toggle, collapsed by default, remembered per task | Shell (Q7) |
 | The row is hidden from the accessibility tree while collapsed | Shell: the wrapper keeps `hidden` |
 | Title, rename, status pill, plan mirror | `CoreTaskHeaderMain`, unchanged |
+| Monitoring and dispatch lines | Shell, unchanged (not metadata: Q3) |
 
-With an extension's header that does not declare `shows-meta` (the compact example), the page now
-shows core's meta row under it. Before this item that page had no meta row at all. The compact
-example prints `runner · model` itself, so the engine shows twice there, once in each part (Q4). With a header
-that declares `shows-meta`, the page shows that header alone, without the slot or the chevron.
+With an extension's header, the page shows that header and core's metadata under it. Before this
+item, a header that did not render the row left the page without branch, references, diff and
+cost.
 
 Accessibility: the row keeps its markup, labels and keyboard behavior, because the code moves
-unchanged. The chevron's `aria-controls` points at the wrapper, as today. Both now live in the shell.
+unchanged. The chevron's `aria-controls` points at the wrapper, as today. Both now live in the
+shell.
 
 Prototype: `.ai/specs/assets/task-metadata-contract/`. `current-01-task-header.png` is the task
 page, reused from `assets/task-header-contract/`. It was captured on 2026-09-19 before #37 merged.
 #37 kept the default page's title and meta rows as they were (item 11 § UI/UX lists its five
-differences, none in these two rows), and no new capture was taken for this spec. `mockup-01-two-parts.png` shows the default page with the two
-hosts' boxes outlined, at desktop and phone width. `mockup-02-plain-metadata.png` shows the plain
-example under core's title part, and under the compact header. The `.html` sources sit beside
-them. The dashed outlines mark the hosts' boxes and are not part of the design.
+differences, none in these two rows), and no new capture was taken for this spec.
+`mockup-01-two-parts.png` shows the default page with the two hosts' boxes outlined, at desktop
+and phone width. `mockup-02-compact-metadata.png` shows the test implementation under core's
+title part, and core's row returning after it throws. The `.html` sources sit beside them. The
+dashed outlines mark the hosts' boxes and are not part of the design.
 
 ## 📝 Edge Cases & Failure Scenarios
 
@@ -435,121 +503,149 @@ them. The dashed outlines mark the hosts' boxes and are not part of the design.
 - **The header implementation throws while the metadata one is fine**, and the other way round.
   Each host falls back alone. The failure record is per (implementation, subject), so neither
   marks the other.
-- **A header that declares `shows-meta` throws.** Its host falls back to core's title part, which
-  does not declare `shows-meta`. `useHostedComponent` names core's default, so the shell renders
-  the slot and the chevron again. For one commit, between the fallback's render and the failure
-  being recorded, neither shows the meta (item 11 describes the same commit for the actions).
-- **A header declares `shows-meta` and shows nothing.** A capability is a declaration, as
-  everywhere. The facts are missing from that page and no control of the task is lost (Q6). The
-  picker item shows the declared capabilities, so the user can see what they chose.
-- **The user prefers a metadata implementation, and the hosted header declares `shows-meta`.**
-  The slot is not rendered, so the preferred row is not either. Nothing is logged: it is what the
-  header declared. Nobody stores a preference yet. The picker item, which will, shows each
-  implementation's capabilities and can say so.
+- **A header implementation renders the whole meta row itself.** The page shows the facts twice.
+  The header's TSDoc says to show at most a summary, and nothing enforces it: no capability can
+  switch the slot off, by the owner's decision (Q4).
+- **An implementation still declares `shows-meta` on the header.** The name is no longer in the
+  contract, so the compatibility check ignores it and the implementation stays usable.
+- **An implementation of the metadata does not declare `shows-metadata`.** The registry records it
+  as `compatible: false` with `missing-capability` and reports it once, and it is never rendered,
+  even when preferred.
+- **An intent is absent.** On the Changes, Commits and Files tabs there is no engine picker, so
+  `intents.chooseEngine` is absent and `actions.chooseEngine.available` is `false`. An
+  implementation renders no control for it. Core's badge shows no menu item, as today.
+- **An implementation calls an intent at the wrong time.** Core checks the action's state first
+  and ignores the call, as for the header's intents. `intents.navigate` follows only an `href`
+  core put into the props, and logs one `[cezar:extensions]` warning per foreign value.
 - **Core's row fails while collapsed on a phone.** The notice and **Try again** are inside the
   `hidden` wrapper, so the user sees them when they open the details. The provider's one report is
   not affected.
 - **Two extensions, one per contract.** Each is resolved by its own contract id and preference.
   Deactivating one re-resolves both hosts (one registry revision), and only its host changes.
-- **One extension provides both contracts.** Nothing special: two registrations under one
-  activation scope, dropped together when it deactivates.
 - **Collapsed on a phone.** The host stays mounted inside a `hidden` wrapper, as the row is today,
   so an implementation's effects run while it is not visible. The contract's TSDoc says so.
 - **A narrow or wide box.** Core's row wraps. An implementation that overflows is clipped by the
   header's own `min-w-0` column and never pushes the ⋮ menu off screen.
-- **Core's metadata default throws.** The box shows #32's inline notice with **Try again**. The
-  title part, the actions, the tabs and the thread keep working.
+- **Core's metadata default throws.** The box shows #32's inline notice with **Try again**, at the
+  notice's own height inside a box that still reserves 20 px. The title part, the actions, the
+  tabs and the thread keep working.
 - **Core forgets to register the default, or to list its source.** The gate test and
   `core-sources.test.ts` fail first. At run time an unregistered default renders an empty box,
   never an extension's implementation (#32, "unresolved").
 - **A third contract is served without conformance fixtures.** `core-conformance.test.tsx` fails
   with the contract's id.
-- **The user moves from task A to task B.** The header is not remounted. The callbacks are
-  #37's, which read the latest run through a ref. The toggle's state is read per task id.
-- **A metric hidden by the server, an unknown reference status or tone, a removed account.** The
-  props are the header's own frozen objects, so item 11's answers hold word for word.
+- **The user moves from task A to task B.** The header is not remounted. The intents keep their
+  identity and read the latest run through a ref, as #37's callbacks do. The toggle's state is
+  read per task id.
+- **A metric hidden by the server, an unknown reference status, a removed account.** The
+  derivations move unchanged, so item 11's answers hold word for word.
 - **An implementation mutates its props.** They are frozen: in strict-mode code the write throws
   and counts as a render failure.
-- **The Changes, Commits and Files tabs.** They render the same shell, so the same two hosts.
-  `actions.chooseEngine` is not available there, as today.
+- **Between PR 1 and PR 2.** The token is exported and no cockpit serves it. An extension that
+  provides against it is recorded as `unknown-contract`, as for any contract the cockpit does not
+  serve. Nobody ships an extension yet.
 
 ## 📝 Risks & Impact Review
 
-- **A second public contract.** `cezar.task.metadata@1` adds one token and three small interfaces,
-  and it makes #37's `TaskHeaderMeta`, `TaskHeaderEngine` and `TaskHeaderActionState` shared by two
-  contracts: narrowing one of them later bumps both. Nothing is added that core's row does not
-  render. The package is private and `BUILTIN_EXTENSIONS` is empty, so nobody implements it yet.
-- **The meta row moves twice in a short time** (#37, then this item). AGENTS.md § Changing a
-  mechanism that already works applies. What the in-part toggle was load-bearing for: the row
-  leaving the accessibility tree while collapsed, per-task memory, and `aria-controls`. All three
-  move to the shell and keep their tests. The row's own tests move file without being rewritten
-  (step 4 lists them), and `run-header.test.tsx`'s meta assertions must pass with no change beyond
-  the container they are found in.
-- **Core's header default declares one capability fewer.** No runtime code reads `shows-meta`
-  before this item's shell rule, and no preference is stored anywhere yet. Two tests and the
-  README name it on core's default (`extension-api/test/core-components.test.ts`,
-  `web/src/component-registry/core-components.test.ts`, the README's "Replacing a component") and
-  change with it.
-- **Two visible changes to a page that has just shipped** (§ UI/UX: the row stays during rename,
-  and a header without `shows-meta` gains core's row). Each has a named test in step 4 or 7, and
-  both are listed for the owner on the PR that carries this spec.
-- **A page with an extension header gains a row** (the compact example, § UI/UX). This is
-  intended: facts no longer vanish because a header chose not to show them.
+- **A second public contract, and a shared model.** `cezar.task.metadata@1` adds one token and
+  eight type names. `TaskMetadataModel` is now read by two contracts: narrowing it later bumps
+  both. Nothing is added that core's row does not render. The package is private and
+  `BUILTIN_EXTENSIONS` is empty, so nobody implements either contract yet.
+- **The header contract changes without a bump.** `shows-meta` leaves its optional capabilities,
+  and four of its types become aliases with the same members. Both are non-breaking by the bump
+  table and by structure, and the type tests in step 1 pin the second. `Omit<…>` is a type alias,
+  so an extension cannot re-open `TaskHeaderMeta` by declaration merging; none does.
+- **The token is exported one PR before it is served** (Q1). AGENTS.md asks for a core token to
+  land with the host code that honours it. The owner's split puts the contract in PR 1 and the
+  slot in PR 2, so PR 1's body says so, and `CORE_COMPONENT_CONTRACTS` gains the token only in
+  PR 2, with the slot, as that rule's second half requires.
+- **The metadata's derivations move twice in a short time** (#37, then this item). AGENTS.md
+  § Changing a mechanism that already works applies. PR 1 moves derivations with no visible
+  change, and `task-header-main.test.ts` must pass without a rewrite, because the header's props
+  do not change. What the in-part toggle was load-bearing for: the row leaving the accessibility
+  tree while collapsed, per-task memory, and `aria-controls`. All three move to the shell and keep
+  their tests.
+- **Two visible changes to a page that has just shipped** (§ UI/UX). Each has a named test in
+  step 5.
+- **No capability can hide the slot.** A header that renders all the metadata itself duplicates
+  it (§ Edge Cases). This is the owner's decision (Q4). The way out, if a real header needs it, is
+  layout configuration, not a header capability.
 - **Task content reaches a second kind of extension code.** The same facts item 11 already gives
   a header implementation, minus the prompt and the status. Extensions are compiled in and
   trusted, hidden usage metrics stay hidden, and no credential or file content is in the props.
-- **The entry bundle.** Both defaults load with the first paint. The entry-chunk check now covers
-  every source in `core-sources.ts`, so the row's imports (`ReferenceChip`, the badge menu) are
-  held to the same rule as the title part's. They already load with the first paint today, inside
-  the header default.
+- **The entry bundle.** Both defaults load with the first paint. The entry-chunk check covers
+  every source in `core-sources.ts`, so the row's imports are held to the same rule as the title
+  part's. They already load with the first paint today, inside the header default.
 - **`vite.config.ts` imports a source file.** `core-sources.ts` is pure data with no alias and no
-  React, imported by relative path. If the config's TypeScript project cannot include it, the
-  fallback is to keep the patterns in the config and let `core-sources.test.ts` assert they match.
-- **Depends on a lost merge being repaired** (Q10). Until #38's changes are on `main`,
-  implementation cannot start as written. The design does not depend on how they are re-landed,
-  and Q10 names the fallback if they are dropped.
-- **Rollback.** Revert the PR. Nothing is persisted, the header contract is untouched, and the
-  extension API is private.
+  React, imported by relative path, and `packages/web`'s `tsconfig.json` already includes both
+  files.
+- **Other open work touches the same files.** PR #49 (#38's changes) edits `run-header.tsx`,
+  `component-host.tsx` and the header token's capability list, and several open specs (#39, #42,
+  #44, #45) design around the header part. This spec depends on none of them. Whichever lands
+  second rebases, and after #49 the header token's optional capabilities are the three `offers-*`.
+- **Rollback.** Revert PR 3, then PR 2, then PR 1. Nothing is persisted, the header contract's
+  props are untouched, and the extension API is private.
 
 ## 📋 Phasing
 
-1. **Phase 1: The slot, and the platform checks.** Declare the contract, add the projection, move
-   the row into its own default, host it in the shell with the toggle and the `shows-meta` rule,
-   register it, replace the single entries with `core-sources.ts`, and add the conformance test.
-2. **Phase 2: The proof.** The plain example, its package test, and the cockpit test that uses it
-   alone and beside the compact header. Then the README and AGENTS.md.
+One spec, three PRs to `main`, each opened after the one before it has merged (Q1). Each leaves a
+working cockpit.
 
-Both phases ship in one PR (Q1). Phase 1 alone leaves a working cockpit and can merge first if the
-PR is split.
+1. **PR 1: The contract, the public types and the controller.** The shared model, the token, the
+   header's types as aliases, `useTaskMetadataController`, and the header's adapter reading from
+   it. No visible change, and nothing is served yet.
+2. **PR 2: Core's implementation, registered and rendered through `ComponentHost`.** The source
+   list and the host's header constant, `CoreTaskMetadata`, the registration, the slot and the
+   toggle in the shell, and `shows-meta` leaving the header contract.
+3. **PR 3: The alternative implementation and the conformance tests.** Then the README and
+   AGENTS.md.
 
 ## 📋 Implementation Plan
 
 Every step keeps the validation gate in `.ai/agentic.config.json` green: typecheck, `npm test`,
 `test:unit`, `build` and `test:package`.
 
-### Phase 1: The slot, and the platform checks
+### PR 1: The contract, the public types and the controller
 
-1. **The contract** (`packages/extension-api/src/core-components.ts`, re-exported from
-   `src/index.ts`), per § API Contracts, with the added sentence on `TaskHeaderMain`'s
-   `shows-meta`.
+1. **The shared model and the contract** (`packages/extension-api/src/core-components.ts`,
+   re-exported from `src/index.ts`), per § API Contracts. `TaskHeaderMain` is not touched yet.
    *Tests:*
-   - the token equals `{ kind: 'component', id: 'cezar.task.metadata', version: 1, requiredCapabilities: [], optionalCapabilities: [], layout: { minBlockSize: 20 } }`
+   - the token equals `{ kind: 'component', id: 'cezar.task.metadata', version: 1, requiredCapabilities: ['shows-metadata'], optionalCapabilities: ['offers-links', 'offers-copy'], layout: { minBlockSize: 20 } }`
      and is frozen;
-   - `IsJson<Omit<TaskMetadataProps, 'onResolveConflicts' | 'onNavigate' | 'onChooseEngine'>>`;
-   - a type test: the three intents are the only function-typed props and all return `void`;
-   - a type test: `TaskMetadataProps['meta']`, `['engine']` and both action states are the header
-     contract's own types, so one object satisfies both;
+   - `IsJson<Omit<TaskMetadataProps, 'intents'>>`;
+   - a type test: every member of `TaskMetadataIntents` is optional and returns `void`, and
+     `intents` is the only place a function appears;
+   - type-equality tests: `TaskHeaderMeta`, `TaskHeaderEngine`, `TaskHeaderReference` and
+     `TaskHeaderActionState` have exactly the members they had before, and `TaskHeaderMainProps`
+     is unchanged;
+   - a scan of the contract's declarations: nothing named `TaskMetadata…` refers to a type named
+     `TaskHeader…`;
    - `test/surface.test.ts` lists `TaskMetadata`.
 
-2. **The projection** (`routes/task-thread/task-metadata.ts`). Nothing renders it yet.
-   *Tests* (`task-metadata.test.ts`):
-   - `meta`, `engine` and both action states equal the header props' (`toEqual`), and the three
-     callbacks are the header props' own functions (`toBe`);
-   - `task` has exactly `taskId`, `projectId` and `title`;
-   - the result is frozen, and is the same object (`toBe`) across a re-render where only
-     `task.status`, `task.prompt` or `attention` changed, although the header's `meta` object is a
-     new one then;
-   - it is a new object when `meta`, `engine`, an action state or the title changes.
+2. **The controller, and the header's adapter on top of it** (`task-metadata.ts`,
+   `lib/use-frozen-json.ts`, `task-header-main.ts`, `run-header.tsx`). `RunHeader` calls the
+   controller and hands its result to `useTaskHeaderModel`. Nothing renders the metadata props
+   yet.
+   *Tests* (`task-metadata.test.ts`, fixture runs; the per-field cases move here from
+   `task-header-main.test.ts`):
+   - each model field matches the helper that feeds today's header: workflow, branch, the diff
+     with its file count and `repointed`, references in the Tasks table's order with their status,
+     look-up state and reason, the project-scoped automation `href`, usage without each hidden
+     metric, and the engine (default runner, `auto`, the account, a removed account, `identity`);
+   - `task` is `{ id, projectId, title }`;
+   - `intents.chooseEngine` is absent without the option, and present with it;
+   - `intents.resolveConflicts` sends the prompt only for a numbered, `conflicting` reference
+     while the action is available and enabled, and `intents.navigate` follows only the `href`
+     from the props;
+   - the data keeps its identity while its JSON is the same, and `intents` keeps one identity
+     across a switch from task A to task B, acting on B;
+   - `task-metadata.ts` does not import `task-header-main` (an import scan), and the controller
+     renders in a test with no `RunHeader` around it;
+   - `task-header-main.test.ts` passes with no rewrite beyond its wrapper passing the controller's
+     result: the header's `meta`, `engine`, action states and intents are what they were;
+   - `run-header.test.tsx` and the route tests pass unchanged.
+
+### PR 2: Core's implementation, registered and rendered through `ComponentHost`
 
 3. **One list of core's sources, and the host's header constant** (`core-sources.ts`;
    `boundary.ts`, `vite.config.ts`, `core-props-only.test.ts`; `component-host.tsx`). A refactor
@@ -565,28 +661,37 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
      generated patterns;
    - `core-props-only.test.ts` runs today's forbidden-import scan over every listed source and
      keeps every "catches …" and "lets through" case of `core-task-header-boundary.test.ts`, which
-     it replaces. The forbidden list is shared by all sources, and it gains one rule: no listed
-     source imports another listed source. Step 4 adds `src/routes/task-thread/task-metadata`;
+     it replaces. The forbidden list is shared by all sources, and it gains two rules: no listed
+     source imports another listed source, and none imports `src/routes/task-thread/task-metadata`;
    - `component-host.test.tsx`: the failure notice has no fixed minimum height of its own, and the
      box around it still reserves the fixture contract's `minBlockSize`.
 
-4. **The split** (`core-task-metadata.tsx`, `core-task-header-main.tsx`, `core-contracts.ts`,
+4. **`shows-meta` leaves the header contract** (`core-components.ts` in both packages, the
+   README). The token's `optionalCapabilities` becomes `[]` and core's header default declares two
+   capabilities. It lands in the same PR as step 5, which stops the header default rendering the
+   row.
+   *Tests:*
+   - `extension-api/test/core-components.test.ts` and `component-registry/core-components.test.ts`
+     expect `optionalCapabilities: []` and `['shows-title', 'shows-status']`;
+   - an implementation that still declares `shows-meta` is compatible, and its checked
+     capabilities do not include it.
+
+5. **The split** (`core-task-metadata.tsx`, `core-task-header-main.tsx`, `core-contracts.ts`,
    `core-components.ts`, `core-sources.ts`, `run-header.tsx`). One step, so the row is never
    missing from the page: the row moves into `CoreTaskMetadata`, the token joins
    `CORE_COMPONENT_CONTRACTS`, the default is registered and listed, the header default drops the
-   row, the toggle and `shows-meta`, and the shell renders the second host, the toggle and the
-   `shows-meta` rule.
+   row and the toggle, and the shell renders the second host and the toggle.
    *Tests:*
    - `core-task-metadata.test.tsx`: every meta-row case of `core-task-header-main.test.tsx` moves
-     here with only its props type and render target changed; the component renders with no
+     here with only its props and render target changed; the component renders with no
      `QueryClientProvider`, router, `CommandsProvider` or `ComponentsProvider` above it; its root
-     element has no margin class;
+     element has no margin class; without `intents.chooseEngine` the badge offers no menu item;
    - `core-task-header-main.test.tsx` keeps its title, rename, pill and plan cases, and asserts
      the part renders no `data-slot="run-meta"` and no details toggle;
    - the gate test: `missingCoreDefaults` is `[]`, and `['cezar.task.metadata']` without the new
      registration, so the check is shown to fail;
    - `checkComponentCompatibility(TaskMetadata, coreTaskMetadata)` is compatible with
-     `capabilities` of `[]`, and the header default's are `['shows-title', 'shows-status']`;
+     `capabilities` of `['shows-metadata', 'offers-links', 'offers-copy']`;
    - `run-header.test.tsx`: the existing meta assertions pass, found inside
      `data-component="cezar.task.metadata.default"`; the title is inside
      `data-component="cezar.task.header.main.default"`; neither host box contains the other, and
@@ -595,21 +700,41 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
      `cezar.task.header.main` box looks in the `cezar.task.metadata` box instead, the one rewrite
      in that file. `e2e/task-thread.e2e.ts` finds `run-meta` from the document and passes
      unchanged;
-   - `extension-api/test/core-components.test.ts` and `component-registry/core-components.test.ts`
-     expect `['shows-title', 'shows-status']` on core's header default;
    - the toggle: at phone width the wrapper is `hidden` until **Show run details** is pressed,
      `aria-expanded` and `aria-controls` match the wrapper, and the answer is kept per task across
      a switch from task A to task B and back;
-   - rename: while the editor is open the title part is `inert` and the meta row is not, and a
+   - rename: while the editor is open the title part is `inert` and the metadata is not, and a
      click on the row commits the rename;
-   - `shows-meta`: with a preferred fixture header that declares it, the page has no
-     `data-contract="cezar.task.metadata"` box and no toggle; after that fixture throws, both
-     return; with a fixture header that does not declare it, both are present;
-   - the metadata fixture that throws: core's row returns, the failure is reported once, and the
-     title part's box keeps its `data-component`;
+   - with a preferred fixture header, whatever it declares, the metadata box and the toggle are
+     present;
+   - a preferred metadata fixture that throws: core's row returns, the failure is reported once,
+     and the title part's box keeps its `data-component`;
    - the other route tests (`task-changes`, `task-files`, `review-panel`) pass unchanged.
 
-5. **The conformance test** (`core-conformance.test.tsx`, `core-conformance-fixtures.ts`).
+### PR 3: The alternative implementation and the conformance tests
+
+6. **The second implementation** (`component-registry/testing/compact-task-metadata.tsx`).
+   *Tests* (`compact-task-metadata.test.tsx`):
+   - an import scan of the file finds `react` and `@open-mercato/cezar-extension-api` and nothing
+     else, and the scan is shown to catch a `@/…` import;
+   - a registry built the way `main.tsx` builds it holds `cezar.task.metadata.default`; the test
+     registers `test.compact-task-metadata.line` through the extension path; with no preference
+     the host renders core's default, and with the preference set to the test id it renders the
+     compact line (`data-component="test.compact-task-metadata.line"`), under
+     `ComponentsProvider` alone, with no `RunHeader`;
+   - the line shows the workflow, the branch, the diff and `runner/model` from fixture props;
+   - disposing the registration brings core's default back.
+
+7. **The proof on the task page** (`routes/task-thread/external-task-metadata.test.tsx`).
+   *Tests:*
+   - `ThreadView` with a finished fixture run and the preference set renders the compact line
+     under core's title part (`data-component="cezar.task.header.main.default"`);
+   - on a task that can be continued, the line's engine label calls `intents.chooseEngine` and
+     focus lands on the dock's first engine pill; on one that cannot, the label is plain text;
+   - when the compact implementation is made to throw, core's row returns and the title part is
+     untouched.
+
+8. **The conformance test** (`core-conformance.test.tsx`, `core-conformance-fixtures.ts`).
    *Tests,* once per contract in `CORE_COMPONENT_CONTRACTS`:
    - a fixture exists for the contract id (the test names the id when one is missing, shown by a
      case that adds a fixture contract to a copy of the list);
@@ -617,46 +742,24 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - the box's `min-block-size` is the contract's `layout.minBlockSize`;
    - a preferred implementation that throws on render is replaced by core's default, and the
      failure is reported once;
-   - an implementation of `version + 1` is recorded `compatible: false` and never rendered, even
-     when preferred;
+   - an implementation of `version + 1`, and one that lacks a required capability, are recorded
+     `compatible: false` and never rendered, even when preferred;
    - a preferred implementation that is disposed gives way to core's default.
 
-### Phase 2: The proof
-
-6. **The example** (`examples/plain-task-metadata/index.ts`).
-   *Tests:*
-   - `test/plain-task-metadata.test.ts` activates it with `createFakeContext`, checks that it
-     provides `example.plain-metadata.line` against `cezar.task.metadata@1`, and that
-     `checkComponentCompatibility(TaskMetadata, impl)` is compatible;
-   - `test/boundary.test.ts` passes unchanged: the example imports only the package and `react`.
-
-7. **The proof on the task page** (`routes/task-thread/external-task-metadata.test.tsx`). Import
-   the example through a test-only relative path (AGENTS.md: "ugly on purpose"), activate it
-   through the extension registry the way `main.tsx` does, and prefer it through
-   `ComponentsProvider`.
-   *Tests:*
-   - `ThreadView` with a finished fixture run renders the example's line
-     (`data-component="example.plain-metadata.line"`) with the workflow, the branch, the diff and
-     `runner/model`, under core's title part (`data-component="cezar.task.header.main.default"`);
-   - on a task that can be continued, the example's engine label calls `onChooseEngine()` and
-     focus lands on the dock's first engine pill; on one that cannot, the label is plain text;
-   - with the compact header preferred too, both examples render, each in its own box, and the
-     compact header's Continue still executes `cezar.task.continue`;
-   - when the example is made to throw, core's row returns and the compact header stays.
-
-8. **The README and AGENTS.md.** The README's "Replacing a component" section describes the
-   metadata contract, the `shows-meta` rule and the plain example. AGENTS.md's "Component
-   implementations" routing row records the platform rules this item adds:
+9. **The README and AGENTS.md.** The README's "Replacing a component" section describes the
+   metadata contract, the shared model, the intents and the capabilities, and says that core
+   places and shows the component. AGENTS.md's "Component implementations" routing row records
+   the platform rules this item adds:
    - a new core contract is three entries and two files: the token in
      `CORE_COMPONENT_CONTRACTS`, the registration in `core-components.ts`, the source in
      `core-sources.ts`, plus the default and its conformance fixture;
    - `registry.ts`, `resolve.ts`, `component-host.tsx` and `provider.tsx` hold no knowledge of any
      one contract, and a PR that serves a new contract does not edit them;
-   - a replaceable part owns no outer spacing and no state another part reads: the shell that
-     places it owns both;
-   - props for a second part come from a projection of the model that already reads the run,
-     never from a second reader.
+   - a contract says what a component receives and must be able to do; where it sits and whether
+     it is visible belong to the page's layout, never to a capability or a prop;
+   - data that two contracts show has one public model and one controller, and the second
+     contract reads the model, never the first contract's adapter.
 
    `.ai/specs/2026-09-19-task-header-contract.md` gains one line under its title, marked
-   *(Corrected in the implementation PR)*: core's header default no longer renders the meta row or
-   declares `shows-meta`; see this spec.
+   *(Corrected in the implementation PR)*: the task's metadata is `cezar.task.metadata@1`, core's
+   header default no longer renders it, and `shows-meta` is gone; see this spec.
