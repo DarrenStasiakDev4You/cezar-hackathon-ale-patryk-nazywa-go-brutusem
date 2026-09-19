@@ -80,7 +80,7 @@ describe('guardServices', () => {
     const { scope } = fakeScope('acme.guard')
     const guarded = guardServices(scope, real, new Set())
 
-    expect(() => guarded.events.on({} as never, () => {})).toThrow(/events.on/) 
+    expect(() => guarded.events.on({} as never, () => {})).toThrow(/events.on/)
     expect(() => guarded.components.provide({} as never, {} as never)).toThrow(/ui.components/)
     await expect(guarded.storage.set('key', 1)).rejects.toMatchObject({ code: 'permission-denied' })
     expect(() => guarded.notifications.warning('warn')).toThrow(/notifications.warning/)
