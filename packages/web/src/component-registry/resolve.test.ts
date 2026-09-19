@@ -8,9 +8,15 @@ import {
 } from '@open-mercato/cezar-extension-api'
 
 import { fakeScope } from '../extensions/registry.fixtures'
-import { createComponentRegistry, type CockpitComponentRegistry, type UsableComponent } from './registry'
+import {
+  createComponentRegistry,
+  type AnyComponentContract,
+  type CockpitComponentRegistry,
+  type UsableComponent,
+} from './registry'
 import {
   coreDefaultComponentId,
+  missingCoreDefaults,
   resolveComponent,
   type ComponentResolution,
   type PreferenceRejection,
@@ -490,5 +496,49 @@ describe('resolveComponent', () => {
 
     expectTypeOf(typeOnly).toBeFunction()
     expect(resolved(resolution).component.componentId).toBe(JIRA_ID)
+  })
+})
+
+describe('missingCoreDefaults', () => {
+  /** A third served contract, which nothing implements. */
+  const Status = defineComponentContract<HeaderProps>('cezar.fixture.task-status', { version: 1 })
+
+  const registerListDefault = (registry: CockpitComponentRegistry) =>
+    registry.register(TaskList, { id: 'cezar.fixture.task-list.default', title: 'Task list', component: RenderList })
+
+  it('is [] when every contract of the catalog has core’s default registered', () => {
+    const registry = servedRegistry()
+    registerDefault(registry)
+    registerListDefault(registry)
+    provide(registry, 'acme.jira')
+
+    expect(missingCoreDefaults(registry, [Header, TaskList])).toEqual([])
+  })
+
+  it('names, in catalog order, each contract left unresolved: only a compact core implementation, or nothing', () => {
+    const catalog: readonly AnyComponentContract[] = [Status, TaskList, Header]
+    const registry = createComponentRegistry({ contracts: catalog, onDiagnostic: () => {} })
+    registerCompact(registry)
+    registerListDefault(registry)
+    provide(registry, 'acme.jira')
+
+    const missing = missingCoreDefaults(registry, catalog)
+
+    expect(missing).toEqual(['cezar.fixture.task-status', 'cezar.fixture.task-header'])
+    expect(Object.isFrozen(missing)).toBe(true)
+    for (const contract of catalog) {
+      expect(missing.includes(contract.id)).toBe(resolveComponent(registry, contract).status === 'unresolved')
+    }
+  })
+
+  it('names a contract whose .default an extension provides, since only core’s counts', () => {
+    const registry = servedRegistry()
+    registry.forExtension(fakeScope('cezar.fixture').scope).provide(Header, header(DEFAULT_ID, 'Built-in header'))
+
+    expect(missingCoreDefaults(registry, [Header])).toEqual([Header.id])
+  })
+
+  it('is [] for an empty catalog', () => {
+    expect(missingCoreDefaults(servedRegistry(), [])).toEqual([])
   })
 })

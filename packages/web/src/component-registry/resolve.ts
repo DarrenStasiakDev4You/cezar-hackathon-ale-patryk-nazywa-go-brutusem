@@ -1,6 +1,7 @@
 import { isValidContributionId, type ComponentContract, type ContributionId } from '@open-mercato/cezar-extension-api'
 
 import type {
+  AnyComponentContract,
   CockpitComponentRegistry,
   ComponentRegistration,
   ComponentRegistrationIssue,
@@ -109,6 +110,22 @@ export function resolveComponent<P>(
 
   // 6 and 7. Why not, then core's default.
   return setAside(fallback, whyNot(registry.get(preference), preference, fallback.contractId))
+}
+
+/**
+ * The ids of the served contracts that have no core default: each contract in `contracts` that
+ * `resolveComponent(registry, contract)` leaves `unresolved`, in catalog order. `[]` when every
+ * one resolves. The slot item's gate test asserts `[]` for `CORE_COMPONENT_CONTRACTS`.
+ */
+export function missingCoreDefaults(
+  registry: ResolverRegistry,
+  contracts: readonly AnyComponentContract[],
+): readonly ContributionId[] {
+  const missing: ContributionId[] = []
+  for (const contract of contracts) {
+    if (resolveComponent(registry, contract).status === 'unresolved') missing.push(contract.id)
+  }
+  return Object.freeze(missing)
 }
 
 /** Step 7: core's default renders, and `rejected` says why the preference did not. */
