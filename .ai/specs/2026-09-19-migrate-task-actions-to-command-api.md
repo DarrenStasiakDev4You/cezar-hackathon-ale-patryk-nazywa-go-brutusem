@@ -315,10 +315,12 @@ The existing fetch-level tests for each site are the proof (§ Implementation Pl
   cross-project index, where `useContinueRun` waited for `runs.all` alone. Its panel stays on
   "Sending…" until that one extra request lands. That is the rule's direct consequence
   (`refetchTask(input)` covers what the handler invalidated), and it is accepted.
-- **Repeated 409s join one refetch.** The Ask delivery's idle-teardown retry can meet up to ten
-  409s in a few seconds, and each 409 invalidates the task keys. The handler's 409 branch
-  therefore passes `{ cancelRefetch: false }`, so a retry joins the refetch already in flight
-  instead of cancelling and restarting it.
+- **Repeated 409s restart the refetch (accepted).** The Ask delivery's idle-teardown retry can
+  meet up to ten 409s in about 5.5 s, and each 409 invalidates the task keys, cancelling the
+  previous refetch. That is kept on purpose: joining a refetch already in flight could keep a
+  record fetched before the task changed, which is exactly what #11's 409 rule refetches away
+  (and what `deliver-prompt`'s re-route decides on). The cost is bounded — one request in flight
+  at a time, for at most the retry window.
 - **More refetches after some failures.** The handler's rule is broader than two of today's
   copies. The composer, review panel and Ask delivery now also invalidate `runs.all` after a
   409 (today only the header does). Resolve conflicts on cross-project surfaces now

@@ -73,9 +73,9 @@ export function registerCoreCommands(
    * caller acted on is not the task the server has — refetch it so the UI redraws to the truth —
    * and still rejects. Any other failure changed nothing, so it leaves the caches alone (unlike
    * the global Tasks page's `onSettled`, which must undo its own optimistic patch: a caller that
-   * patches optimistically keeps that rollback and invalidation itself). The 409 refetch joins
-   * one already in flight: the Ask delivery retries a continue through the idle-teardown window
-   * (up to ten 409s in a few seconds), and each must not cancel and restart the last one's.
+   * patches optimistically keeps that rollback and invalidation itself). The 409 refetch always
+   * starts after the 409 — it cancels one already in flight, which may have been answered before
+   * the task changed — even across the Ask delivery's bounded idle-teardown retries.
    */
   const settled = async <T>(
     projectId: string | undefined,
@@ -86,9 +86,7 @@ export function registerCoreCommands(
     try {
       result = await request()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
-        void invalidateTaskKeys(queryClient, projectId, { cancelRefetch: false })
-      }
+      if (error instanceof ApiError && error.status === 409) void invalidateTaskKeys(queryClient, projectId)
       throw error
     }
     const refetch = invalidateTaskKeys(queryClient, projectId)

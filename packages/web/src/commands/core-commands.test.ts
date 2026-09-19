@@ -310,28 +310,30 @@ describe('failures', () => {
     expect(keys()).toEqual([['default', 'runs']])
   })
 
-  it('back-to-back 409s join one refetch rather than cancelling and restarting it', async () => {
+  it('a 409 refetch starts after the 409, replacing one already in flight', async () => {
     stubFetch(() => jsonResponse({ error: 'run is still active' }, 409))
     const queryClient = new QueryClient()
     const registry = createCommandRegistry()
     registerCoreCommands(registry, { queryClient })
     // An observed runs list whose answers the test releases by hand, as a mounted view would have.
-    const pending: Array<() => void> = []
-    const queryFn = vi.fn(() => new Promise<string[]>((resolve) => pending.push(() => resolve([]))))
-    const unsubscribe = new QueryObserver(queryClient, { queryKey: ['default', 'runs', 'list'], queryFn }).subscribe(
-      () => {},
-    )
+    const pending: Array<(runs: string[]) => void> = []
+    const queryFn = vi.fn(() => new Promise<string[]>((resolve) => pending.push(resolve)))
+    const key = ['default', 'runs', 'list']
+    const unsubscribe = new QueryObserver(queryClient, { queryKey: key, queryFn }).subscribe(() => {})
     await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
-    pending.shift()?.()
-    await vi.waitFor(() => expect(queryClient.getQueryState(['default', 'runs', 'list'])?.status).toBe('success'))
+    pending.shift()?.(['initial'])
+    await vi.waitFor(() => expect(queryClient.getQueryData(key)).toEqual(['initial']))
+    // A refetch asked BEFORE the task changed is still on its way when the 409 arrives.
+    void queryClient.invalidateQueries({ queryKey: key })
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
 
-    // The idle-teardown retry: the same refusal, again and again, while the refetch is in flight.
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await rejection(registry.execute(TaskContinue, { taskId: 'r1' }))
-    }
+    await rejection(registry.execute(TaskContinue, { taskId: 'r1' }))
 
-    expect(queryFn).toHaveBeenCalledTimes(2)
-    pending.shift()?.()
+    // The 409 asked again rather than trusting the answer already on its way.
+    expect(queryFn).toHaveBeenCalledTimes(3)
+    pending.shift()?.(['before the 409'])
+    pending.shift()?.(['after the 409'])
+    await vi.waitFor(() => expect(queryClient.getQueryData(key)).toEqual(['after the 409']))
     unsubscribe()
   })
 
