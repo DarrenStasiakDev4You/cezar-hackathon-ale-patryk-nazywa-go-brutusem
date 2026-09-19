@@ -7,6 +7,7 @@ import {
   defineEvent,
   isExtensionError,
   TaskArchive,
+  TaskContinue,
   type Extension,
   type ExtensionContext,
 } from '@open-mercato/cezar-extension-api'
@@ -212,6 +213,42 @@ describe('cockpitServices', () => {
     expect(registry.get('acme.archiver')?.status).toBe('active')
     expect(result).toEqual({ taskId: 'r1', archived: true })
     expect(sent).toEqual(['POST /api/v1/runs/r1/archive {"archived":true}'])
+  })
+
+  it('lets an extension continue a task on another engine, with a prompt — the composer’s own continue', async () => {
+    const sent: { path: string; body: unknown }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+        sent.push({ path: `${init.method ?? 'GET'} ${String(input)}`, body: JSON.parse(String(init.body)) })
+        return new Response(JSON.stringify({ continued: true }), { headers: { 'content-type': 'application/json' } })
+      }),
+    )
+    let result: unknown
+    const { registry, ready } = boot([
+      fixture('acme.steer', {
+        async activate(context) {
+          result = await context.commands.execute(TaskContinue, {
+            taskId: 'r1',
+            projectId: 'web',
+            runner: 'codex',
+            model: 'gpt-5.1-codex',
+            text: 'Now fix the lint errors.',
+          })
+        },
+      }),
+    ])
+
+    await ready
+
+    expect(registry.get('acme.steer')?.status).toBe('active')
+    expect(result).toEqual({ taskId: 'r1', continued: true })
+    expect(sent).toEqual([
+      {
+        path: 'POST /api/v1/p/web/runs/r1/continue',
+        body: { text: 'Now fix the lint errors.', runner: 'codex', model: 'gpt-5.1-codex' },
+      },
+    ])
   })
 
   it('hides an internal core command: has is false and execute answers command-not-found', async () => {
