@@ -21,7 +21,8 @@
 | 3 | 3.3 | Authoritative review pass and fixes. | inline | todo | — |
 | 3 | 3.4-review-fix | Mark the context-menu Delete as an edit-mode editor action. | inline | done | f854908e |
 | 3 | 3.5-review-fix | Re-check the target and edit mode after an asynchronous delete confirmation. | inline | done | 88f5819e |
-| 3 | 3.6-review-fix | Return focus to the invoker on Escape and give the Delete description a per-menu id. | inline | done | (this commit) |
+| 3 | 3.6-review-fix | Return focus to the invoker on Escape and give the Delete description a per-menu id. | inline | done | 3f8f463f |
+| 3 | 3.7-review-fix | Keep the native-dialog name out of the context-menu test (design guardian). | inline | done | (this commit) |
 
 Goal: Add a reusable, accessible context menu for registered layout widgets and groups in edit mode, with Delete delegated to the layout owner.
 

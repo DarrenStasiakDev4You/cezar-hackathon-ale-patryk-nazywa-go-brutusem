@@ -119,8 +119,8 @@ describe('LayoutElementContextMenu', () => {
 
   it('drops a confirmed delete whose target unmounted, or whose edit mode ended, while confirming', async () => {
     const onDelete = vi.fn()
-    let confirm: (value: boolean) => void = () => {}
-    const confirmDelete = vi.fn(() => new Promise<boolean>((resolve) => { confirm = resolve }))
+    let settleConfirmation: (value: boolean) => void = () => {}
+    const confirmDelete = vi.fn(() => new Promise<boolean>((resolve) => { settleConfirmation = resolve }))
     const layout = (enabled: boolean, mounted: boolean) => (
       <LayoutRegistryProvider>
         <LayoutElementContextMenu enabled={enabled} onDelete={onDelete} confirmDelete={confirmDelete}>
@@ -134,7 +134,7 @@ describe('LayoutElementContextMenu', () => {
     fireEvent.contextMenu(screen.getByText('Revenue'))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
     view.rerender(layout(true, false))
-    await act(async () => confirm(true))
+    await act(async () => settleConfirmation(true))
     expect(onDelete).not.toHaveBeenCalled()
 
     view.rerender(layout(true, true))
@@ -142,7 +142,7 @@ describe('LayoutElementContextMenu', () => {
     fireEvent.contextMenu(screen.getByText('Revenue'))
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
     view.rerender(layout(false, true))
-    await act(async () => confirm(true))
+    await act(async () => settleConfirmation(true))
     expect(onDelete).not.toHaveBeenCalled()
     expect(confirmDelete).toHaveBeenCalledTimes(2)
   })
