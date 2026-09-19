@@ -98,25 +98,30 @@ describe('the hello example extension', () => {
 
 describe('the README', () => {
   const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf8')
-  const lines = (source: string): Set<string> => new Set(source.split('\n').map((line) => line.trim()))
+  const trimmedLines = (source: string): string[] => source.split('\n').map((line) => line.trim())
+
+  /** `true` when `run` appears in `lines` as one unbroken sequence. */
+  const containsRun = (lines: readonly string[], run: readonly string[]): boolean =>
+    lines.some((_, start) => run.every((line, offset) => lines[start + offset] === line))
 
   // "Replacing a component" quotes the example and this test instead of writing its own code, so
-  // the gate compiles and runs what the README shows. A quoted line that drifts fails here.
+  // the gate compiles and runs what the README shows. Each quoted run of lines — the blocks, split
+  // at their `// …` elision comments — must appear unbroken in one of the two files.
   it('quotes its component check from the example extension and this test, verbatim', () => {
     const readme = read('../README.md')
     const section = readme.slice(
       readme.indexOf('**Checking an implementation.**'),
       readme.indexOf('#### When `version` changes'),
     )
-    const quoted = [...section.matchAll(/```ts\n([\s\S]*?)```/g)]
-      .flatMap((block) => (block[1] ?? '').split('\n'))
-      .map((line) => line.trim())
-      .filter((line) => line !== '' && !line.startsWith('//'))
-    expect(quoted.length).toBeGreaterThan(0)
-    const compiled = new Set([
-      ...lines(read('../examples/hello-extension/index.ts')),
-      ...lines(read('./example.test.ts')),
-    ])
-    expect(quoted.filter((line) => !compiled.has(line))).toEqual([])
+    const runs = [...section.matchAll(/```ts\n([\s\S]*?)```/g)].flatMap((block) =>
+      trimmedLines(block[1] ?? '')
+        .join('\n')
+        .split(/^\/\/.*$/m)
+        .map((run) => run.split('\n').filter((line) => line !== '')),
+    )
+    expect(runs.filter((run) => run.length > 0).length).toBeGreaterThanOrEqual(3)
+    const sources = [read('../examples/hello-extension/index.ts'), read('./example.test.ts')].map(trimmedLines)
+    const drifted = runs.filter((run) => run.length > 0 && !sources.some((lines) => containsRun(lines, run)))
+    expect(drifted).toEqual([])
   })
 })

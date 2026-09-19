@@ -186,10 +186,11 @@ issue. Capabilities are **declared, not verified**: the check below compares dec
 behaviour that is wrong without throwing is the implementation author's responsibility.
 
 **Checking an implementation.** `checkComponentCompatibility(contract, implementation, implemented?)`
-never throws and never touches React. It returns `{ compatible, issues, capabilities }`: `issues`
-is either the first blocking problem (`malformed` input, then `contract-id-mismatch`, then
-`contract-version-mismatch`) or every `missing-capability` at once, and `capabilities` is what the
-host may rely on, the required ones plus the optional ones you declare. The host passes its own
+never throws and never touches React. It returns `{ compatible, issues, capabilities }`. `issues`
+holds whatever stops the check first: every `malformed` field (at most one per capability list,
+and a list over 256 names is not read), else one `contract-id-mismatch`, else one
+`contract-version-mismatch`, else every `missing-capability` at once. `capabilities` is what the
+host may rely on: the required ones plus the optional ones you declare. The host passes its own
 token, your implementation and the token `provide` received; in your tests the third argument
 defaults to the contract. From the example extension (`examples/hello-extension/index.ts`):
 
