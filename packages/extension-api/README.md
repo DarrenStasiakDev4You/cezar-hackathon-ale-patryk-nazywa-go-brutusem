@@ -2,9 +2,10 @@
 
 > **Experimental and private.** The cockpit's extension registry
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
-> extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands` is
-> honoured (spec `2026-09-19-command-api`); events, storage and components arrive in later items,
-> and every host item may still revise these types in the PR that implements them. Component
+> extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands`
+> (spec `2026-09-19-command-api`) and `events` (spec `2026-09-19-extension-event-api`) are
+> honoured; storage and components arrive in later items, and every host item may still revise
+> these types in the PR that implements them. Component
 > contracts are already checkable — `checkComponentCompatibility` runs anywhere, in your own tests
 > too (spec `2026-09-19-component-contract-api`) — while `context.components` is still
 > unimplemented. The package is versioned with the release but not published to npm.
@@ -151,6 +152,59 @@ Continuing a task starts an agent session. That is no new power — extension co
 cockpit's origin — but it is the reason the loader must decide who may run third-party code before
 any exists.
 
+### Events
+
+`context.events` is the cockpit's event bus, seen from your extension. Events are typed tokens made
+with `defineEvent<Payload>(id)`; the payload is JSON, and a payload-less event is emitted as
+`emit(token)`.
+
+- `on(token, listener)` — calls `listener` for every later emit of the event. Returns a
+  `Disposable` that removes this one subscription.
+- `once(token, listener)` — the same, for the first later emit only.
+- `off(token, listener)` — removes every subscription of that exact function to that event made
+  through your context, `on` and `once` alike. A re-created arrow function is another listener, so
+  keep the reference or keep the `Disposable`. `off` with nothing to remove does nothing.
+- `emit(token, payload?)` — only ids under your own `${extension.id}.` prefix. You may listen to
+  any id, including one nobody emits yet: that subscription just stays silent, so an extension
+  written for a newer Cezar still runs on an older one.
+
+**Delivery.** `emit` returns before any listener runs. Events are delivered in emit order and,
+within one emit, in subscription order; a listener receives only events emitted after it
+subscribed. The payload is copied as JSON when it is emitted and every listener gets its own copy,
+so a mutation by the emitter or another listener is never seen. A payload that is not JSON (a cycle,
+a `bigint`) makes `emit` throw `invalid-input`, and nothing is delivered.
+
+**Isolation.** A listener that throws, or returns a promise that rejects, is reported
+(`[cezar:extensions] <extension>: listener for <event> failed`) and affects nothing else: the
+emitter, the other listeners and your extension's status are untouched.
+
+**Ownership.** An extension emits only into its own namespace, and never a core `cezar.*` event —
+even a built-in whose own id is under `cezar`. Anything else throws `namespace-violation`. Names
+cannot collide, because every id sits under exactly one owner's prefix. Any extension may listen to
+any event, so **never put a secret in a payload**.
+
+**Storms.** An emit made synchronously from inside a listener counts toward a cascade depth; past
+16, it is dropped and reported. After 1,000 listener calls without a break the bus yields to the
+page and resumes in its next task, so a busy extension cannot freeze rendering.
+
+**Cleanup.** Every subscription is disposed when your extension deactivates — including deliveries
+already queued for it — and when a failed or timed-out `activate` ends. While `deactivate()` runs,
+your listeners may still be called. Afterwards `on`, `once`, `off` and `emit` throw `disposed`.
+
+**Core events.** Emitted by Cezar only and exported from this package with their payload types:
+
+| Token | Id | Payload | When |
+| --- | --- | --- | --- |
+| `ExtensionActivated` | `cezar.extension.activated` | `{ extensionId, version }` | An extension became active — after its own listeners are live, so it hears its own activation. Not replayed for extensions that activate later. |
+
+```ts
+import { ExtensionActivated } from '@open-mercato/cezar-extension-api'
+
+context.events.on(ExtensionActivated, ({ extensionId, version }) => {
+  console.info(`${extensionId}@${version} is active`)
+})
+```
+
 ### Storage
 
 `context.storage` is async, private to the extension and holds JSON values. `get<T>()` is an
@@ -235,7 +289,7 @@ notice; at publication each core contract is listed with its major in `BACKWARD_
 `isExtensionError(error, code?)` recognises every `ExtensionErrorCode` by its `code`, never by
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
 and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
-malformed command token); `namespace-violation`, `duplicate-registration`, `command-not-found`,
+malformed command or event token); `namespace-violation`, `duplicate-registration`, `command-not-found`,
 `contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
 `command-timeout` come from the host. The union grows additively: a copy of this package older than
 the host does not recognise the newer codes.
