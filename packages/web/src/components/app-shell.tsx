@@ -24,7 +24,7 @@ import {
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from '@/components/layout-context-menu'
 import { LayoutElement } from '@/components/layout-element'
 import { LayoutRegistryProvider } from '@/components/layout-registry'
-import { LayoutDropZone, LayoutSortableSurface } from '@/components/layout-sortable-surface'
+import { LayoutSortableSurface } from '@/components/layout-sortable-surface'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -306,15 +306,13 @@ export const AppShell = React.memo(function AppShell({
 
   const [shellLayout, setShellLayout] = React.useState<Record<string, string[]>>({
     root: ['shell-sidebar', 'shell-main'],
-    'shell-main': [],
   })
   const handleShellLayoutChange = React.useCallback((snapshot: Array<{ id: string; parentId?: string; order: number }>) => {
-    const next: Record<string, string[]> = { root: [], 'shell-main': [] }
+    const next: Record<string, string[]> = { root: [] }
     for (const element of snapshot) {
       if (element.id !== 'shell-sidebar' && element.id !== 'shell-main') continue
       const parent = element.parentId ?? 'root'
-      if (!next[parent]) next[parent] = []
-      next[parent]!.push(element.id)
+      if (parent === 'root') next.root!.push(element.id)
     }
     setShellLayout(next)
   }, [])
@@ -326,7 +324,6 @@ export const AppShell = React.memo(function AppShell({
           key={id}
           id="shell-sidebar"
           kind="group"
-          parentId={shellLayout['shell-main']?.includes('shell-sidebar') ? 'shell-main' : undefined}
           as="section"
           className="relative hidden shrink-0 md:flex"
           style={{ width: sidebarWidth }}
@@ -344,13 +341,6 @@ export const AppShell = React.memo(function AppShell({
         as="section"
         className="relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0"
       >
-        <LayoutDropZone
-          id="shell-main"
-          className="contents"
-          hitAreaClassName="absolute inset-x-0 top-16 bottom-0 z-30 bg-primary/5"
-        >
-          {shellLayout['shell-main']?.map(renderShellBlock)}
-        </LayoutDropZone>
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
           <MobileTopBar title={current?.label ?? 'cezar'} />
           <MobileNavDrawer {...nav} onNavigate={closeMenu} />

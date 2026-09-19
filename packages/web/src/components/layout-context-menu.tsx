@@ -156,6 +156,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
       return
     }
     close()
+    if (registry.get(target.id)) registry.removeSubtree(target.id)
     onDelete(target)
   }
 

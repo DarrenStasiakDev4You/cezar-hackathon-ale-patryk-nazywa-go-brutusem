@@ -158,4 +158,24 @@ describe('LayoutRegistry', () => {
     expect(registry.getSiblingIds('left')).toEqual([])
     expect(registry.getSiblingIds('right')).toEqual(['sidebar', 'content'])
   })
+
+  it('removes one element or its complete subtree in one update', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'root', kind: 'group' })
+    registry.register({ id: 'child', kind: 'widget', parentId: 'root' })
+    registry.register({ id: 'nested', kind: 'group', parentId: 'root' })
+    registry.register({ id: 'grandchild', kind: 'widget', parentId: 'nested' })
+    registry.register({ id: 'sibling', kind: 'widget' })
+    let notifications = 0
+    registry.subscribe(() => notifications++)
+
+    expect(registry.removeSubtree('nested')).toBe(true)
+    expect(registry.getSnapshot().map((item) => item.id)).toEqual(['root', 'child', 'sibling'])
+    expect(registry.get('nested')).toBeUndefined()
+    expect(registry.get('grandchild')).toBeUndefined()
+    expect(registry.getSiblingIds('root')).toEqual(['child'])
+    expect(notifications).toBe(1)
+    expect(registry.isRemoved('nested')).toBe(true)
+    expect(registry.removeSubtree('unknown')).toBe(false)
+  })
 })

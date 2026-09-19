@@ -18,6 +18,7 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
   const registry = useLayoutRegistry()
   const { enabled } = useLayoutSortableContext()
   const sortable = useSortable({ id, disabled: !enabled })
+  const removed = registry.isRemoved(id)
   const order = registry.get(id)?.order ?? -1
   const nodeRef = React.useRef<HTMLElement | null>(null)
 
@@ -34,6 +35,8 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
       unregister()
     }
   }, [id, kind, parentId, registry])
+
+  if (removed) return null
 
   return React.createElement(
     as,

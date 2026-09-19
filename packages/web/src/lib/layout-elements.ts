@@ -62,6 +62,7 @@ export class LayoutRegistry {
   private readonly elements = new Map<string, LayoutElementDescriptor>()
   private readonly pendingElements = new Map<string, PendingLayoutElement>()
   private readonly pendingRemovals = new Set<string>()
+  private readonly removedIds = new Set<string>()
   private readonly domNodes = new Map<string, Element>()
   private readonly siblingOrder = new Map<string | undefined, string[]>()
   private readonly listeners = new Set<LayoutRegistryListener>()
@@ -76,6 +77,7 @@ export class LayoutRegistry {
       throw new Error(`Layout element parent "${descriptor.parentId}" is not registered`)
     }
 
+    this.removedIds.delete(descriptor.id)
     this.elements.set(descriptor.id, { ...descriptor })
     const siblings = this.siblingOrder.get(descriptor.parentId) ?? []
     this.siblingOrder.set(descriptor.parentId, [...siblings, descriptor.id])
@@ -135,6 +137,39 @@ export class LayoutRegistry {
   get(id: string): RegisteredLayoutElement | undefined {
     const element = this.snapshotCache.find((candidate) => candidate.id === id)
     return element ? cloneElement(element) : undefined
+  }
+
+  /** Returns true after an explicit delete until the same id is mounted again. */
+  isRemoved(id: string): boolean {
+    return this.removedIds.has(id)
+  }
+
+  /** Removes one element and all descendants as one registry update. */
+  removeSubtree(id: string): boolean {
+    if (!this.elements.has(id) && !this.pendingElements.has(id)) return false
+
+    const ids = this.getSubtreeIds(id)
+    if (ids.size === 0) return false
+    for (const removedId of ids) this.removedIds.add(removedId)
+
+    const root = this.elements.get(id)
+    if (root) {
+      const siblings = this.siblingOrder.get(root.parentId)
+      if (siblings) {
+        const next = siblings.filter((siblingId) => siblingId !== id)
+        if (next.length > 0) this.siblingOrder.set(root.parentId, next)
+        else this.siblingOrder.delete(root.parentId)
+      }
+    }
+    for (const removedId of ids) {
+      this.elements.delete(removedId)
+      this.pendingElements.delete(removedId)
+      this.domNodes.delete(removedId)
+      this.siblingOrder.delete(removedId)
+      this.pendingRemovals.delete(removedId)
+    }
+    this.rebuildSnapshot()
+    return true
   }
 
   getChildren(id?: string): RegisteredLayoutElement[] {

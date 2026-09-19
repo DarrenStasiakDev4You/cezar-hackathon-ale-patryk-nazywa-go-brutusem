@@ -143,6 +143,16 @@ describe('AppShell', () => {
 
       expect(onClick).toHaveBeenCalledOnce()
     })
+
+    it('keeps the shell layout flat while editing so the sidebar can move to the other side', () => {
+      renderShell('/')
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+
+      expect(document.querySelector('[data-layout-drop-zone="shell-main"]')).toBeNull()
+      expect(document.querySelector('[data-layout-id="shell-sidebar"]')).not.toBeNull()
+      expect(document.querySelector('[data-layout-id="shell-main"]')).not.toBeNull()
+    })
   })
 
   it('resets the main scroller to the top on navigation (#mobile-scroll-top)', () => {
