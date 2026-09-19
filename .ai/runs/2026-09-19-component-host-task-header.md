@@ -97,7 +97,7 @@ The spec decides on one spec, two phases, two stacked PRs (spec Q1). **This run 
 
 ### Phase 2: The task header slot
 
-- [ ] 2.1 The TaskHeaderMain contract
-- [ ] 2.2 The split, core's default and its registration
+- [x] 2.1 The TaskHeaderMain contract — cb305e67
+- [x] 2.2 The split, core's default and its registration — 88db9f0a
 - [ ] 2.3 The boundary test and the failure path on a real page
 - [ ] 2.4 AGENTS.md routing row
