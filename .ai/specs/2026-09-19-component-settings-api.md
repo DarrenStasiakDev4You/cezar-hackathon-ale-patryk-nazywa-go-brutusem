@@ -311,7 +311,7 @@ Rules:
   the boot project.
 - The global and project UI-state schemas remain additive and tolerant of unknown sibling keys. The
   existing body cap, per-entry size bound and map entry-count bound apply.
-- Cezar owns storage-format migrations. A schema version change that cannot be normalized safely
+- Cezar owns storage-format and field-shape migrations. A stored value that cannot be normalized safely
   clears only that implementation's overrides and returns its declared defaults; this item does not
   add extension-provided migration callbacks.
 - These values are ordinary UI/configuration state, never a secret store. Credentials and tokens
