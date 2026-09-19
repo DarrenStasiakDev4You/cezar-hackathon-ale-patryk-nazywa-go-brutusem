@@ -17,16 +17,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   // poll budget. The openFileInDefaultApp arg-surface tests (#365) still override this per-test
   // with mockReturnValue in their own beforeEach.
   spawnMock.mockImplementation(() => ({ once: vi.fn(), unref: vi.fn() }));
-  return {
-    ...actual,
-    // Keep the path assertions on the pure fallback conversion. A real WSL host
-    // may provide `wslpath`, whose output necessarily uses that host's distro.
-    execFileSync: (...args: unknown[]) => {
-      if (args[0] === 'wslpath') throw new Error('force pure WSL path fallback');
-      return (actual.execFileSync as (...inner: unknown[]) => unknown)(...args);
-    },
-    spawn: (...args: unknown[]) => spawnMock(...args),
-  };
+  return { ...actual, spawn: (...args: unknown[]) => spawnMock(...args) };
 });
 
 import { RUNNER_IDS } from '../core/agent-runner.ts';
@@ -37,18 +28,12 @@ import { RUNNER_IDS } from '../core/agent-runner.ts';
 // `spawn`, so it trips on the mock exactly as it would on the real thing. Scoped to the file and
 // restored afterwards, so no other suite inherits the exemption.
 const savedAllowSpawn = process.env.CEZ_ALLOW_TEST_SPAWN;
-const savedWslDistro = process.env.WSL_DISTRO_NAME;
 beforeAll(() => {
   process.env.CEZ_ALLOW_TEST_SPAWN = '1';
-  // The WSL path cases assert the documented fallback distro, not the distro
-  // that happens to host this test process.
-  delete process.env.WSL_DISTRO_NAME;
 });
 afterAll(() => {
   if (savedAllowSpawn === undefined) delete process.env.CEZ_ALLOW_TEST_SPAWN;
   else process.env.CEZ_ALLOW_TEST_SPAWN = savedAllowSpawn;
-  if (savedWslDistro === undefined) delete process.env.WSL_DISTRO_NAME;
-  else process.env.WSL_DISTRO_NAME = savedWslDistro;
 });
 
 import {

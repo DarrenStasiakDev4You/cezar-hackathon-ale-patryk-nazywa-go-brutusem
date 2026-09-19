@@ -280,7 +280,7 @@ describe('GET /api/v1/health — forge + capabilities', () => {
       tokenUsageMetrics: true,
       costMetrics: false,
     });
-  }, 15_000);
+  });
 });
 
 describe('POST /api/v1/runs/:id/open-in-cli — hosted-mode defense in depth', () => {

@@ -43,8 +43,6 @@ const targetFromElement = (
   registry: ReturnType<typeof useLayoutRegistry>,
   allowAnyElement: boolean,
 ): LayoutContextMenuTarget | null => {
-  // Identity is always taken from the concrete registered element carrying the attribute. Do not
-  // walk to a parent as a fallback: nested children must own their own context-menu target.
   const id = element.getAttribute('data-layout-id')
   if (id && element.getAttribute('data-layout-element') === 'true') {
     const registered = registry.get(id)
@@ -57,9 +55,8 @@ const targetFromElement = (
 
 const getLayoutTarget = (eventTarget: EventTarget | null, registry: ReturnType<typeof useLayoutRegistry>, allowAnyElement: boolean) => {
   if (!(eventTarget instanceof Element)) return null
-  const targetElement = eventTarget.closest('[data-layout-element="true"][data-layout-id]')
-    ?? eventTarget.closest('a,button,input,select,textarea,[role],section,article,li,td,th,div')
-    ?? eventTarget
+  const layoutElement = eventTarget.closest('[data-layout-element="true"][data-layout-id]')
+  const targetElement = layoutElement ?? eventTarget.closest('a,button,input,select,textarea,[role],section,article,li,td,th,div') ?? eventTarget
   return targetFromElement(targetElement, registry, allowAnyElement)
 }
 
@@ -159,7 +156,6 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
       return
     }
     close()
-    if (registry.get(target.id)) registry.removeSubtree(target.id)
     onDelete(target)
   }
 

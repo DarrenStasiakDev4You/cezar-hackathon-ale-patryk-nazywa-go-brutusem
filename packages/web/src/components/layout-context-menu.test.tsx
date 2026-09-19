@@ -49,7 +49,6 @@ describe('LayoutElementContextMenu', () => {
 
     expect(onDelete).toHaveBeenCalledTimes(1)
     expect(onDelete).toHaveBeenCalledWith({ id: 'card', kind: 'widget', subtreeIds: ['card'] })
-    expect(screen.queryByText('Revenue')).toBeNull()
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
@@ -72,9 +71,6 @@ describe('LayoutElementContextMenu', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
 
     expect(onDelete).toHaveBeenCalledWith({ id: 'root', kind: 'group', subtreeIds: ['root', 'first', 'nested', 'last'] })
-    expect(document.querySelector('[data-layout-id="root"]')).toBeNull()
-    expect(document.querySelector('[data-layout-id="first"]')).toBeNull()
-    expect(document.querySelector('[data-layout-id="last"]')).toBeNull()
   })
 
   it('keeps the browser context menu untouched when disabled or outside the layout', () => {

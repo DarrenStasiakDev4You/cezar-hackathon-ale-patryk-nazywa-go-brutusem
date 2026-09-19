@@ -10,7 +10,6 @@ import {
   useSensors,
   type DragEndEvent,
   type DragOverEvent,
-  type DragMoveEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
 import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
@@ -22,24 +21,9 @@ import type { LayoutElementDescriptor, LayoutMove, LayoutRegistry, RegisteredLay
 type LayoutSortableContextValue = {
   enabled: boolean
   activeId: string | null
-  dragMode: LayoutDragMode
-  placeholder: LayoutPlaceholderState | null
 }
 
-export type LayoutDragMode = 'sortable' | 'container'
-export type LayoutPlaceholderPlacement = 'before' | 'after'
-export type LayoutPlaceholderState = {
-  visible: boolean
-  placement: LayoutPlaceholderPlacement | null
-  order: number | null
-}
-
-const LayoutSortableContext = React.createContext<LayoutSortableContextValue>({
-  enabled: false,
-  activeId: null,
-  dragMode: 'sortable',
-  placeholder: null,
-})
+const LayoutSortableContext = React.createContext<LayoutSortableContextValue>({ enabled: false, activeId: null })
 
 export function useLayoutSortableContext(): LayoutSortableContextValue {
   return React.useContext(LayoutSortableContext)
@@ -51,8 +35,6 @@ export type LayoutSortableSurfaceProps = {
   className?: string
   /** Limit this surface to one layout container; useful when a page and the shell share a registry. */
   ids?: string[]
-  /** Container surfaces drag their shell as one stable block; ordinary surfaces reorder siblings. */
-  dragMode?: LayoutDragMode
   renderOverlay?: (element: RegisteredLayoutElement) => React.ReactNode
   onLayoutChange?: (snapshot: RegisteredLayoutElement[]) => void
 }
@@ -67,9 +49,6 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: layoutZoneId(id) })
   const { activeId } = useLayoutSortableContext()
-  const registry = useLayoutRegistry()
-  const activeElement = activeId ? registry.get(activeId) : undefined
-  const acceptsLayoutNode = Boolean(activeElement)
   return (
     <div
       className={className}
@@ -77,11 +56,11 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
       <div
         ref={setNodeRef}
         aria-hidden="true"
-        className={acceptsLayoutNode
+        className={activeId
           ? `pointer-events-auto ${hitAreaClassName ?? 'absolute inset-0 z-30 bg-primary/5'}`
           : 'pointer-events-none absolute inset-0'}
         data-layout-drop-zone={id}
-        data-layout-drop-active={acceptsLayoutNode && isOver ? 'true' : 'false'}
+        data-layout-drop-active={isOver ? 'true' : 'false'}
       />
       {children}
     </div>
@@ -89,139 +68,6 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
 }
 
 const elementLabel = (element: LayoutElementDescriptor): string => `${element.kind === 'group' ? 'Grupa' : 'Element'} ${element.id}`
-
-type LayoutRect = { top: number; left: number; right: number; bottom: number; width: number; height: number }
-
-const rectFromGeometry = (geometry: { top: number; left: number; width: number; height: number }): LayoutRect => ({
-  top: geometry.top,
-  left: geometry.left,
-  right: geometry.left + geometry.width,
-  bottom: geometry.top + geometry.height,
-  width: geometry.width,
-  height: geometry.height,
-})
-
-function surfaceRect(node: HTMLElement | null): LayoutRect | null {
-  if (!node) return null
-  const rect = node.getBoundingClientRect()
-  if (rect.width !== 0 || rect.height !== 0) return rect
-  const parentRect = node.parentElement?.getBoundingClientRect()
-  return parentRect && (parentRect.width !== 0 || parentRect.height !== 0) ? parentRect : null
-}
-
-function placeholderOrder(registry: LayoutRegistry, activeId: string, placement: LayoutPlaceholderPlacement): number {
-  const source = registry.get(activeId)
-  if (!source) return placement === 'before' ? -1 : 0
-  const siblingCount = registry.getSiblingIds(source.parentId).length
-  return placement === 'before' ? -1 : siblingCount
-}
-
-export function resolveLayoutPlaceholderState({
-  current,
-  geometry,
-  boundary,
-  deltaX,
-  deltaY,
-  previousDeltaX,
-  originId,
-  registry,
-}: {
-  current: LayoutPlaceholderState | null
-  geometry: { top: number; left: number; width: number; height: number }
-  boundary: LayoutRect | null
-  deltaX: number
-  deltaY: number
-  previousDeltaX: number
-  originId: string
-  registry: LayoutRegistry
-}): LayoutPlaceholderState | null {
-  if (!boundary || geometry.width === 0) return current
-
-  const origin = rectFromGeometry(geometry)
-  const translated = {
-    ...origin,
-    top: geometry.top + deltaY,
-    bottom: geometry.top + deltaY + geometry.height,
-    left: geometry.left + deltaX,
-    right: geometry.left + deltaX + geometry.width,
-  }
-  const nearLeft = translated.left <= boundary.left + origin.width
-  const nearRight = translated.right >= boundary.right - origin.width
-  const overlapsOrigin =
-    translated.left < origin.right &&
-    translated.right > origin.left &&
-    translated.top < origin.bottom &&
-    translated.bottom > origin.top
-  const originEdge: LayoutPlaceholderPlacement = origin.left + origin.width / 2 <= boundary.left + boundary.width / 2 ? 'before' : 'after'
-  const deltaDirection = deltaX === previousDeltaX ? 0 : deltaX > previousDeltaX ? 1 : -1
-
-  let next = current
-  if (current?.visible) {
-    const stillAtEdge = current.placement === 'before' ? nearLeft : current.placement === 'after' ? nearRight : overlapsOrigin
-    if (!stillAtEdge) {
-      next = overlapsOrigin
-        ? { visible: true, placement: null, order: null }
-        : { visible: false, placement: null, order: null }
-    }
-  } else if (nearLeft || nearRight) {
-    const edge: LayoutPlaceholderPlacement = nearLeft && nearRight
-      ? (deltaDirection < 0 ? 'before' : deltaDirection > 0 ? 'after' : originEdge)
-      : nearLeft
-        ? 'before'
-        : 'after'
-    next = {
-      visible: true,
-      placement: edge === originEdge ? null : edge,
-      order: edge === originEdge ? null : placeholderOrder(registry, originId, edge),
-    }
-  }
-
-  if (next?.visible === current?.visible && next?.placement === current?.placement && next?.order === current?.order) return current
-  return next
-}
-
-export function resolveLayoutOverlayScale(placeholder: LayoutPlaceholderState | null): number {
-  return placeholder?.visible ? 1 : 0.92
-}
-
-function LayoutDragOverlayPreview({ element, scale }: { element: RegisteredLayoutElement; scale: number }) {
-  const previewRef = React.useRef<HTMLDivElement | null>(null)
-
-  React.useLayoutEffect(() => {
-    const source = element.domNode
-    const preview = source?.cloneNode(true)
-    if (!(preview instanceof HTMLElement) || !previewRef.current) return
-
-    preview.removeAttribute('data-layout-placeholder')
-    preview.setAttribute('data-layout-dragging', 'false')
-    preview.style.display = ''
-    preview.style.visibility = 'visible'
-    preview.style.transform = ''
-    preview.style.transition = 'none'
-    preview.style.order = ''
-    for (const placeholder of preview.querySelectorAll('[data-layout-placeholder]')) placeholder.remove()
-
-    previewRef.current.replaceChildren(preview)
-    return () => previewRef.current?.replaceChildren()
-  }, [element])
-
-  return (
-    <div
-      ref={previewRef}
-      aria-hidden="true"
-      data-layout-overlay-preview="true"
-      data-layout-overlay-state={scale < 1 ? 'detached' : 'anchored'}
-      style={{
-        width: '100%',
-        height: '100%',
-        transform: `scale(${scale})`,
-        transformOrigin: 'center',
-        transition: 'transform 120ms ease',
-        pointerEvents: 'none',
-      }}
-    />
-  )
-}
 
 function useDetectedEditMode(): boolean {
   const [active, setActive] = React.useState(() => typeof document !== 'undefined' && isEditModeActive())
@@ -258,31 +104,7 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   }
 }
 
-function applyLayoutMove(registry: LayoutRegistry, move: LayoutMove): boolean {
-  const source = registry.get(move.id)
-  if (!source) return false
-  const destinationParent = move.parentId !== undefined
-    ? move.parentId
-    : registry.get(move.targetId ?? '')?.parentId ?? source.parentId
-  const siblings = registry.getSiblingIds(destinationParent)
-  const available = source.parentId === destinationParent
-    ? siblings.filter((id) => id !== source.id)
-    : siblings
-  const targetIndex = move.targetId === null
-    ? available.length
-    : available.indexOf(move.targetId) + (move.position === 'after' ? 1 : 0)
-  return targetIndex >= 0 && registry.moveNode(source.id, destinationParent, targetIndex)
-}
-
-export function LayoutSortableSurface({
-  children,
-  enabled,
-  className,
-  ids,
-  dragMode = 'sortable',
-  renderOverlay,
-  onLayoutChange,
-}: LayoutSortableSurfaceProps) {
+export function LayoutSortableSurface({ children, enabled, className, ids, renderOverlay, onLayoutChange }: LayoutSortableSurfaceProps) {
   const registry = useLayoutRegistry()
   const snapshot = useLayoutSnapshot()
   const detectedEditMode = useDetectedEditMode()
@@ -294,51 +116,18 @@ export function LayoutSortableSurface({
   )
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [overId, setOverId] = React.useState<string | null>(null)
-  const [activeGeometry, setActiveGeometry] = React.useState<{
-    top: number
-    left: number
-    width: number
-    height: number
-  } | null>(null)
-  const [placeholder, setPlaceholder] = React.useState<LayoutPlaceholderState | null>(null)
-  const placeholderRef = React.useRef<LayoutPlaceholderState | null>(null)
-  const surfaceRef = React.useRef<HTMLDivElement | null>(null)
-  const lastDeltaX = React.useRef(0)
   const [liveMessage, setLiveMessage] = React.useState('')
   const activeElement = activeId ? registry.get(activeId) : undefined
 
   const handleDragStart = React.useCallback((event: DragStartEvent) => {
     const id = String(event.active.id)
     const element = registry.get(id)
-    const rect = event.active.rect.current.initial
     setActiveId(id)
     setOverId(null)
-    setActiveGeometry(rect ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height } : null)
-    const nextPlaceholder = dragMode === 'container' ? { visible: true, placement: null, order: null } : null
-    placeholderRef.current = nextPlaceholder
-    setPlaceholder(nextPlaceholder)
-    lastDeltaX.current = 0
     setLiveMessage(element ? `Podniesiono: ${elementLabel(element)}` : '')
-  }, [dragMode, registry])
+  }, [registry])
 
   const handleDragOver = React.useCallback((event: DragOverEvent) => {
-    if (dragMode === 'container' && activeId && activeGeometry) {
-      const nextPlaceholder = resolveLayoutPlaceholderState({
-        current: placeholderRef.current,
-        geometry: activeGeometry,
-        boundary: surfaceRect(surfaceRef.current),
-        deltaX: event.delta.x,
-        deltaY: event.delta.y,
-        previousDeltaX: lastDeltaX.current,
-        originId: activeId,
-        registry,
-      })
-      lastDeltaX.current = event.delta.x
-      if (nextPlaceholder !== placeholderRef.current) {
-        placeholderRef.current = nextPlaceholder
-        setPlaceholder(nextPlaceholder)
-      }
-    }
     const nextOverId = event.over ? String(event.over.id) : null
     setOverId(nextOverId)
     if (!nextOverId || !activeId || nextOverId === activeId) return
@@ -348,25 +137,7 @@ export function LayoutSortableSurface({
     }
     const target = registry.get(nextOverId)
     if (target) setLiveMessage(`Cel: ${elementLabel(target)}`)
-  }, [activeGeometry, activeId, dragMode, registry])
-
-  const handleDragMove = React.useCallback((event: DragMoveEvent) => {
-    if (dragMode !== 'container' || !activeId || String(event.active.id) !== activeId || !activeElement || !activeGeometry) return
-    const nextPlaceholder = resolveLayoutPlaceholderState({
-      current: placeholderRef.current,
-      geometry: activeGeometry,
-      boundary: surfaceRect(surfaceRef.current),
-      deltaX: event.delta.x,
-      deltaY: event.delta.y,
-      previousDeltaX: lastDeltaX.current,
-      originId: activeId,
-      registry,
-    })
-    lastDeltaX.current = event.delta.x
-    if (nextPlaceholder === placeholderRef.current) return
-    placeholderRef.current = nextPlaceholder
-    setPlaceholder(nextPlaceholder)
-  }, [activeElement, activeGeometry, activeId, dragMode, registry])
+  }, [activeId, registry])
 
   const finishDrag = React.useCallback((event: DragEndEvent) => {
     const sourceId = String(event.active.id)
@@ -374,29 +145,18 @@ export function LayoutSortableSurface({
     const source = registry.get(sourceId)
     let moved = false
 
-    const activePlaceholder = placeholderRef.current
-    if (dragMode === 'container' && activePlaceholder?.visible && activePlaceholder.placement) {
-      const siblings = registry.getSiblingIds(source?.parentId)
-      const availableCount = siblings.filter((id) => id !== sourceId).length
-      moved = source
-        ? registry.moveNode(sourceId, source.parentId, activePlaceholder.placement === 'before' ? 0 : availableCount)
-        : false
-    } else if (targetId) {
+    if (targetId) {
       if (targetId.startsWith('layout-zone:')) {
-        if (!source) {
-          setActiveId(null)
-          setOverId(null)
-          setActiveGeometry(null)
-          placeholderRef.current = null
-          setPlaceholder(null)
-          setLiveMessage('Przeciąganie anulowane')
-          return
-        }
         const parentId = targetId.slice('layout-zone:'.length)
-        moved = registry.moveNode(sourceId, parentId === 'root' ? null : parentId, registry.getSiblingIds(parentId === 'root' ? null : parentId).length)
+        moved = registry.moveToParent({
+          id: sourceId,
+          targetId: null,
+          position: 'after',
+          parentId: parentId === 'root' ? null : parentId,
+        })
       } else {
         const move = resolveLayoutMove(registry, sourceId, targetId)
-        if (move) moved = applyLayoutMove(registry, move)
+        if (move) moved = registry.moveToParent(move)
       }
     }
 
@@ -404,75 +164,23 @@ export function LayoutSortableSurface({
 
     setActiveId(null)
     setOverId(null)
-    setActiveGeometry(null)
-    placeholderRef.current = null
-    setPlaceholder(null)
     setLiveMessage(moved && source ? `Przeniesiono: ${elementLabel(source)}` : 'Przeciąganie anulowane')
-  }, [dragMode, onLayoutChange, overId, registry])
+  }, [onLayoutChange, overId, registry])
 
   const handleDragCancel = React.useCallback(() => {
     setActiveId(null)
     setOverId(null)
-    setActiveGeometry(null)
-    placeholderRef.current = null
-    setPlaceholder(null)
     setLiveMessage('Przeciąganie anulowane')
   }, [])
 
   const overlay = activeElement
-    ? renderOverlay?.(activeElement) ?? <LayoutDragOverlayPreview element={activeElement} scale={resolveLayoutOverlayScale(placeholder)} />
+    ? renderOverlay?.(activeElement) ?? <div className="layout-drag-overlay-label">{elementLabel(activeElement)}</div>
     : null
-
-  const dropIndicatorStyle = React.useMemo<React.CSSProperties | undefined>(() => {
-    if (!activeElement || !overId || activeElement.id === overId || overId.startsWith('layout-zone:')) return undefined
-    const target = registry.get(overId)
-    const rect = target?.domNode?.getBoundingClientRect()
-    const bounds = rect && (rect.width !== 0 || rect.height !== 0)
-      ? rect
-      : activeGeometry
-        ? {
-            top: activeGeometry.top,
-            left: activeGeometry.left,
-            right: activeGeometry.left + activeGeometry.width,
-            bottom: activeGeometry.top + activeGeometry.height,
-            width: activeGeometry.width,
-            height: activeGeometry.height,
-          }
-        : undefined
-    if (!bounds) return undefined
-
-    const siblings = registry.getSiblingIds(activeElement.parentId)
-    const sourceIndex = siblings.indexOf(activeElement.id)
-    const targetIndex = siblings.indexOf(overId)
-    const position = activeElement.parentId === target?.parentId && sourceIndex < targetIndex ? 'after' : 'before'
-
-    if (dragMode === 'container') {
-      return {
-        position: 'fixed',
-        top: bounds.top,
-        left: position === 'after' ? bounds.right - 1 : bounds.left - 1,
-        width: 3,
-        height: bounds.height,
-        margin: 0,
-        minHeight: 0,
-      }
-    }
-
-    return {
-      position: 'fixed',
-      top: position === 'after' ? bounds.bottom - 1 : bounds.top - 1,
-      left: bounds.left,
-      width: bounds.width,
-      height: 3,
-      margin: 0,
-      minHeight: 0,
-    }
-  }, [activeElement, activeGeometry, dragMode, overId, registry])
 
   if (!isEnabled) {
     return (
-      <LayoutSortableContext.Provider value={{ enabled: false, activeId: null, dragMode, placeholder: null }}>
-        <div ref={surfaceRef} className={className} data-slot="layout-sortable-surface" data-edit-mode="false">
+      <LayoutSortableContext.Provider value={{ enabled: false, activeId: null }}>
+        <div className={className} data-slot="layout-sortable-surface" data-edit-mode="false">
           {children}
         </div>
       </LayoutSortableContext.Provider>
@@ -480,40 +188,17 @@ export function LayoutSortableSurface({
   }
 
   return (
-    <LayoutSortableContext.Provider value={{ enabled: isEnabled, activeId, dragMode, placeholder }}>
+    <LayoutSortableContext.Provider value={{ enabled: isEnabled, activeId }}>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={isEnabled ? handleDragStart : undefined}
-        onDragMove={isEnabled ? handleDragMove : undefined}
         onDragOver={isEnabled ? handleDragOver : undefined}
         onDragEnd={isEnabled ? finishDrag : undefined}
         onDragCancel={isEnabled ? handleDragCancel : undefined}
       >
-        {dragMode === 'sortable' ? (
-          <SortableContext items={sortableSnapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
-            <div
-              ref={surfaceRef}
-              className={className}
-              data-slot="layout-sortable-surface"
-              data-edit-mode={isEnabled ? 'true' : 'false'}
-              data-layout-active-id={activeId ?? undefined}
-              data-layout-over-id={overId ?? undefined}
-            >
-              {children}
-              {activeId && overId && activeId !== overId ? (
-                <div
-                  aria-hidden="true"
-                  data-slot="layout-drop-indicator"
-                  data-layout-drop-target={overId}
-                  style={dropIndicatorStyle}
-                />
-              ) : null}
-            </div>
-          </SortableContext>
-        ) : (
+        <SortableContext items={sortableSnapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
           <div
-            ref={surfaceRef}
             className={className}
             data-slot="layout-sortable-surface"
             data-edit-mode={isEnabled ? 'true' : 'false'}
@@ -522,21 +207,11 @@ export function LayoutSortableSurface({
           >
             {children}
             {activeId && overId && activeId !== overId ? (
-              <div
-                aria-hidden="true"
-                data-slot="layout-drop-indicator"
-                data-layout-drop-target={overId}
-                style={dropIndicatorStyle}
-              />
+              <div aria-hidden="true" data-slot="layout-drop-indicator" data-layout-drop-target={overId} />
             ) : null}
           </div>
-        )}
-        <DragOverlay
-          dropAnimation={null}
-          style={activeGeometry ? { width: activeGeometry.width, height: activeGeometry.height } : undefined}
-        >
-          {isEnabled ? overlay : null}
-        </DragOverlay>
+        </SortableContext>
+        <DragOverlay>{isEnabled ? overlay : null}</DragOverlay>
       </DndContext>
       <div aria-live="polite" className="sr-only" data-slot="layout-sortable-live-region">
         {liveMessage}
