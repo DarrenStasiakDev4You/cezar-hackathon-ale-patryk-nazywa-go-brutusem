@@ -155,6 +155,10 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
         type="button"
         role="menuitem"
         data-layout-menu-delete="true"
+        // An editor action: without the opt-in, the shell's edit-mode guard (spec
+        // 2026-09-18-global-edit-mode-interaction-guard) swallows the click and the Enter key, and
+        // the menu only ever opens in edit mode.
+        data-edit-mode-action="allow"
         aria-label="Delete layout element"
         aria-describedby="layout-context-menu-delete-description"
         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive outline-hidden focus:bg-destructive/10"

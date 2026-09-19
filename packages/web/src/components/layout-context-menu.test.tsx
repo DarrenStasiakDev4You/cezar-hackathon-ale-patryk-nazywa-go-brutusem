@@ -1,9 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { AppShell } from './app-shell'
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from './layout-context-menu'
 import { LayoutElement } from './layout-element'
 import { LayoutRegistryProvider } from './layout-registry'
+import { ThemeProvider } from './theme-provider'
 
 function renderLayout(props: { enabled?: boolean; onDelete?: (target: LayoutContextMenuTarget) => void; confirmDelete?: (target: LayoutContextMenuTarget) => boolean | Promise<boolean> } = {}) {
   return render(
@@ -87,6 +90,37 @@ describe('LayoutElementContextMenu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(onDelete).not.toHaveBeenCalled()
     expect(confirmDelete).not.toHaveBeenCalled()
+  })
+
+  it('keeps Delete usable under the shell edit-mode guard, by click and by Enter', async () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
+    const onDelete = vi.fn()
+    render(
+      <ThemeProvider>
+        <MemoryRouter>
+          <AppShell>
+            <LayoutRegistryProvider>
+              <LayoutElementContextMenu enabled onDelete={onDelete}>
+                <LayoutElement id="card" kind="widget">
+                  <span>Revenue</span>
+                </LayoutElement>
+              </LayoutElementContextMenu>
+            </LayoutRegistryProvider>
+          </AppShell>
+        </MemoryRouter>
+      </ThemeProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+    await waitFor(() => expect(document.querySelector('[data-layout-id="card"]')).not.toBeNull())
+
+    fireEvent.contextMenu(screen.getByText('Revenue'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
+    expect(onDelete).toHaveBeenCalledTimes(1)
+
+    fireEvent.contextMenu(screen.getByText('Revenue'))
+    const deleteItem = screen.getByRole('menuitem', { name: 'Delete layout element' })
+    expect(fireEvent.keyDown(deleteItem, { key: 'Enter' })).toBe(true)
+    vi.unstubAllGlobals()
   })
 
   it('clamps the menu to the viewport when the pointer is near an edge', async () => {

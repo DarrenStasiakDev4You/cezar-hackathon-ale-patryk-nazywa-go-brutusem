@@ -19,6 +19,7 @@
 | 3 | 3.1 | Merge the updated base branch and resolve the edit-mode conflicts to the base's version. | inline | done | 166d27cb |
 | 3 | 3.2 | Run the final gate on the synced branch. | inline | todo | — |
 | 3 | 3.3 | Authoritative review pass and fixes. | inline | todo | — |
+| 3 | 3.4-review-fix | Mark the context-menu Delete as an edit-mode editor action. | inline | done | (this commit) |
 
 Goal: Add a reusable, accessible context menu for registered layout widgets and groups in edit mode, with Delete delegated to the layout owner.
 
