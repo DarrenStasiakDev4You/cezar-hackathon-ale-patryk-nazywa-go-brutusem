@@ -31,6 +31,9 @@ import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { DirectionalUsage } from '@/components/directional-usage'
 import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
+import { LayoutElement } from '@/components/layout-element'
+import { LayoutRegistryProvider } from '@/components/layout-registry'
+import { LayoutSortableSurface } from '@/components/layout-sortable-surface'
 import { useListView } from '@/components/list-view'
 import { Pill } from '@/components/pill'
 import { PinToggle } from '@/components/pin-toggle'
@@ -145,6 +148,8 @@ export function TasksOverview({
   // nowhere to show its result — and one that outlives the view, since un-archiving would then
   // drop the task at the top of the active list by a click that looked like it did nothing.
   const pinToggle = view === 'archived' ? undefined : onTogglePin
+  const finishedTasks = all.filter((run) => run.status === 'done').length
+  const pinnedTasks = all.filter((run) => run.pinned).length
 
   return (
     <div data-route="tasks" className="flex min-h-full flex-col">
@@ -206,6 +211,35 @@ export function TasksOverview({
       </header>
 
       <div className="flex flex-1 flex-col p-3 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-5 md:pb-5">
+        <LayoutRegistryProvider>
+          <LayoutSortableSurface
+            className="mb-5 grid gap-3 md:grid-cols-3"
+            renderOverlay={(element) => (
+              <div className="rounded-lg border border-primary bg-card px-4 py-3 shadow-lg">
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {element.id.replace(/-/g, ' ')}
+                </span>
+              </div>
+            )}
+          >
+            <LayoutElement id="tasks-active" kind="widget" className="rounded-lg border border-border bg-card p-4 shadow-xs">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Active tasks</span>
+              <div className="mt-3 text-2xl font-bold">{runs === undefined ? '—' : counts.active}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Currently visible in the active queue</div>
+            </LayoutElement>
+            <LayoutElement id="tasks-finished" kind="widget" className="rounded-lg border border-border bg-card p-4 shadow-xs">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Finished tasks</span>
+              <div className="mt-3 text-2xl font-bold">{runs === undefined ? '—' : finishedTasks}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Completed tasks in the current workspace</div>
+            </LayoutElement>
+            <LayoutElement id="tasks-pinned" kind="widget" className="rounded-lg border border-border bg-card p-4 shadow-xs">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Pinned tasks</span>
+              <div className="mt-3 text-2xl font-bold">{runs === undefined ? '—' : pinnedTasks}</div>
+              <div className="mt-1 text-xs text-muted-foreground">Tasks kept at the top of the active list</div>
+            </LayoutElement>
+          </LayoutSortableSurface>
+        </LayoutRegistryProvider>
+
         {runs === undefined ? null : visible.length === 0 ? (
           <TasksEmptyState view={view} query={query} />
         ) : (

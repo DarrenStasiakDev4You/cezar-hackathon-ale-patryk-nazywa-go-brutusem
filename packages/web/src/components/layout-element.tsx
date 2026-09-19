@@ -18,6 +18,7 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
   const registry = useLayoutRegistry()
   const { enabled } = useLayoutSortableContext()
   const sortable = useSortable({ id, disabled: !enabled })
+  const order = registry.get(id)?.order ?? -1
   const nodeRef = React.useRef<HTMLElement | null>(null)
 
   const setNodeRef = React.useCallback((node: HTMLElement | null) => {
@@ -41,6 +42,7 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
       ref: setNodeRef,
       style: {
         ...props.style,
+        ...(order >= 0 ? { order } : {}),
         ...(sortable.transform ? { transform: CSS.Transform.toString(sortable.transform) } : {}),
         transition: sortable.transition,
       },
