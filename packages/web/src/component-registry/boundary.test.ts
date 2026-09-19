@@ -63,7 +63,10 @@ describe('findCoreImplementationImports', () => {
 
     expect(scan('src/component-registry/core-components.ts', registration)).toEqual([])
     // The scan is not blind to how that module really writes its import.
-    expect(scan('src/component-registry/elsewhere.ts', registration)).toEqual(['@/routes/task-thread/core-task-header-main'])
+    expect(scan('src/component-registry/elsewhere.ts', registration)).toEqual([
+      '@/routes/task-thread/core-task-composer',
+      '@/routes/task-thread/core-task-header-main',
+    ])
   })
 })
 

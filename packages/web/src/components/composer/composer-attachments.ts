@@ -20,6 +20,14 @@ import {
 export const MAX_ATTACHMENTS = 4
 export const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 
+/** DOM-free structural subset accepted by the extension contract's file intent. */
+export interface ComposerFileLike {
+  readonly name: string
+  readonly type: string
+  readonly size: number
+  arrayBuffer(): Promise<ArrayBuffer>
+}
+
 /** Extension → media type for a file whose own `type` is empty or unrecognised. `.log` is here
  *  because `text/plain` is what the allowlist takes, and a log the browser typed as `text/plain`
  *  is accepted either way — the fallback only decides the TYPELESS case. */
@@ -39,7 +47,7 @@ const EXTENSION_MEDIA_TYPES: Record<string, string> = {
  * refusing a supported file over a MIME database the user does not control would be a defect they
  * could do nothing about.
  */
-export function attachmentMediaType(file: File): string | null {
+export function attachmentMediaType(file: ComposerFileLike): string | null {
   if (isAttachmentMediaType(file.type)) return file.type
   const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
   return EXTENSION_MEDIA_TYPES[ext] ?? null
@@ -47,6 +55,8 @@ export function attachmentMediaType(file: File): string | null {
 
 /** A pending attachment: the wire shape, plus what the composer's row needs to show it. */
 export interface PendingAttachment extends AttachmentInput {
+  /** Stable in-memory key used by the prop-only view; never sent on the wire. */
+  key?: string
   /** Server-minted id when this attachment is backed by the in-task draft store. */
   id?: string
   /** Data-URL for the thumbnail — images only; a file has nothing to preview. */
@@ -80,7 +90,7 @@ export function fallbackAttachmentName(mediaType: string, isImage: boolean): str
 }
 
 /** File → base64 (chunked — `String.fromCharCode(...5MB)` would blow the arg limit). */
-export async function fileToPendingAttachment(file: File, source: 'file' | 'clipboard' = 'file'): Promise<PendingAttachment> {
+export async function fileToPendingAttachment(file: ComposerFileLike, source: 'file' | 'clipboard' = 'file'): Promise<PendingAttachment> {
   const bytes = new Uint8Array(await file.arrayBuffer())
   let binary = ''
   for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -92,6 +102,7 @@ export async function fileToPendingAttachment(file: File, source: 'file' | 'clip
   // Clipboard image names may be synthesized by the browser (for example image.png).
   const originalName = source === 'clipboard' && isImage ? undefined : file.name
   return {
+    key: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
     mediaType,
     data,
     ...(isImage ? { preview: `data:${mediaType};base64,${data}` } : {}),
@@ -113,9 +124,9 @@ export function toAttachmentInput({ mediaType, data, originalName }: PendingAtta
   return { mediaType, data, ...(originalName ? { name: originalName } : {}) }
 }
 
-export interface AttachmentIntake {
+export interface AttachmentIntake<T extends ComposerFileLike = ComposerFileLike> {
   /** The files that passed — encode these and append. */
-  accepted: File[]
+  accepted: T[]
   /** One human sentence per rejection, ready for a toast. */
   rejected: string[]
 }
@@ -125,8 +136,8 @@ export interface AttachmentIntake {
  * failure this screening exists to prevent is the silent one: before #950 a `.md` dropped on the
  * composer simply vanished, which reads as a broken composer rather than as an unsupported file.
  */
-export function screenFiles(files: readonly File[], alreadyAttached: number): AttachmentIntake {
-  const accepted: File[] = []
+export function screenFiles<T extends ComposerFileLike>(files: readonly T[], alreadyAttached: number): AttachmentIntake<T> {
+  const accepted: T[] = []
   const rejected: string[] = []
   let count = alreadyAttached
   for (const file of files) {

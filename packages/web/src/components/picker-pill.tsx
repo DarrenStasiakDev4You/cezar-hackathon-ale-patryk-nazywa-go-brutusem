@@ -187,6 +187,40 @@ export interface RunnerAccountChoice {
 const choiceValue = (runner: Runner, account: string | null): string =>
   account === null ? runner : `${runner}:${account}`
 
+export interface RunnerPillOption {
+  readonly value: string
+  readonly label: string
+  readonly desc?: string
+}
+
+/** Pure row construction shared by the legacy pill and the hosted composer picker. */
+export function runnerPillOptions(
+  runners: readonly Runner[],
+  accounts: readonly RunnerAccountChoice[] = [],
+): RunnerPillOption[] {
+  return RUNNERS.filter((runner) => runners.includes(runner.id)).flatMap((runner) => {
+    const logins = accounts.filter((entry) => entry.provider === runner.id)
+    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: runner.id, desc: runner.desc }]
+    return logins.map((login) => ({
+      value: choiceValue(runner.id, login.id),
+      label: `${runner.id} · ${login.label}`,
+      desc: login.configDir,
+    }))
+  })
+}
+
+/** Resolve the selected row, including the safe fallback for a removed account. */
+export function runnerPillSelection(
+  value: Runner,
+  options: readonly RunnerPillOption[],
+  account: string | null | undefined,
+  repoAccount?: Partial<Record<Runner, string>>,
+): string {
+  const selected = account ?? repoAccount?.[value] ?? DEFAULT_AGENT_ACCOUNT_ID
+  const preferred = choiceValue(value, selected)
+  return options.some((option) => option.value === preferred) ? preferred : choiceValue(value, null)
+}
+
 /**
  * Which agent — and, when there is more than one login for it, which account — in ONE flat list:
  *
@@ -231,27 +265,8 @@ export function RunnerPill({
   /** What the repo's setting resolves to per runner — the row that is selected until overridden. */
   repoAccount?: Partial<Record<Runner, string>>
 }) {
-  const available = RUNNERS.filter((r) => runners.includes(r.id))
-  const options = available.flatMap((runner) => {
-    const logins = accounts.filter((entry) => entry.provider === runner.id)
-    // One login is not a choice, so it does not become a row of its own — the agent is the row.
-    if (logins.length < 2) return [{ value: choiceValue(runner.id, null), label: runner.id, desc: runner.desc }]
-    return logins.map((login) => ({
-      value: choiceValue(runner.id, login.id),
-      label: `${runner.id} · ${login.label}`,
-      // The folder, because the label is cezar's invention and the folder is the account.
-      desc: login.configDir,
-    }))
-  })
-
-  // What is selected right now: the override if the user made one, else whatever the repo resolves
-  // to, else the discovered account. Falls back to the plain runner row for an agent with one login
-  // — and for an override naming an account that has since been deleted, which must not leave the
-  // pill pointing at nothing.
-  const selected = account ?? repoAccount?.[value] ?? DEFAULT_AGENT_ACCOUNT_ID
-  const value_ = options.some((option) => option.value === choiceValue(value, selected))
-    ? choiceValue(value, selected)
-    : choiceValue(value, null)
+  const options = runnerPillOptions(runners, accounts)
+  const value_ = runnerPillSelection(value, options, account, repoAccount)
 
   return (
     <PickerPill

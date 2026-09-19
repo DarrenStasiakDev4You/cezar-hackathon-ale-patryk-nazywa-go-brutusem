@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   checkComponentCompatibility,
+  TaskComposer,
   TaskHeaderMain,
   type ComponentContract,
   type ComponentImplementation,
@@ -37,7 +38,7 @@ function registered(): Registered[] {
 
 describe('core defaults: the gate', () => {
   it('serves the task header’s main part', () => {
-    expect(CORE_COMPONENT_CONTRACTS).toEqual([TaskHeaderMain])
+    expect(CORE_COMPONENT_CONTRACTS).toEqual([TaskHeaderMain, TaskComposer])
   })
 
   it('leaves no served contract without core’s default on the registry main.tsx builds', () => {
@@ -47,7 +48,7 @@ describe('core defaults: the gate', () => {
   it('fails without registerCoreComponents, so the check is shown to fail', () => {
     const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
 
-    expect(missingCoreDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['cezar.task.header.main'])
+    expect(missingCoreDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['cezar.task.header.main', 'cezar.task.composer'])
   })
 
   it('gives a ComponentsProvider without a registry the same catalog, with core’s default for the header', () => {
@@ -78,7 +79,7 @@ describe('core’s task header main part', () => {
   it('is registered once, for TaskHeaderMain, and fits it with all three capabilities', () => {
     const [only, ...others] = registered()
 
-    expect(others).toEqual([])
+    expect(others).toHaveLength(1)
     expect(only?.contract).toBe(TaskHeaderMain)
     expect(checkComponentCompatibility(TaskHeaderMain, only!.implementation)).toEqual({
       compatible: true,

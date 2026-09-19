@@ -1,4 +1,4 @@
-import { TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, TaskHeaderMain } from '@open-mercato/cezar-extension-api'
 
 import type { AnyComponentContract } from './registry'
 
@@ -14,4 +14,4 @@ import type { AnyComponentContract } from './registry'
  *   meta, rendered by `RunHeader` (specs `2026-09-19-component-host` and
  *   `2026-09-19-task-header-contract`).
  */
-export const CORE_COMPONENT_CONTRACTS: readonly AnyComponentContract[] = [TaskHeaderMain]
+export const CORE_COMPONENT_CONTRACTS: readonly AnyComponentContract[] = [TaskHeaderMain, TaskComposer]
