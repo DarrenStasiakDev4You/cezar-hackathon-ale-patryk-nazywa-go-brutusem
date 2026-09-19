@@ -5,15 +5,20 @@ import {
   type ComponentCompatibilityIssue,
   type ComponentContract,
   type ComponentImplementation,
+  type ComponentRegistrationHandle,
+  type ComponentSettingsDefinition,
   type ComponentRegistry,
   type ContributionId,
   type Disposable,
   type ExtensionErrorCode,
   type ExtensionId,
+  type JsonValue,
 } from '@open-mercato/cezar-extension-api'
 import type { ComponentType } from 'react'
 
 import type { ExtensionScope } from '../extensions/registry'
+import { ComponentSettingsError, createMemoryComponentSettingsStore, targetForScope, type ComponentSettingsStore } from './settings'
+export { ComponentSettingsError } from './settings'
 
 /**
  * The cockpit's component registry (spec `.ai/specs/2026-09-19-component-registry.md`): every
@@ -72,6 +77,7 @@ export interface ComponentRegistration {
   /** `true` exactly when `issues` is empty. Only a compatible registration may be rendered. */
   readonly compatible: boolean
   readonly issues: readonly ComponentRegistrationIssue[]
+  readonly settings?: ComponentSettingsDefinition<unknown>
 }
 
 /** A compatible registration of the served contract, as `listUsable` returns it. */
@@ -94,6 +100,8 @@ export interface ComponentRegistryOptions {
   /** Called once for each registration recorded with `compatible: false`. Default:
    *  {@link logComponentDiagnostic}. Called inside a try/catch: a throwing reporter is swallowed. */
   readonly onDiagnostic?: (registration: ComponentRegistration) => void
+  readonly settings?: ComponentSettingsStore
+  readonly resolveProjectId?: () => string | null
 }
 
 export interface CockpitComponentRegistry {
@@ -121,6 +129,9 @@ export interface CockpitComponentRegistry {
   /** A number that grows with every change `subscribe` reports: the snapshot for
    *  `useSyncExternalStore`. */
   revision(): number
+  getSettings(componentId: ContributionId): Promise<unknown | undefined>
+  setSettings(componentId: ContributionId, patch: unknown): Promise<void>
+  resetSettings(componentId: ContributionId, key?: string): Promise<void>
 }
 
 /** Recognised by `isExtensionError` (duck-typed on `code`), like `CommandError` and `EventError`. */
@@ -162,12 +173,14 @@ interface ServedContract {
 export function createComponentRegistry(options: ComponentRegistryOptions = {}): CockpitComponentRegistry {
   const served = catalogOf(options)
   const onDiagnostic = options.onDiagnostic ?? logComponentDiagnostic
+  const settingsStore = options.settings ?? createMemoryComponentSettingsStore()
+  const resolveProjectId = options.resolveProjectId ?? (() => null)
   /** Every registration by component id. The Map keeps registration order. */
   const registrations = new Map<ContributionId, ComponentRegistration>()
   /** One entry per `subscribe` call, so the same function subscribed twice is two subscriptions. */
   const listeners = new Set<{ readonly listener: () => void }>()
+  const settingsListeners = new Map<string, Set<(settings: unknown | undefined) => void>>()
   let revision = 0
-
   /** Bumps the revision, then tells every listener subscribed at that moment. */
   const changed = (): void => {
     revision += 1
@@ -179,6 +192,13 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       }
     }
   }
+  settingsStore.subscribe((_target, componentId) => {
+    changed()
+    const listenersForComponent = settingsListeners.get(componentId)
+    if (listenersForComponent) void readSettings(registrations.get(componentId), settingsStore, resolveProjectId).catch(() => undefined).then((settings) => {
+      for (const listener of [...listenersForComponent]) { try { listener(settings) } catch {} }
+    })
+  })
 
   /** § Providing, precisely, step 6: a component id names one registration across the registry. */
   const assertFree = (componentId: ContributionId): void => {
@@ -202,11 +222,17 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
         disposed = true
         if (registrations.get(registration.componentId) === registration) {
           registrations.delete(registration.componentId)
+          settingsListeners.delete(registration.componentId)
           changed()
         }
       },
     }
   }
+  const handleOf = <Settings>(registration: ComponentRegistration, tracked: Disposable): ComponentRegistrationHandle<Settings> => Object.assign(tracked as ComponentRegistrationHandle<Settings>, {
+    componentId: registration.componentId,
+    async getSettings() { if (registrations.get(registration.componentId) !== registration) throw new ComponentSettingsError('disposed', 'Component registration is disposed'); return await readSettings(registration, settingsStore, resolveProjectId) as Settings | undefined },
+    onSettingsChange(listener: (settings: Settings | undefined) => void) { if (registrations.get(registration.componentId) !== registration) throw new ComponentSettingsError('disposed', 'Component registration is disposed'); let set = settingsListeners.get(registration.componentId); if (!set) { set = new Set(); settingsListeners.set(registration.componentId, set) }; const typed = listener as (settings: unknown | undefined) => void; set.add(typed); return { dispose() { set?.delete(typed); if (set?.size === 0) settingsListeners.delete(registration.componentId) } } },
+  })
 
   /** § Providing, precisely, step 7: the fit against the host's token, or `unknown-contract`. */
   const fitOf = (input: PreparedImplementation): Fit => {
@@ -288,7 +314,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       const extensionId = scope.extension.id
       const prefix = `${extensionId}.`
       return Object.freeze<ComponentRegistry>({
-        provide(contract, implementation) {
+        provide<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>, Settings>) {
           scope.assertLive()
           const input = prepare(
             contract,
@@ -302,7 +328,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
           // On an ended activation `track` disposes the registration and throws `disposed`.
           const handle = scope.track(add(registration))
           if (!registration.compatible) report(registration)
-          return handle
+          return handleOf<Settings>(registration, handle)
         },
       })
     },
@@ -318,6 +344,20 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
     revision() {
       return revision
     },
+    async getSettings(componentId) { const registration = registrations.get(componentId); if (!registration?.settings) return undefined; return readSettings(registration, settingsStore, resolveProjectId) },
+    async setSettings(componentId, patch) {
+      const registration = registrations.get(componentId); const definition = registration?.settings
+      if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
+      if (!isRecord(patch)) throw new ComponentSettingsError('invalid-settings', 'Component settings patch must be an object')
+      let existing: unknown; try { existing = await rawSettings(registration, settingsStore, resolveProjectId) } catch (error) { throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+      let parsed: unknown; try { parsed = definition.parse({ ...(isRecord(existing) ? existing : {}), ...patch }) } catch (error) { throw new ComponentSettingsError('invalid-settings', error instanceof Error ? error.message : 'Invalid component settings') }
+      try { const canonical = sparseSettings(definition, parsed); const target = targetForScope(definition.scope, resolveProjectId); if (Object.keys(canonical).length === 0) await settingsStore.clear(target, componentId); else await settingsStore.set(target, componentId, canonical as unknown as JsonValue) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+    },
+    async resetSettings(componentId, key) {
+      const registration = registrations.get(componentId); const definition = registration?.settings
+      if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
+      try { const target = targetForScope(definition.scope, resolveProjectId); if (key === undefined) return await settingsStore.clear(target, componentId); const existing = await rawSettings(registration, settingsStore, resolveProjectId); if (!isRecord(existing)) return; const next = { ...existing }; delete next[key]; if (Object.keys(next).length === 0) await settingsStore.clear(target, componentId); else await settingsStore.set(target, componentId, next as unknown as JsonValue) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+    },
   }
 }
 
@@ -329,6 +369,7 @@ interface PreparedImplementation {
   readonly component: ComponentType<never>
   readonly declaredCapabilities: readonly ComponentCapability[]
   readonly metadata: ComponentMetadata
+  readonly settings?: ComponentSettingsDefinition<unknown>
 }
 
 /** A fit: the check's outcome, or the host's own `unknown-contract`. Frozen. */
@@ -351,7 +392,7 @@ function prepare(
   const token = tokenOf(contract)
   if (token === undefined) throw new ComponentError('invalid-id', INVALID_CONTRACT)
 
-  const { id, title, description, capabilities, component } = implementationFields(implementation)
+  const { id, title, description, capabilities, component, settings } = implementationFields(implementation)
 
   if (typeof id !== 'string' || !isValidContributionId(id)) throw new ComponentError('invalid-id', INVALID_COMPONENT_ID)
   if (!id.startsWith(prefix)) throw new ComponentError('namespace-violation', outsidePrefix(id), { componentId: id })
@@ -367,6 +408,7 @@ function prepare(
     throw invalid('component must be a React component: a function, or an object such as memo, forwardRef or lazy return')
   }
   if (!capabilities.ok) throw invalid(`capabilities ${capabilities.rule}`)
+  if (settings !== undefined && !validSettingsDefinition(settings)) throw invalid('settings must be a valid settings definition')
   const names = capabilities.names ?? []
   for (let index = 0; index < names.length; index += 1) {
     if (typeof names[index] !== 'string') throw invalid(`capabilities[${index}] must be a string`)
@@ -379,6 +421,7 @@ function prepare(
     component: component as ComponentType<never>,
     declaredCapabilities: Object.freeze([...new Set(names as readonly ComponentCapability[])]),
     metadata: Object.freeze(description === undefined ? { title } : { title, description }),
+    settings: settings as ComponentSettingsDefinition<unknown> | undefined,
   }
 }
 
@@ -395,6 +438,7 @@ function registrationOf(input: PreparedImplementation, extensionId: ExtensionId 
     metadata: input.metadata,
     compatible: fit.issues.length === 0,
     issues: fit.issues,
+    ...(input.settings === undefined ? {} : { settings: input.settings }),
   })
 }
 
@@ -409,6 +453,7 @@ interface ImplementationFields {
   readonly description: unknown
   readonly capabilities: CapabilityCopy
   readonly component: unknown
+  readonly settings: unknown
 }
 
 /**
@@ -450,7 +495,29 @@ function implementationFields(implementation: unknown): ImplementationFields {
   }
 
   const component = read('component')
-  return { id, title, description, capabilities, component }
+  const settings = read('settings')
+  return { id, title, description, capabilities, component, settings }
+}
+
+function validSettingsDefinition(value: unknown): value is ComponentSettingsDefinition<unknown> {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as { scope?: unknown; parse?: unknown; defaults?: unknown }
+  return (candidate.scope === 'global' || candidate.scope === 'project') && typeof candidate.parse === 'function' && isRecord(candidate.defaults)
+}
+function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
+function targetOf(definition: ComponentSettingsDefinition<unknown>, resolve: () => string | null) { return targetForScope(definition.scope, resolve) }
+async function rawSettings(registration: ComponentRegistration, store: ComponentSettingsStore, resolve: () => string | null): Promise<unknown> { return registration.settings ? store.get(targetOf(registration.settings, resolve), registration.componentId) : undefined }
+async function readSettings(registration: ComponentRegistration | undefined, store: ComponentSettingsStore, resolve: () => string | null): Promise<unknown | undefined> {
+  if (!registration?.settings) return undefined
+  let raw: unknown
+  try { raw = await rawSettings(registration, store, resolve) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+  try { return registration.settings.parse(raw ?? {}) } catch { return registration.settings.defaults }
+}
+function sparseSettings(definition: ComponentSettingsDefinition<unknown>, parsed: unknown): Record<string, boolean> {
+  if (!isRecord(parsed) || !isRecord(definition.defaults)) throw new ComponentSettingsError('invalid-settings', 'Settings parser must return an object')
+  const result: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(parsed)) { if (typeof value !== 'boolean') throw new ComponentSettingsError('invalid-settings', `Setting "${key}" must be a boolean`); if (value !== definition.defaults[key]) result[key] = value }
+  return result
 }
 
 /** A copy of an untrusted list of at most {@link MAX_DECLARED_CAPABILITIES} elements. May throw: the caller wraps it. */

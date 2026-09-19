@@ -6,6 +6,7 @@ import { createQueryClient } from './api/query-client'
 import { registerCoreCommands } from './commands/core-commands'
 import { createCommandRegistry } from './commands/registry'
 import { createCoreComponentRegistry } from './component-registry/core-components'
+import { createPersistentComponentSettingsStore, resolveComponentProjectId } from './component-registry/settings'
 import { createEventBus } from './events/bus'
 import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost } from './extensions/host'
@@ -42,7 +43,7 @@ const events = createEventBus()
 // component contract with its provenance. Core's defaults are registered here, before the host
 // starts, as the core commands are, so core always keeps its own ids and every served contract
 // has a default to render and to fall back to (spec `2026-09-19-component-host`).
-const components = createCoreComponentRegistry()
+const components = createCoreComponentRegistry({ settings: createPersistentComponentSettingsStore({ resolveProjectId: resolveComponentProjectId }), resolveProjectId: resolveComponentProjectId })
 
 // Extensions compiled into the cockpit (spec `2026-09-18-extension-registry`). Started outside the
 // React tree and never awaited: the host never throws and its `ready` never rejects, so no

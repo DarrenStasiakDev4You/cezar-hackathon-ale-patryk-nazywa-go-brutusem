@@ -7,6 +7,7 @@ import {
   useState,
   useSyncExternalStore,
   type CSSProperties,
+  type ComponentType,
   type ReactElement,
   type ReactNode,
 } from 'react'
@@ -16,7 +17,7 @@ import type { ComponentContract, ComponentLayout } from '@open-mercato/cezar-ext
 import { Button } from '@/components/ui/button'
 
 import { useComponentsRuntime } from './provider'
-import type { ComponentRegistration, UsableComponent } from './registry'
+import type { CockpitComponentRegistry, ComponentRegistration, UsableComponent } from './registry'
 import { resolveComponent } from './resolve'
 
 /**
@@ -74,7 +75,7 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
   const { fallback } = resolution
   const current = hasFailed(registrationOf(resolution.component), subject) ? fallback : resolution.component
   const isFallback = current === fallback
-  const key = `${current.componentId}:${retry}`
+  const key = `${current.componentId}:${retry}:${subject}:${typeof window === 'undefined' ? '' : window.location.pathname}`
   const identity = `${key}|${subject}`
   // Another boundary or another subject is on screen: the `failed` mark belonged to the one before,
   // so it goes (React's "adjust state while rendering" pattern, for this component's own state).
@@ -96,7 +97,7 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
     ? failedNotice
     : (
         <ImplementationBoundary onCatch={IGNORE} failed={failedNotice} resetKey={subject}>
-          <Suspense fallback={null}>{createElement(fallback.component, props)}</Suspense>
+          <Suspense fallback={null}><SettingsImplementation registry={registry} registration={registrationOf(fallback)} props={props} /></Suspense>
         </ImplementationBoundary>
       )
   const onCatch = isFallback
@@ -112,7 +113,7 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
   return (
     <HostBox contractId={contract.id} componentId={current.componentId} state={state} box={box}>
       <ImplementationBoundary key={key} onCatch={onCatch} failed={onFailed} resetKey={subject}>
-        <Suspense fallback={null}>{createElement(current.component, props)}</Suspense>
+        <Suspense fallback={null}><SettingsImplementation registry={registry} registration={registrationOf(current)} props={props} /></Suspense>
       </ImplementationBoundary>
     </HostBox>
   )
@@ -125,6 +126,21 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
  */
 function registrationOf<P>(usable: UsableComponent<P>): ComponentRegistration {
   return usable as unknown as ComponentRegistration
+}
+
+function SettingsImplementation(props: { readonly registry: Pick<CockpitComponentRegistry, 'subscribe' | 'revision' | 'getSettings'>; readonly registration: ComponentRegistration; readonly props: object }): ReactElement {
+  const { registry, registration } = props
+  const revision = useSyncExternalStore(registry.subscribe, registry.revision)
+  const definition = registration.settings
+  const [settings, setSettings] = useState<unknown>(() => definition?.defaults)
+  useEffect(() => {
+    let active = true
+    if (!definition) return () => { active = false }
+    void registry.getSettings(registration.componentId).then((value) => { if (active) setSettings(value ?? definition.defaults) }).catch(() => { if (active) setSettings(definition.defaults) })
+    return () => { active = false }
+  }, [definition, registry, registration.componentId, revision])
+  const implementationProps = definition ? { ...props.props, useComponentSettings: () => settings } : props.props
+  return createElement(registration.component as ComponentType<object>, implementationProps)
 }
 
 function HostBox(props: {
