@@ -55,7 +55,8 @@ Every Task UI path that continues or archives a task goes through the command re
 ### Post-review fixes
 
 - [x] Post-review fix: pin the cross-project Resolve conflicts continue on global Tasks — 56d5b482
-- [x] Post-review fix: join the 409 refetch and name every attachment rule — 102fc63d
+- [x] Post-review fix: name every attachment rule — 102fc63d (its 409 refetch join reverted in 6211b240 after re-review)
 - [x] Post-review fix: close the gaps in the boundary scan — cf21a2d3
 - [x] Post-review fix: memoize the composer's continueWith — 35e12916
 - [x] Post-review fix: record implementation status and timing notes in the spec — 76a00c69
+- [x] Re-review fix: read a boundary-scan clause without its comments — 7896b539
