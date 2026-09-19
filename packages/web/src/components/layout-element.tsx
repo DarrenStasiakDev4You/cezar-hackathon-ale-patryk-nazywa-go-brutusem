@@ -39,8 +39,6 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
     as,
     {
       ...props,
-      ...(enabled ? sortable.attributes : {}),
-      ...(enabled ? sortable.listeners : {}),
       ref: setNodeRef,
       style: {
         ...props.style,
@@ -53,18 +51,21 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
       'data-layout-kind': kind,
       'data-layout-sortable': enabled ? 'true' : 'false',
       'data-layout-dragging': sortable.isDragging ? 'true' : 'false',
-      ...(enabled ? { 'data-edit-mode-action': 'allow' } : {}),
       ...(parentId === undefined ? {} : { 'data-layout-parent-id': parentId }),
     },
     enabled ? (
-      <span
+      <button
+        type="button"
         className="layout-drag-handle"
+        ref={sortable.setActivatorNodeRef}
+        {...sortable.attributes}
+        {...sortable.listeners}
         aria-label={`Przenieś ${kind === 'group' ? 'grupę' : 'element'} ${id}`}
-        aria-hidden="true"
         data-layout-drag-handle="true"
+        data-edit-mode-action="allow"
       >
         ⋮⋮
-      </span>
+      </button>
     ) : null,
     children,
   )

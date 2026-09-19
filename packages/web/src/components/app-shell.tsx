@@ -325,7 +325,7 @@ export const AppShell = React.memo(function AppShell({
         <LayoutElement
           key={id}
           id="shell-sidebar"
-          kind="widget"
+          kind="group"
           parentId={shellLayout['shell-main']?.includes('shell-sidebar') ? 'shell-main' : undefined}
           as="section"
           className="relative hidden shrink-0 md:flex"

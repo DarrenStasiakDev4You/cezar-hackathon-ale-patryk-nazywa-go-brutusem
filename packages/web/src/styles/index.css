@@ -570,11 +570,13 @@
   min-height: 44px;
   align-items: center;
   justify-content: center;
+  padding: 0;
   cursor: grab;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--card);
   color: var(--muted-foreground);
+  font: inherit;
   touch-action: none;
 }
 .layout-drag-handle:hover,

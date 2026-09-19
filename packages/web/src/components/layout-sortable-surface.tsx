@@ -49,6 +49,9 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: layoutZoneId(id) })
   const { activeId } = useLayoutSortableContext()
+  const registry = useLayoutRegistry()
+  const activeElement = activeId ? registry.get(activeId) : undefined
+  const acceptsGroup = activeElement?.kind === 'group'
   return (
     <div
       className={className}
@@ -56,11 +59,11 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
       <div
         ref={setNodeRef}
         aria-hidden="true"
-        className={activeId
+        className={acceptsGroup
           ? `pointer-events-auto ${hitAreaClassName ?? 'absolute inset-0 z-30 bg-primary/5'}`
           : 'pointer-events-none absolute inset-0'}
         data-layout-drop-zone={id}
-        data-layout-drop-active={isOver ? 'true' : 'false'}
+        data-layout-drop-active={acceptsGroup && isOver ? 'true' : 'false'}
       />
       {children}
     </div>
@@ -94,6 +97,9 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   const sourceIndex = siblings.indexOf(source.id)
   const targetIndex = siblings.indexOf(target.id)
   const sameParent = source.parentId === target.parentId
+  // Ordinary elements are reorderable only among their current siblings. Groups are the
+  // explicit cross-menu affordance; their complete subtree moves together.
+  if (!sameParent && source.kind !== 'group') return null
   if (sameParent && (sourceIndex < 0 || targetIndex < 0)) return null
 
   return {
@@ -147,6 +153,12 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
 
     if (targetId) {
       if (targetId.startsWith('layout-zone:')) {
+        if (source?.kind !== 'group') {
+          setActiveId(null)
+          setOverId(null)
+          setLiveMessage('Przeciąganie anulowane')
+          return
+        }
         const parentId = targetId.slice('layout-zone:'.length)
         moved = registry.moveToParent({
           id: sourceId,
