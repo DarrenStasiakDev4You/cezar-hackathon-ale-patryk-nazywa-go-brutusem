@@ -1,5 +1,12 @@
 import { PickerPill } from '@/components/picker-pill'
-import type { TaskComposerEngine, TaskComposerProps } from '@open-mercato/cezar-extension-api'
+import type { TaskComposerProps } from '@open-mercato/cezar-extension-api'
+
+/** Focus the first enabled engine control inside a mounted composer slot. */
+export function focusEnginePicker(root: HTMLElement | null): void {
+  const target = root?.querySelector<HTMLElement>('[data-slot="follow-up-engine"] button:not([disabled]), [data-slot="follow-up-engine"] [tabindex]:not([tabindex="-1"])')
+  target?.scrollIntoView?.({ block: 'nearest' })
+  target?.focus()
+}
 
 export function ContinuationEnginePicker({
   engine,

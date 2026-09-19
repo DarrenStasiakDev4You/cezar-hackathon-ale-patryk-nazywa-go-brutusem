@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router'
 
 import { Link } from '@/lib/project-router'
+import { ComponentHost } from '@/component-registry/component-host'
+import { TaskComposer } from '@open-mercato/cezar-extension-api'
 
 import { ApiError } from '@/api/client'
 import {
@@ -17,7 +19,6 @@ import {
 import { useRunHistory, type RunHistoryState } from '@/api/run-history'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
-import { Composer } from '@/components/composer/composer'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
@@ -26,10 +27,10 @@ import { taskIssueUrl, taskPrUrl } from '@/lib/tasks-table'
 import { cn, isHttpUrl } from '@/lib/utils'
 
 import { AutoResumeHint } from './auto-resume-hint'
-import { useDraft } from './thread-draft'
 import { WorkingIndicator } from './thread-items'
-import { useDeliverPrompt } from './deliver-prompt'
 import { useContinueAction } from './follow-up-engine'
+import { focusEnginePicker } from './continuation-engine-picker'
+import { useTaskComposerModel } from './task-composer'
 import { AgentsDock } from './agents-dock'
 import { PlanDock, planCounts } from './plan-dock'
 import { collectSubagents, findSubagent, subagentChildren } from './subagent-dock'
@@ -39,7 +40,6 @@ import { queuePosition } from './run-actions'
 import { RunHeader } from './run-header'
 import { AskCard } from './ask-card'
 import { useRunRecordReconcile } from './run-reconcile'
-import { useActiveProviderAvailability } from './active-provider'
 import { ThreadLoading } from './thread-loading'
 import { threadRenderMode } from './thread-scroll'
 import { JumpToLatestPill, useThreadScroll } from './thread-scroller'
@@ -52,7 +52,6 @@ import {
 import {
   latestPlanEntries,
   reduceThread,
-  threadFilePaths,
   threadFooter,
   type ThreadAsk,
   type ThreadState,
@@ -200,8 +199,7 @@ export function ThreadView({
   // stays authorable here instead: the draft is the prompt the reopened session starts on, and
   // submitting an empty one is still the plain one-click Continue.
   const continueAction = useContinueAction(run)
-  const hasContinuation = !sessionOpen && !queued && continueAction.available
-  const continuable = hasContinuation && continueAction.canContinue
+  const continuable = !sessionOpen && !queued && continueAction.available && continueAction.canContinue
   // A closed session can never settle its in-flight items — nothing in the reducer rewrites a
   // `running` item on `session.ended`, so an interrupted fan-out stays `running` in the
   // persisted stream forever. Without this, reopening it pulses `Agents · 0/1` above a dead
@@ -242,17 +240,8 @@ export function ThreadView({
   // a 409 refetches it and, when the truth names the other endpoint, delivers there instead
   // (deliver-prompt.ts). Without that, a lost record update meant every send bounced until the
   // page was reloaded.
-  const deliverPrompt = useDeliverPrompt(run, continueAction)
-  // The reply composer's unsent content (#939) — server-side, per run, restored on return.
-  const draft = useDraft(run.id, 'composer')
-  const activeProvider = useActiveProviderAvailability(run)
-  // A queued send only amends the persisted prompt; it invokes no provider and therefore
-  // remains available even when provider discovery cannot authorize a live session. Once the
-  // session is open, mirror the server's active-backend gate as before.
-  const activeProviderBlocked = sessionOpen && !activeProvider.usable
-  const continuationProviderBlocked = hasContinuation && !continueAction.canContinue
-  const providerBlocked = activeProviderBlocked || continuationProviderBlocked
-  const providerReason = activeProviderBlocked ? activeProvider.reason : continueAction.reason
+  const composerModel = useTaskComposerModel(run, { continueAction, thread })
+  const composerSlotRef = useRef<HTMLDivElement>(null)
 
   // The queued-run affordances (#472), passed only while the run is queued — so the bubbles
   // go read-only on the next `run` SSE frame once it starts. The bubbles await these promises
@@ -322,7 +311,7 @@ export function ThreadView({
         // dock's picker for the next continuation (spec 2026-09-19-task-header-contract, Q7). The
         // picker itself lives in the dock only, so a header pick and the next composer submission
         // are one engine state. Offered exactly while the dock shows the pills.
-        onChooseEngine={continuable ? continueAction.focusPicker : undefined}
+        onChooseEngine={continuable ? () => focusEnginePicker(composerSlotRef.current) : undefined}
       />
 
       {/* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
@@ -472,51 +461,9 @@ export function ThreadView({
             </div>
           ) : null}
 
-          <Composer
-            // The draft store's first host (#939). The composer is controlled on BOTH seams here
-            // — text and attachments — so leaving the task mid-sentence and coming back restores
-            // the message exactly as it was left, screenshots included. `draft.submit` wraps the
-            // real send: the optimistic clear only becomes a cleared draft once the message has
-            // actually landed, and a rejection leaves the draft (and its blobs) intact.
-            value={draft.text}
-            onValueChange={draft.setText}
-            images={draft.images}
-            onImagesChange={draft.setImages}
-            // The send itself is `deliverPrompt`, not a branch on `continuable`: the record that
-            // would pick the endpoint can be stale, so the re-route on a 409 decides it from the
-            // truth instead. The two compose exactly as they read — the draft stays open until
-            // the message has actually landed, wherever it turned out to land.
-            onSubmit={(text, images) => draft.submit<unknown>(() => deliverPrompt(text, images))}
-            disabled={providerBlocked || (!sessionOpen && !queued && !continuable)}
-            // Only reachable now by a closed run with NO session to resume — which is exactly
-            // the one case where Continue is not on offer either. Left honest rather than
-            // rewritten: "closed" is all such a run can be told.
-            disabledReason={providerBlocked ? providerReason : 'Session closed — no session to resume.'}
-            // The engine pills ride the enabled footer, so the picked runner/model and the
-            // typed prompt reach `POST /continue` in one request.
-            footerEnd={
-              providerBlocked && !continueAction.providerPending ? (
-                <Link
-                  to="/settings/agents#providers"
-                  className="text-xs font-medium text-foreground underline underline-offset-4"
-                >
-                  Configure providers
-                </Link>
-              ) : continuable ? continueAction.pills : undefined
-            }
-            // Continuing with nothing typed is the legacy one-click Continue.
-            allowEmptySubmit={continuable}
-            sendAriaLabel={continuable ? 'Continue' : 'Send'}
-            placeholder={
-              queued ? 'Add to the prompt — sent when the run starts…'
-              : continuable ? 'Continue — add a prompt, or send to just reopen the session…'
-              : run.status === 'waiting' ? 'Reply — / for skills, @ for files…'
-              : 'Message the agent — / for skills, @ for files…'
-            }
-            autocompleteSkills
-            quickReplies
-            getMentionCandidates={() => threadFilePaths(thread)}
-          />
+          <div ref={composerSlotRef} data-slot="thread-composer">
+            <ComponentHost contract={TaskComposer} subject={run.id} props={composerModel.props} />
+          </div>
         </div>
       </div>
     </div>
