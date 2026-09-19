@@ -1,6 +1,7 @@
-import type { Extension } from '@open-mercato/cezar-extension-api'
+import { ExtensionActivated, type Extension } from '@open-mercato/cezar-extension-api'
 
 import type { CommandRegistry } from '../commands/registry'
+import type { EventBus } from '../events/bus'
 import {
   createExtensionRegistry,
   logExtensionError,
@@ -10,8 +11,8 @@ import {
 } from './registry'
 
 /**
- * Placeholder services until the commands, events, storage and components items land, each one
- * replacing its placeholder behind the same `services(scope)` seam.
+ * Placeholder services until each service's item lands and replaces its placeholder behind the
+ * same `services(scope)` seam (commands and events have; storage and components have not).
  *
  * Every method first calls `scope.assertLive()` (so a call after deactivation fails with
  * `disposed`, as the contract says), then fails with
@@ -29,7 +30,7 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
   }
   return {
     commands: { register: fails('commands'), execute: rejects('commands'), has: fails('commands') },
-    events: { on: fails('events'), emit: fails('events') },
+    events: { on: fails('events'), once: fails('events'), off: fails('events'), emit: fails('events') },
     storage: {
       get: rejects('storage'),
       set: rejects('storage'),
@@ -42,11 +43,31 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
 
 /**
  * The services the cockpit gives each activation: the real `commands` — the command registry's
- * extension view (spec `2026-09-19-command-api`) — with events, storage and components still the
+ * extension view (spec `2026-09-19-command-api`) — and the real `events` — the event bus's
+ * extension view (spec `2026-09-19-extension-event-api`), with storage and components still the
  * {@link unavailableServices} placeholders until their items land.
  */
-export function cockpitServices(deps: { readonly commands: CommandRegistry }): ExtensionRegistryOptions['services'] {
-  return (scope) => ({ ...unavailableServices(scope), commands: deps.commands.forExtension(scope) })
+export function cockpitServices(deps: {
+  readonly commands: CommandRegistry
+  readonly events: EventBus
+}): ExtensionRegistryOptions['services'] {
+  return (scope) => ({
+    ...unavailableServices(scope),
+    commands: deps.commands.forExtension(scope),
+    events: deps.events.forExtension(scope),
+  })
+}
+
+/**
+ * The registry's `onStatusChange` for the page's event bus: emits `cezar.extension.activated`
+ * each time an extension becomes `active`. The registry reports `active` after `activate()`
+ * settles, so the new extension's own listeners are live and it hears its own activation.
+ */
+export function extensionLifecycleEvents(events: EventBus): NonNullable<ExtensionRegistryOptions['onStatusChange']> {
+  return (record) => {
+    if (record.status !== 'active') return
+    events.emit(ExtensionActivated, { extensionId: record.id, version: record.manifest.version })
+  }
 }
 
 /**
@@ -59,11 +80,14 @@ export function startExtensionHost(options: {
   readonly extensions: readonly Extension[]
   readonly services?: ExtensionRegistryOptions['services']
   readonly onError?: ExtensionRegistryOptions['onError']
+  /** The cockpit passes {@link extensionLifecycleEvents} for its bus. */
+  readonly onStatusChange?: ExtensionRegistryOptions['onStatusChange']
 }): { readonly registry: ExtensionRegistry; readonly ready: Promise<readonly ExtensionRecord[]> } {
   const onError = options.onError ?? logExtensionError
   const registry = createExtensionRegistry({
     services: options.services ?? unavailableServices,
     onError,
+    ...(options.onStatusChange === undefined ? {} : { onStatusChange: options.onStatusChange }),
   })
 
   for (const extension of options.extensions) {

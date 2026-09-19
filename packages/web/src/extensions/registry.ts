@@ -74,6 +74,14 @@ export interface ExtensionRegistryOptions {
    * Called inside a try/catch: a throwing reporter is swallowed, never propagated.
    */
   readonly onError?: (report: ExtensionErrorReport) => void
+  /**
+   * Called after each status change — `registered → active`, `active → registered`, into
+   * `failed` — with the new record and the one it replaced. Not called by `register`, nor when a
+   * retried activation fails again (`failed → failed`). `active` is reported once the
+   * extension's own registrations are live. Called inside a try/catch: a throwing callback is
+   * swallowed and changes no status.
+   */
+  readonly onStatusChange?: (record: ExtensionRecord, previous: ExtensionRecord) => void
 }
 
 export interface ExtensionRegistry {
@@ -162,8 +170,17 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
     Object.freeze(Array.from(entries.values(), (entry) => entry.record))
 
   const setRecord = (entry: Entry, status: ExtensionStatus, error?: ExtensionFailure): ExtensionRecord => {
-    entry.record = createRecord(entry.manifest, status, error)
-    return entry.record
+    const previous = entry.record
+    const record = createRecord(entry.manifest, status, error)
+    entry.record = record
+    if (options.onStatusChange !== undefined && previous.status !== status) {
+      try {
+        options.onStatusChange(record, previous)
+      } catch {
+        // Core's own callback: a throw must not change a status or break activateAll.
+      }
+    }
+    return record
   }
 
   /** Runs `step` after every earlier step of the same extension; steps never enqueue steps. */

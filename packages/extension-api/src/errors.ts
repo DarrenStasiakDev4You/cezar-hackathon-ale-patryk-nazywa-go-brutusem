@@ -5,16 +5,18 @@ import type { ManifestIssue } from './manifest.ts'
  * package's helpers ({@link ExtensionDefinitionError}); the rest are raised by the host:
  *
  * - `invalid-id` — also raised by the host: `register`, `execute` and `has` treat a value that is
- *   not `{ kind: 'command', id: <valid ContributionId> }` as malformed.
+ *   not `{ kind: 'command', id: <valid ContributionId> }` as malformed, and `on`, `once`, `off`
+ *   and `emit` one that is not `{ kind: 'event', id: <valid ContributionId> }`.
  * - `namespace-violation` — an id outside the calling extension's `${extension.id}.` prefix, or
  *   an extension emitting a core (`cezar.*`) event.
  * - `duplicate-registration` — a second handler for a command id.
  * - `command-not-found` — `execute` of an id nobody registered, or one the caller may not run.
  * - `contract-version-mismatch` — an implementation built against another major of a contract.
  * - `storage-quota` — a write over the host's storage limits.
- * - `disposed` — a context call after the extension was deactivated.
- * - `invalid-input` — arguments a core command's validator refused, or a handler that is not a
- *   function.
+ * - `disposed` — a context call after the extension was deactivated: commands, events,
+ *   storage and components alike.
+ * - `invalid-input` — arguments a core command's validator refused, a handler or event listener
+ *   that is not a function, or an event payload that is not JSON (a cycle, a `bigint`).
  * - `command-failed` — the command's handler threw or rejected; the original is the error's
  *   `cause`. A handler's own coded error is wrapped too, so the code always describes the call
  *   the caller made.

@@ -5,16 +5,19 @@ import {
   defineCommand,
   defineComponentContract,
   defineEvent,
+  ExtensionActivated,
   isExtensionError,
   TaskArchive,
   TaskContinue,
   type Extension,
+  type ExtensionActivation,
   type ExtensionContext,
 } from '@open-mercato/cezar-extension-api'
 import { registerCoreCommands } from '../commands/core-commands'
 import { createCommandRegistry } from '../commands/registry'
+import { createEventBus, type EventErrorReport } from '../events/bus'
 import { BUILTIN_EXTENSIONS } from './builtin-extensions'
-import { cockpitServices, startExtensionHost, unavailableServices } from './host'
+import { cockpitServices, extensionLifecycleEvents, startExtensionHost, unavailableServices } from './host'
 import { fixture, pingCommand, recordingServices } from './registry.fixtures'
 import { createExtensionRegistry, type ExtensionErrorReport } from './registry'
 
@@ -25,6 +28,32 @@ afterEach(() => {
 
 const statuses = (records: readonly { id: string; status: string }[]) =>
   records.map((record) => [record.id, record.status])
+
+function thrown(run: () => unknown): unknown {
+  try {
+    run()
+  } catch (error) {
+    return error
+  }
+  return undefined
+}
+
+/**
+ * The boot order `main.tsx` uses: the command registry with the core commands and the event bus
+ * first, then the host, with the bus's lifecycle events.
+ */
+function bootCockpit(extensions: readonly Extension[], busOptions: Parameters<typeof createEventBus>[0] = {}) {
+  const commands = createCommandRegistry()
+  registerCoreCommands(commands, { queryClient: new QueryClient() })
+  const events = createEventBus(busOptions)
+  const host = startExtensionHost({
+    extensions,
+    services: cockpitServices({ commands, events }),
+    onStatusChange: extensionLifecycleEvents(events),
+    onError: () => {},
+  })
+  return { ...host, commands, events }
+}
 
 describe('startExtensionHost', () => {
   it('activates every extension it is given once `ready` resolves', async () => {
@@ -139,23 +168,24 @@ describe('unavailableServices', () => {
     await ready
     const live = context as ExtensionContext
 
-    expect(() => live.events.on(pingEvent, () => {})).toThrow('context.events is not available in this Cezar version yet')
+    for (const call of [
+      () => live.events.on(pingEvent, () => {}),
+      () => live.events.once(pingEvent, () => {}),
+      () => live.events.off(pingEvent, () => {}),
+      () => live.events.emit(pingEvent),
+    ]) {
+      expect(call).toThrow('context.events is not available in this Cezar version yet')
+    }
     await expect(live.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
 
     await registry.deactivate('acme.alpha')
 
-    const thrown = (run: () => unknown): unknown => {
-      try {
-        run()
-      } catch (error) {
-        return error
-      }
-      return undefined
-    }
     for (const call of [
       () => live.commands.register(pingCommand('acme.alpha'), () => {}),
       () => live.commands.has(pingCommand('acme.alpha')),
       () => live.events.on(pingEvent, () => {}),
+      () => live.events.once(pingEvent, () => {}),
+      () => live.events.off(pingEvent, () => {}),
       () => live.events.emit(pingEvent),
       () => live.components.provide(listContract, { id: 'acme.alpha.list', title: 'List', component: () => null }),
     ]) {
@@ -176,16 +206,13 @@ describe('unavailableServices', () => {
 describe('cockpitServices', () => {
   const Internal = defineCommand<[input: { readonly taskId: string }], string>('cezar.fixture.internal')
 
-  /** The boot order `main.tsx` uses: registry and core commands first, then the host. */
   function boot(extensions: readonly Extension[]) {
-    const commands = createCommandRegistry()
-    registerCoreCommands(commands, { queryClient: new QueryClient() })
-    commands.register(Internal, ({ taskId }) => taskId, {
+    const booted = bootCockpit(extensions)
+    booted.commands.register(Internal, ({ taskId }) => taskId, {
       visibility: 'internal',
       validate: (args): [{ taskId: string }] => [args[0] as { taskId: string }],
     })
-    const host = startExtensionHost({ extensions, services: cockpitServices({ commands }), onError: () => {} })
-    return { ...host, commands }
+    return booted
   }
 
   it('lets an extension execute a public core command against the API', async () => {
@@ -323,8 +350,7 @@ describe('cockpitServices', () => {
     expect(beta?.commands.has(Broken)).toBe(true)
   })
 
-  it('keeps events, storage and components on the placeholders', async () => {
-    const pinged = defineEvent('acme.alpha.pinged')
+  it('keeps storage and components on the placeholders', async () => {
     const list = defineComponentContract<Record<string, never>>('cezar.fixture.list', { version: 1 })
     let context: ExtensionContext | undefined
     const { ready } = boot([
@@ -337,12 +363,168 @@ describe('cockpitServices', () => {
     await ready
     const live = context as ExtensionContext
 
-    expect(() => live.events.on(pinged, () => {})).toThrow('context.events is not available in this Cezar version yet')
-    expect(() => live.events.emit(pinged)).toThrow('context.events is not available in this Cezar version yet')
     expect(() => live.components.provide(list, { id: 'acme.alpha.list', title: 'List', component: () => null })).toThrow(
       'context.components is not available in this Cezar version yet',
     )
     await expect(live.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
+  })
+})
+
+describe('the events service', () => {
+  const AlphaReady = defineEvent<{ readonly step: number }>('acme.alpha.ready')
+  const BetaReady = defineEvent<{ readonly step: number }>('acme.beta.ready')
+
+  it('DoD 1, end to end: an extension hears a later extension’s activation, with its id and version', async () => {
+    const heard: ExtensionActivation[] = []
+    const { registry, ready } = bootCockpit([
+      fixture('acme.listener', {
+        activate(context) {
+          context.events.on(ExtensionActivated, (activation) => heard.push(activation))
+        },
+      }),
+      fixture('acme.later'),
+    ])
+
+    await ready
+    await vi.waitFor(() => expect(heard).toHaveLength(2))
+
+    // It hears its own activation too: the emit comes after its listener is live.
+    expect(heard).toEqual([
+      { extensionId: 'acme.listener', version: '1.0.0' },
+      { extensionId: 'acme.later', version: '1.0.0' },
+    ])
+    expect(registry.listActive().map((record) => record.id)).toEqual(['acme.listener', 'acme.later'])
+  })
+
+  it('DoD 4, end to end: after deactivate resolves, neither a core nor an extension emit reaches it', async () => {
+    const heard: string[] = []
+    let beta: ExtensionContext | undefined
+    let alpha: ExtensionContext | undefined
+    const { registry, events, ready } = bootCockpit([
+      fixture('acme.alpha', {
+        activate(context) {
+          alpha ??= context
+          context.events.on(ExtensionActivated, ({ extensionId }) => heard.push(`activated ${extensionId}`))
+          context.events.on(BetaReady, ({ step }) => heard.push(`beta ${step}`))
+          context.events.once(AlphaReady, ({ step }) => heard.push(`own ${step}`))
+        },
+      }),
+      fixture('acme.beta', {
+        activate(context) {
+          beta = context
+        },
+      }),
+    ])
+    await ready
+    await vi.waitFor(() => expect(heard).toEqual(['activated acme.alpha', 'activated acme.beta']))
+
+    // (A delivery queued before the scope ends and cancelled by it is proven at the bus level: here
+    // `deactivate()` itself takes microtasks, and the extension stays active while it runs.)
+    await registry.deactivate('acme.alpha')
+    events.emit(ExtensionActivated, { extensionId: 'acme.gamma', version: '1.0.0' })
+    beta?.events.emit(BetaReady, { step: 2 })
+    await registry.activate('acme.alpha')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    // Only the new activation's listener hears its own re-activation; the old ones are gone.
+    expect(heard).toEqual(['activated acme.alpha', 'activated acme.beta', 'activated acme.alpha'])
+    // The first activation's context refuses every call.
+    expect(isExtensionError(thrown(() => alpha?.events.emit(AlphaReady, { step: 3 })), 'disposed')).toBe(true)
+  })
+
+  it('leaves no listener behind when activate subscribes and then throws', async () => {
+    const heard: string[] = []
+    const { registry, ready } = bootCockpit([
+      fixture('acme.crash', {
+        activate(context) {
+          context.events.on(BetaReady, ({ step }) => heard.push(`crash heard ${step}`))
+          throw new Error('crash after subscribing')
+        },
+      }),
+      fixture('acme.beta', {
+        activate(context) {
+          context.events.emit(BetaReady, { step: 1 })
+        },
+      }),
+    ])
+
+    await ready
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(registry.get('acme.crash')?.status).toBe('failed')
+    expect(heard).toEqual([])
+  })
+
+  it('keeps the extension that owns a failing listener active, and reports the failure', async () => {
+    const reports: EventErrorReport[] = []
+    const after: number[] = []
+    const { registry, ready } = bootCockpit(
+      [
+        fixture('acme.alpha', {
+          activate(context) {
+            context.events.on(BetaReady, () => {
+              throw new Error('alpha listener broke')
+            })
+            context.events.on(BetaReady, ({ step }) => after.push(step))
+          },
+        }),
+        fixture('acme.beta', {
+          activate(context) {
+            context.events.emit(BetaReady, { step: 7 })
+          },
+        }),
+      ],
+      { onError: (report) => reports.push(report) },
+    )
+
+    await ready
+    await vi.waitFor(() => expect(after).toEqual([7]))
+
+    expect(registry.get('acme.alpha')?.status).toBe('active')
+    expect(registry.get('acme.beta')?.status).toBe('active')
+    expect(reports.map(({ extensionId, eventId, kind }) => [extensionId, eventId, kind])).toEqual([
+      ['acme.alpha', 'acme.beta.ready', 'listener'],
+    ])
+  })
+
+  it('refuses an extension emitting a core event, failing that activation only', async () => {
+    const { registry, ready } = bootCockpit([
+      fixture('acme.spoof', {
+        activate(context) {
+          context.events.emit(ExtensionActivated, { extensionId: 'acme.fake', version: '9.9.9' })
+        },
+      }),
+      fixture('acme.quiet'),
+    ])
+
+    await ready
+
+    expect(registry.get('acme.spoof')).toMatchObject({ status: 'failed', error: { code: 'namespace-violation' } })
+    expect(registry.get('acme.quiet')?.status).toBe('active')
+  })
+})
+
+describe('extensionLifecycleEvents', () => {
+  it('emits cezar.extension.activated for a record that became active, and nothing for another change', async () => {
+    const events = createEventBus()
+    const heard: ExtensionActivation[] = []
+    events.on(ExtensionActivated, (activation) => heard.push(activation))
+    const onStatusChange = extensionLifecycleEvents(events)
+    const registry = createExtensionRegistry({ ...recordingServices(), onStatusChange, onError: () => {} })
+    registry.register(fixture('acme.alpha'))
+    registry.register(
+      fixture('acme.crash', {
+        activate() {
+          throw new Error('crash')
+        },
+      }),
+    )
+
+    await registry.activateAll()
+    await registry.deactivate('acme.alpha')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(heard).toEqual([{ extensionId: 'acme.alpha', version: '1.0.0' }])
   })
 })
 
