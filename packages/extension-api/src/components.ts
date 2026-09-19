@@ -248,6 +248,13 @@ export interface ComponentImplementation<Props> {
  * - **Versioned.** An implementation is bound to the `version` of the token it was compiled
  *   against; a host whose contract has moved to another major ignores it with a
  *   `contract-version-mismatch` diagnostic instead of rendering it with the wrong props.
+ * - **The author's own mistakes throw.** `provide` throws `disposed`, `invalid-id` (a token that
+ *   is not `{ kind: 'component', id, version }`, or a malformed implementation id),
+ *   `namespace-violation` (an id outside `${extension.id}.`), `duplicate-registration` (an id
+ *   already provided) and `invalid-input` (an implementation field of the wrong type).
+ * - **A misfit is kept, never thrown.** An implementation that does not fit (another major, a
+ *   missing required capability, or a contract this Cezar does not serve) is kept but never
+ *   rendered, and is reported as a diagnostic.
  */
 export interface ComponentRegistry {
   /** `NoInfer`: P comes from the contract only, so an implementation with other props is rejected. */

@@ -5,6 +5,8 @@ import { App } from './app'
 import { createQueryClient } from './api/query-client'
 import { registerCoreCommands } from './commands/core-commands'
 import { createCommandRegistry } from './commands/registry'
+import { CORE_COMPONENT_CONTRACTS } from './component-registry/core-contracts'
+import { createComponentRegistry } from './component-registry/registry'
 import { createEventBus } from './events/bus'
 import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost } from './extensions/host'
@@ -37,6 +39,11 @@ const queryClient = createQueryClient()
 const commands = createCommandRegistry()
 registerCoreCommands(commands, { queryClient })
 const events = createEventBus()
+// The component registry (spec `2026-09-19-component-registry`) records every implementation of a
+// component contract with its provenance. Its catalog stays empty until the slot item adds the
+// core contracts and registers core's defaults here, before the host starts, so every extension
+// `provide` is recorded as `unknown-contract` for now.
+const components = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
 
 // Extensions compiled into the cockpit (spec `2026-09-18-extension-registry`). Started outside the
 // React tree and never awaited: the host never throws and its `ready` never rejects, so no
@@ -44,7 +51,7 @@ const events = createEventBus()
 // `cezar.extension.activated` on the bus.
 startExtensionHost({
   extensions: BUILTIN_EXTENSIONS,
-  services: cockpitServices({ commands, events }),
+  services: cockpitServices({ commands, events, components }),
   onStatusChange: extensionLifecycleEvents(events),
 })
 

@@ -3,13 +3,13 @@
 > **Experimental and private.** The cockpit's extension registry
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
 > extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands`
-> (spec `2026-09-19-command-api`) and `events` (spec `2026-09-19-extension-event-api`) are
-> honoured; storage and components arrive in later items, and every host item may still revise
-> these types in the PR that implements them. Component
-> contracts are already checkable — `checkComponentCompatibility` runs anywhere, in your own tests
-> too (spec `2026-09-19-component-contract-api`) — while `context.components` is still
-> unimplemented. The package is versioned with the release but not published to npm.
-> Design: `.ai/specs/2026-09-18-extension-api-package.md`.
+> (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`) and
+> `components` (spec `2026-09-19-component-registry`) are honoured; storage arrives in a later
+> item, and every host item may still revise these types in the PR that implements them.
+> `context.components` records implementations, while rendering and selection arrive with the slot
+> and picker items. Component contracts are checkable anywhere — `checkComponentCompatibility`
+> runs in your own tests too (spec `2026-09-19-component-contract-api`). The package is versioned
+> with the release but not published to npm. Design: `.ai/specs/2026-09-18-extension-api-package.md`.
 
 The one package an extension imports. It holds the vocabulary Cezar and its extensions share —
 manifest, lifecycle, commands, events, storage, the component registry and errors — and nothing
@@ -239,6 +239,22 @@ contract, core's default always stays available, and a replacement that throws w
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
 goes through the same check.
 
+**Status.** `context.components` records implementations: the cockpit keeps every one per contract,
+with the id of the extension that provided it. Rendering and selection arrive with the slot and
+picker items, so nothing renders a provided implementation yet, and the cockpit serves no core
+contract yet.
+
+**What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
+deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a
+malformed implementation id, `namespace-violation` for an id outside `${extension.id}.`,
+`duplicate-registration` for an id already provided, and `invalid-input` for a field of the wrong
+type (an empty `title`, a `component` that is not a function or an object, `capabilities` that is
+not an array of strings). An implementation that does not fit is kept but never rendered, and is
+reported as a diagnostic in the browser console instead of thrown: another major
+(`contract-version-mismatch`), a missing required capability (`missing-capability`), or a contract
+this Cezar does not serve (`unknown-contract`). So one outdated component never fails your
+activation.
+
 A contract made with `defineComponentContract<Props>(id, options)` has three parts:
 
 - **Props**, the typed half. The implementation must take exactly those props, callbacks included;
@@ -279,7 +295,9 @@ context.components.provide(Greeting, {
 })
 ```
 
-and its test (`test/example.test.ts`), which checks it as a host does:
+`example.hello.greeting` is the example's own contract, which the cockpit does not serve: on a real
+host this registration is recorded as `unknown-contract`, and the example is exercised against the
+test context only. Its test (`test/example.test.ts`) checks it as a host does:
 
 ```ts
 const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
@@ -309,7 +327,7 @@ notice; at publication each core contract is listed with its major in `BACKWARD_
 `isExtensionError(error, code?)` recognises every `ExtensionErrorCode` by its `code`, never by
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
 and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
-malformed command or event token); `namespace-violation`, `duplicate-registration`, `command-not-found`,
+malformed command, event or component contract token, or a malformed component implementation id); `namespace-violation`, `duplicate-registration`, `command-not-found`,
 `contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
 `command-timeout` come from the host. The union grows additively: a copy of this package older than
 the host does not recognise the newer codes.
