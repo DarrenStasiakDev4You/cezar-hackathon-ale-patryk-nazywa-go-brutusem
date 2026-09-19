@@ -46,4 +46,4 @@ The answers require replacing the current Zod-compatible and global-only design.
 ### Phase 2: Incorporate owner answers
 
 - [x] 2.1 Update the spec's decisions, public API, scope-aware persistence model, implementation reading surface, edge cases, and implementation plan. — 47a0df13
-- [ ] 2.2 Validate the edited spec, update the PR description and post a resume summary, then release the PR claim.
+- [x] 2.2 Validate the edited spec, update the PR description and post a resume summary, then release the PR claim. — ebe071fb
