@@ -469,6 +469,8 @@ describe('checkComponentCompatibility — types', () => {
         capabilities: ['restores-draft'],
         component: () => null,
       })
+      // @ts-expect-error — a misspelled key is still an excess property
+      checkComponentCompatibility(Composer, { id: 'acme.zen.composer', capabilites: ['restores-draft'] })
       // @ts-expect-error — the implementation's id is required
       checkComponentCompatibility(Composer, { capabilities: ['restores-draft'] })
       // @ts-expect-error — capabilities are a list of names

@@ -57,23 +57,28 @@ export interface ComponentCompatibility {
  *
  * @param contract       the contract as the checker knows it (a host passes its own token)
  * @param implementation its `id` and `capabilities` — a `ComponentImplementation` fits, written
- *                       inline too: the parameter is generic only so that its other fields
- *                       (`title`, `component`) are not rejected as excess properties
+ *                       inline too; only those two fields are read
  * @param implemented    the token the implementation was compiled against. Defaults to
  *                       `contract`, which suits an author checking their own implementation's
  *                       capabilities. A host MUST pass the token `provide` received: without it,
  *                       the id and version rules cannot fire.
  */
-export function checkComponentCompatibility<
-  Implementation extends { readonly id: ContributionId; readonly capabilities?: readonly ComponentCapability[] },
->(
+export function checkComponentCompatibility(
   contract: {
     readonly id: ContributionId
     readonly version: number
     readonly requiredCapabilities?: readonly ComponentCapability[]
     readonly optionalCapabilities?: readonly ComponentCapability[]
   },
-  implementation: Implementation,
+  implementation: {
+    readonly id: ContributionId
+    readonly capabilities?: readonly ComponentCapability[]
+    // Listed, never read: a full implementation written inline is then not an excess-property
+    // error, while a misspelled key (`capabilites`) still is.
+    readonly title?: string
+    readonly description?: string
+    readonly component?: unknown
+  },
   implemented?: { readonly id: ContributionId; readonly version: number },
 ): ComponentCompatibility {
   const issues: ComponentCompatibilityIssue[] = []
