@@ -1800,18 +1800,24 @@ describe('an implementation that offers task actions', () => {
     stubFetch()
     renderWithRow(run('done'), [])
 
+    // The row really renders: the bar is unchanged because it offers nothing, not because it is absent.
+    expect(document.querySelector('[data-slot="acme-row"]')).not.toBeNull()
     expect(barButtons()).toEqual(expect.arrayContaining(['Continue', 'Archive']))
     expect(kebab().className).toContain('md:hidden')
   })
 
   it('declaring all three and throwing: after the failure, core’s default renders and the bar shows the actions again', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     behaviour.throws = true
     stubFetch()
-    renderWithRow(run('done'), ['offers-continue', 'offers-stop', 'offers-archive'])
+    try {
+      renderWithRow(run('done'), ['offers-continue', 'offers-stop', 'offers-archive'])
 
-    await waitFor(() => expect(document.querySelector('[data-slot="component-host"]')?.getAttribute('data-state')).toBe('fallback'))
-    expect(barButtons()).toEqual(expect.arrayContaining(['Continue', 'Archive']))
-    expect(kebab().className).toContain('md:hidden')
+      await waitFor(() => expect(document.querySelector('[data-slot="component-host"]')?.getAttribute('data-state')).toBe('fallback'))
+      expect(barButtons()).toEqual(expect.arrayContaining(['Continue', 'Archive']))
+      expect(kebab().className).toContain('md:hidden')
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 })
