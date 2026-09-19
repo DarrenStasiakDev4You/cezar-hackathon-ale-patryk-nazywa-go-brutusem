@@ -4,7 +4,7 @@
 
 Dodajemy wizualny edytor layoutu w faktycznym cockpitcie Cezara, uruchamiany przez globalny tryb edycji. Cały widok — poza aktywnie wskazanym elementem — jest wtedy wyszarzony, aby użytkownik widział, że edytuje strukturę, a nie uruchamia funkcje biznesowe. Hover przywraca pełny kolor wskazanego elementu.
 
-Użytkownik może przeciągnąć całą grupę/menu z jednej strony layoutu na drugą. Pojedynczy element grupy można przesuwać w obrębie tego menu niezależnie od tego, czy menu znajduje się po lewej, czy po prawej stronie. Nie przenosimy elementów do głównej części treści ani do innego menu. Podczas dragowania widoczny jest jednoznaczny placeholder, a po puszczeniu pozycja jest aktualizowana lokalnie.
+Użytkownik może przeciągnąć cały boczny blok menu z jednej strony layoutu na drugą. „Cały blok” oznacza dokładnie całą sekcję zaznaczoną czerwoną ramką na ekranie: logo i repozytorium, przycisk New task, wszystkie pozycje nawigacji, przełącznik Active/Archived, empty state oraz dolny toolbar z Search/Tools. Nie przenosimy pojedynczej pozycji jako zamiennika całego bloku. Pojedynczy element można reorderować dopiero wewnątrz całego przeniesionego bloku, niezależnie od tego, czy blok znajduje się po lewej, czy po prawej stronie. Podczas dragowania widoczny jest placeholder całego bloku, a po puszczeniu cała sekcja pojawia się po drugiej stronie.
 
 ## 📋 Rozstrzygnięte założenia (domyślne decyzje autonomiczne)
 
@@ -12,7 +12,7 @@ Użytkownik może przeciągnąć całą grupę/menu z jednej strony layoutu na d
 |---|---|---|---|---|
 | Q1 | Czy element można upuścić w głównej części treści albo w innym menu? | Nie; element reorderuje się wyłącznie wewnątrz własnego menu. Położenie tego menu — lewa lub prawa strona — nie ma znaczenia. | Edytor porządkuje zawartość menu; główna treść i inne menu nie są celami. | ok |
 | Q2 | Czy zmiana ma być zapisywana po odświeżeniu lub przez API? | Nie; kolejność żyje w pamięci do czasu kolejnego przeładowania. | Discovery i globalny tryb edycji nie mają jeszcze kontraktu persystencji; dodanie storage/API byłoby osobną zdolnością o większym zakresie ryzyka. | tak |
-| Q3 | Czy grupa jest przeciągana razem z całym poddrzewem? | Tak; grupa/menu przenosi się jako całość z lewej strony na prawą lub odwrotnie. Dziecko można przesuwać wewnątrz tego menu przed i po przeniesieniu. | Rozdziela ruch całej grupy od reorderowania jej zawartości; reorder nie zależy od strony. | ok |
+| Q3 | Co dokładnie jest grupą przenoszoną między stronami? | Cały boczny blok zaznaczony czerwoną ramką: nagłówek, New task, nawigacja, Active/Archived, empty state i dolny toolbar. | Eliminuje niejednoznaczność: drag nie dotyczy pojedynczego wpisu, tylko kompletnego panelu bocznego. | ok |
 | Q4 | Czy v1 musi obsługiwać alternatywę klawiaturową? | Tak; uchwyt elementu ma standardową ścieżkę przeciągania klawiaturą z dnd-kit. | Przeciąganie nie może być jedynym sposobem realizacji operacji dostępnej dla użytkownika klawiatury. | tak |
 | Q5 | Czy mechanizm ma używać istniejącego dnd-kit, czy nowej implementacji zdarzeń wskaźnika? | Istniejący dnd-kit, skonfigurowany z małą odległością aktywacji i osobnym uchwytem. | Repozytorium już używa dnd-kit w kreatorze workflow; ponowne użycie redukuje różnice w obsłudze dotyku, kopii elementu i klawiatury. | tak |
 
@@ -34,14 +34,14 @@ Bez tej granicy pojedynczy pointerdown może jednocześnie wybrać widget, klikn
 
 ## 📋 Proponowane rozwiązanie
 
-W trybie edycji każda grupa/menu otrzymuje jawny uchwyt do przeniesienia na drugą stronę, a jej elementy otrzymują uchwyty reorderowania tylko wewnątrz tego menu. Ten sam mechanizm działa identycznie, gdy menu jest po lewej lub po prawej stronie. Cały aktywny widok dostaje warstwę dimmingu; element pod hoverem oraz element dragowany odzyskują pełny kolor. `DndContext` obejmuje wyłącznie menu — główna część treści i inne menu nie są strefami dropu. Aktywacja wskaźnika następuje dopiero po przekroczeniu progu około 6 px.
+W trybie edycji cały boczny blok otrzymuje jeden jawny uchwyt/obszar dragowania. Ramka dragowania obejmuje pełną wysokość panelu, od logo do dolnego toolbara. Jego elementy otrzymują osobne uchwyty reorderowania dopiero po przeniesieniu bloku. Ten sam mechanizm działa identycznie po lewej i po prawej stronie. Cały aktywny widok dostaje warstwę dimmingu; blok pod hoverem oraz blok dragowany odzyskują pełny kolor. Główna część treści nie jest strefą dropu.
 
 Podczas przeciągania:
 
 1. element źródłowy przechodzi w stan `dragging`, a jego wizualna kopia jest renderowana w `DragOverlay`;
 2. elementy rodzeństwa pozostają w układzie, ale między nimi pojawia się jedna linia lub strefa upuszczenia opisująca dokładne miejsce wstawienia;
 3. `over` aktualizuje wyłącznie kandydatkę pozycji, bez wywoływania akcji biznesowych i bez zapisu;
-4. `dragEnd` rozstrzyga cel: grupa może zmienić stronę, a element może zmienić kolejność tylko w menu swojej grupy, niezależnie od strony; placeholder pokazuje dozwolone miejsce przed zatwierdzeniem;
+4. `dragEnd` rozstrzyga cel: cały boczny blok może zmienić stronę, a element może zmienić kolejność dopiero wewnątrz tego bloku; placeholder ma rozmiar całego panelu;
 5. `dragCancel`, `pointercancel` lub utrata aktywnego celu przywraca poprzednią kolejność.
 
 Element może zostać wstawiony przed lub za rodzeństwem wyłącznie w menu swojej grupy. Ta reguła jest taka sama po lewej i po prawej stronie. Grupa porusza się jako jeden wpis z całą zawartością między stronami. Nie pokazujemy stref dropu w głównej treści ani między różnymi menu.
@@ -144,7 +144,7 @@ type LayoutRegistry = {
 
 ### Responsywność i grupy
 
-Makiety odtwarzają rzeczywisty pusty ekran Cezara, a nie przykładowy dashboard: sidebar z Tasks/Git/GitHub/Automations/Skills/Workflows/Settings, dolny toolbar, nagłówek Tasks, Active/Archived, wyszukiwarkę i centralny empty state. Pokazują trzy stany: przed ruchem, w trakcie przenoszenia całej grupy na drugą stronę oraz po przeniesieniu, gdy element grupy jest reorderowany wewnątrz menu po właściwej stronie. Główna część treści nie zawiera stref drop.
+Makiety odtwarzają rzeczywisty pusty ekran Cezara i czerwonym obrysem wskazują cały boczny blok: logo/repo, New task, nawigację, Active/Archived, empty state i dolny toolbar. Pokazują trzy stany: przed ruchem, w trakcie przenoszenia całego bloku na drugą stronę oraz po przeniesieniu, gdy element jest reorderowany wewnątrz kompletnego panelu. Główna część treści nie zawiera stref drop.
 
 Makiety HTML: `assets/przesuwanie-elementow/mockup-01-before.html`, `mockup-02-group-dragging.html`, `mockup-03-after-reorder.html`. Render PNG nie został wygenerowany, ponieważ lokalny Chromium kończy się błędem procesu w tym środowisku.
 
@@ -152,7 +152,7 @@ Makiety HTML: `assets/przesuwanie-elementow/mockup-01-before.html`, `mockup-02-g
 
 - Upuszczenie grupy poza dozwoloną stroną/menu: brak zmiany, bez wyjątku dla użytkownika.
 - Upuszczenie elementu na główną część treści albo do menu innej grupy: brak zmiany i brak placeholdera.
-- Drop elementu w menu swojej grupy zmienia wyłącznie kolejność rodzeństwa; działa identycznie po lewej i po prawej stronie.
+- Drop elementu wewnątrz kompletnego przeniesionego panelu zmienia wyłącznie kolejność rodzeństwa; działa identycznie po lewej i po prawej stronie.
 - Drop grupy na drugą stronę zachowuje wszystkie elementy i ich wewnętrzną kolejność.
 - Upuszczenie na własny symbol miejsca docelowego: nic nie zmieniać; nie tworzyć duplikatu ani pustej strefy.
 - Szybkie kliknięcie bez przekroczenia progu: callback przeciągania nie jest wywołany.
@@ -217,7 +217,8 @@ Dodać przeciąganie klawiaturą, komunikaty regionu live oraz pełną macierz n
 - [ ] Cały widok jest wyszarzony w trybie edycji, a hover przywraca pełny kolor wskazanego elementu.
 - [ ] Grupa jest przenoszona jako całość, ale pojedyncze dziecko można wyrwać i przenieść osobno.
 - [ ] Cała grupa może zostać przeniesiona na drugą stronę razem z zawartością.
-- [ ] Element grupy można przesunąć w obrębie własnego menu niezależnie od tego, czy menu jest po lewej, czy po prawej stronie.
+- [ ] Cały blok z czerwonej ramki jest przenoszony jako jedna sekcja: logo/repo, New task, nawigacja, zakładki, empty state i toolbar.
+- [ ] Elementy można reorderować dopiero wewnątrz całego przeniesionego bloku, niezależnie od jego strony.
 - [ ] Główna część treści nie jest powierzchnią dropu dla grup ani elementów.
 - [ ] Symbol miejsca docelowego lub wskaźnik upuszczenia pokazuje dokładny cel podczas przeciągania.
 - [ ] Kliknięcie bez przekroczenia progu nie rozpoczyna przeciągania i nie zmienia kolejności.
