@@ -239,30 +239,10 @@ contract, core's default always stays available, and a replacement that throws w
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
 goes through the same check.
 
-**Status.** The cockpit serves one core contract, `TaskHeaderMain` (below), and renders it through
-its component host. The picker that stores the user's choice is a later item, so until then nobody
-has a preference and core's default renders everywhere: a provided implementation is recorded, and
-renders only once the user can choose it.
-
-**How the host renders your implementation.** The host asks which implementation the user chose,
-passes it the contract's props as they are, and renders it inside its own error boundary, in a box
-sized by the contract's `layout`. If your implementation throws while rendering, or in an effect or
-a lifecycle method, core's default takes its place for that task for the rest of the page load, and
-the user sees one notice naming your implementation ("Jira header stopped working. Showing Cezar's
-default task header."). The rest of the page keeps working. A boundary isolates; it does not
-sandbox: an error in an event handler or a promise is not caught (React unmounts nothing for it, so
-it only reaches the console), and an infinite loop or a component that never stops suspending
-cannot be stopped. If your extension deactivates, core's default takes its place without a notice.
-
-**The task header's main part.** `TaskHeaderMain` (`cezar.task.header.main@1`) is the presentational
-part of the task header: the title, the status and the basic meta. Core renders everything else
-around it and keeps it: the task's actions (the desktop action bar and the phone menu), the tabs,
-the monitoring and dispatch lines, the step rail, the resume hint and the notes panel. So a
-replacement restyles the header, and can never take away control of a task. Its props are
-`{ task: { taskId, projectId, title, status }, meta: { workflow, branch?, diff? }, plan? }`, all
-JSON. `shows-title` and `shows-status` are required, `shows-meta` is optional, and the host
-reserves 30 px (one title row) while an implementation loads, fails or is swapped. Provide it like
-any contract, with an id under your prefix and at least the two required capabilities.
+**Status.** `context.components` records implementations: the cockpit keeps every one per contract,
+with the id of the extension that provided it. Rendering and selection arrive with the slot and
+picker items, so nothing renders a provided implementation yet, and the cockpit serves no core
+contract yet.
 
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a

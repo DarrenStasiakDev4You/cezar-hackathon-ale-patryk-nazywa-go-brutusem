@@ -19,12 +19,6 @@ export {
 } from './components.ts'
 export type { ExtensionContext } from './context.ts'
 export {
-  TaskHeaderMain,
-  type TaskHeaderMainProps,
-  type TaskHeaderMeta,
-  type TaskHeaderTask,
-} from './core-components.ts'
-export {
   TaskArchive,
   TaskContinue,
   TaskStop,

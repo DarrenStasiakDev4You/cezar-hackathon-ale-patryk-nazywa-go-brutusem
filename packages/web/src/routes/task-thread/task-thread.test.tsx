@@ -8,9 +8,6 @@ import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
-import { createCoreComponentRegistry } from '@/component-registry/core-components'
-import { ComponentsProvider } from '@/component-registry/provider'
-import { fakeScope } from '@/extensions/registry.fixtures'
 import type {
   ApiRun,
   HealthResponse,
@@ -18,7 +15,6 @@ import type {
   RunEvent,
   RunStatus,
 } from '@open-mercato/cezar-api-client'
-import { TaskHeaderMain } from '@open-mercato/cezar-extension-api'
 
 import { TaskThreadRoute, ThreadView } from './task-thread'
 import { buildTranscriptRows, mainTranscriptSections } from './session-transcript'
@@ -69,9 +65,7 @@ function renderView(
     ...render(
       <QueryClientProvider client={queryClient}>
         <CommandsProvider>
-          <ComponentsProvider>
-            <MemoryRouter>{ui}</MemoryRouter>
-          </ComponentsProvider>
+          <MemoryRouter>{ui}</MemoryRouter>
         </CommandsProvider>
       </QueryClientProvider>,
     ),
@@ -285,14 +279,12 @@ describe('ThreadView', () => {
     render(
       <QueryClientProvider client={createQueryClient()}>
         <CommandsProvider>
-          <ComponentsProvider>
-            <MemoryRouter>
-              <ThreadView
-                run={run('failed', { autoResumeAt: '2026-08-03T17:00:30.000Z' })}
-                thread={reduceThread(EVENTS)}
-              />
-            </MemoryRouter>
-          </ComponentsProvider>
+          <MemoryRouter>
+            <ThreadView
+              run={run('failed', { autoResumeAt: '2026-08-03T17:00:30.000Z' })}
+              thread={reduceThread(EVENTS)}
+            />
+          </MemoryRouter>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -505,11 +497,9 @@ describe('ThreadView', () => {
     rerender(
       <QueryClientProvider client={createQueryClient()}>
         <CommandsProvider>
-          <ComponentsProvider>
-            <MemoryRouter>
-              <ThreadView run={fixture} thread={thread} />
-            </MemoryRouter>
-          </ComponentsProvider>
+          <MemoryRouter>
+            <ThreadView run={fixture} thread={thread} />
+          </MemoryRouter>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -553,11 +543,9 @@ describe('ThreadView', () => {
       render(
         <QueryClientProvider client={queryClient}>
           <CommandsProvider>
-            <ComponentsProvider>
-              <MemoryRouter>
-                <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
-              </MemoryRouter>
-            </ComponentsProvider>
+            <MemoryRouter>
+              <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
+            </MemoryRouter>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -604,14 +592,12 @@ describe('ThreadView', () => {
       render(
         <QueryClientProvider client={createQueryClient()}>
           <CommandsProvider>
-            <ComponentsProvider>
-              <MemoryRouter>
-                <ThreadView
-                  run={run('done', { steps: [{ id: 'task', kind: 'agent', sessionId: 'sess-1' }] as ApiRun['steps'] })}
-                  thread={reduceThread(EVENTS)}
-                />
-              </MemoryRouter>
-            </ComponentsProvider>
+            <MemoryRouter>
+              <ThreadView
+                run={run('done', { steps: [{ id: 'task', kind: 'agent', sessionId: 'sess-1' }] as ApiRun['steps'] })}
+                thread={reduceThread(EVENTS)}
+              />
+            </MemoryRouter>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -674,19 +660,17 @@ describe('ThreadView', () => {
       render(
         <QueryClientProvider client={createQueryClient()}>
           <CommandsProvider>
-            <ComponentsProvider>
-              <MemoryRouter>
-                <ThreadView
-                  run={run('queued', {
-                    queuedMessages: [
-                      { id: 'm1', text: 'first', createdAt: '2026-07-21T10:00:00.000Z' },
-                      { id: 'm2', text: 'second', createdAt: '2026-07-21T10:01:00.000Z' },
-                    ],
-                  })}
-                  thread={reduceThread([])}
-                />
-              </MemoryRouter>
-            </ComponentsProvider>
+            <MemoryRouter>
+              <ThreadView
+                run={run('queued', {
+                  queuedMessages: [
+                    { id: 'm1', text: 'first', createdAt: '2026-07-21T10:00:00.000Z' },
+                    { id: 'm2', text: 'second', createdAt: '2026-07-21T10:01:00.000Z' },
+                  ],
+                })}
+                thread={reduceThread([])}
+              />
+            </MemoryRouter>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -738,9 +722,7 @@ describe('ThreadView', () => {
       const { rerender } = render(
         <QueryClientProvider client={queryClient}>
           <CommandsProvider>
-            <ComponentsProvider>
-              <MemoryRouter>{view('r1')}</MemoryRouter>
-            </ComponentsProvider>
+            <MemoryRouter>{view('r1')}</MemoryRouter>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -752,9 +734,7 @@ describe('ThreadView', () => {
       rerender(
         <QueryClientProvider client={queryClient}>
           <CommandsProvider>
-            <ComponentsProvider>
-              <MemoryRouter>{view('r2')}</MemoryRouter>
-            </ComponentsProvider>
+            <MemoryRouter>{view('r2')}</MemoryRouter>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -1176,13 +1156,11 @@ function renderRoute(id: string) {
   render(
     <QueryClientProvider client={createQueryClient()}>
       <CommandsProvider>
-        <ComponentsProvider>
-          <MemoryRouter initialEntries={[`/tasks/${id}`]}>
-            <Routes>
-              <Route path="/tasks/:id" element={<TaskThreadRoute />} />
-            </Routes>
-          </MemoryRouter>
-        </ComponentsProvider>
+        <MemoryRouter initialEntries={[`/tasks/${id}`]}>
+          <Routes>
+            <Route path="/tasks/:id" element={<TaskThreadRoute />} />
+          </Routes>
+        </MemoryRouter>
       </CommandsProvider>
     </QueryClientProvider>,
   )
@@ -1315,13 +1293,11 @@ describe('TaskThreadRoute — read receipts', () => {
     const view = render(
       <QueryClientProvider client={queryClient}>
         <CommandsProvider>
-          <ComponentsProvider>
-            <MemoryRouter initialEntries={[`/tasks/${id}`]}>
-              <Routes>
-                <Route path="/tasks/:id" element={<TaskThreadRoute />} />
-              </Routes>
-            </MemoryRouter>
-          </ComponentsProvider>
+          <MemoryRouter initialEntries={[`/tasks/${id}`]}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskThreadRoute />} />
+            </Routes>
+          </MemoryRouter>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -1383,74 +1359,5 @@ describe('TaskThreadRoute — read receipts', () => {
     visit('r1')
     await waitFor(() => expect(posted(sent, '/api/v1/runs/r1/read')).toBe(1))
     expect(await screen.findByRole('button', { name: 'Mark unread' })).not.toBeNull()
-  })
-})
-
-describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-component-host)', () => {
-  it('renders the title and meta rows through the component host, as core’s default', () => {
-    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
-
-    const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
-    expect(box?.dataset.contract).toBe('cezar.task.header.main')
-    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
-    expect(box?.dataset.state).toBe('resolved')
-    expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
-    expect(box?.querySelector('[data-slot="run-meta"]')).not.toBeNull()
-  })
-
-  it('shows core’s title row when a chosen extension header throws, and the task stays usable', () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const registry = createCoreComponentRegistry({ onDiagnostic: () => {} })
-    const BrokenHeader = (): never => {
-      throw new Error('Jira is down')
-    }
-    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeaderMain, {
-      id: 'acme.jira.task-header',
-      title: 'Jira header',
-      capabilities: ['shows-title', 'shows-status'],
-      component: BrokenHeader,
-    })
-    const onImplementationError = vi.fn()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((input: RequestInfo | URL) =>
-        Promise.resolve(
-          new Response(String(input) === '/api/v1/health' ? '{}' : '[]', {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          }),
-        ),
-      ),
-    )
-
-    render(
-      <QueryClientProvider client={createQueryClient()}>
-        <CommandsProvider>
-          <ComponentsProvider
-            registry={registry}
-            preferenceOf={(contractId) => (contractId === TaskHeaderMain.id ? 'acme.jira.task-header' : null)}
-            onImplementationError={onImplementationError}
-          >
-            <MemoryRouter>
-              <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
-            </MemoryRouter>
-          </ComponentsProvider>
-        </CommandsProvider>
-      </QueryClientProvider>,
-    )
-
-    const header = document.querySelector<HTMLElement>('[data-slot="run-header"]')!
-    const box = header.querySelector<HTMLElement>('[data-slot="component-host"]')
-    expect(box?.dataset.state).toBe('fallback')
-    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
-    expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
-    expect(onImplementationError).toHaveBeenCalledTimes(1)
-    // The task's controls, the thread and the composer are all still there.
-    expect(header.querySelector('[data-slot="run-actions"]')?.textContent).toContain('Notes')
-    expect(header.querySelector('[data-slot="run-tabs"]')?.textContent).toContain('Changes')
-    expect(document.querySelectorAll('[data-slot="user-bubble"]')).toHaveLength(2)
-    const composer = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
-    expect(composer.disabled).toBe(false)
-    consoleError.mockRestore()
   })
 })

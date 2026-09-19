@@ -321,11 +321,8 @@ export interface ComponentHostProps<P> {
   readonly props: P
 }
 
-export function ComponentHost<P extends object>(props: ComponentHostProps<P>): ReactElement
+export function ComponentHost<P>(props: ComponentHostProps<P>): ReactElement
 ```
-
-*(Corrected in the implementation PR: `P extends object`, because `createElement` needs an object
-of props; every contract's props are one.)*
 
 ### Hosting, precisely
 
@@ -340,12 +337,7 @@ of props; every contract's props are one.)*
 5. **Render.** The box, then `<ImplementationBoundary key={current.componentId + ':' + retry}
    fallback={…}>`, then `<Suspense fallback={null}>`, then `createElement(current.component,
    props)`. `retry` is the host's own counter (step 7). The box keeps its reserved size while the
-   implementation suspends. A new `subject` clears a failed boundary without remounting a healthy
-   one (react-error-boundary's `resetKeys` rule), so the next task tries core's default again, and
-   the box's `failed` state belongs to one key and subject only. The boundary that renders core's
-   default at once (step 6) reports nothing: the host re-keys to core's default straight away, and
-   that boundary reports if core's default throws too, so step 7 writes one line. *(Corrected in
-   the implementation PR, from the review of #32.)*
+   implementation suspends.
 6. **An implementation throws** while rendering, or in an effect or lifecycle method.
    `getDerivedStateFromError` only flips the boundary to its failed state, because React may call
    it during render. When `current` is not `resolution.fallback`, the failed boundary renders the
@@ -469,12 +461,7 @@ failure states (their `.html` sources sit beside them). The dashed outline marks
   only intended visual difference.
 - **The entry bundle.** `registerCoreComponents` imports `CoreTaskHeaderMain` eagerly into
   `main.tsx`'s chunk. The module holds only the two rows, so the markdown stack stays in the task
-  chunks. A build check guards it (step 4). *(Corrected in the implementation PR: the build puts
-  `CoreTaskHeaderMain` in a shared chunk the entry imports statically, not in the entry file, and
-  the markdown stack already reaches the first paint by another path: the New task form's skill
-  detail renders markdown (`routes.tsx` → `new-task.tsx` → `source-pill.tsx` → `skill-detail.tsx`
-  → `markdown.tsx`). So the check guards what this item adds: core's defaults load with the first
-  paint, and their own static imports reach neither `streamdown` nor `run-header.tsx`.)*
+  chunks. A build check guards it (step 4).
 - **A core-only side channel.** The context gives core's default the page's `run` and the engine
   picker, which no extension gets. This is deliberate: the run record is not a public contract,
   and the engine picker is a core `ReactNode` that the dock also shows.
@@ -482,9 +469,7 @@ failure states (their `.html` sources sit beside them). The dashed outline marks
   `ComponentsProvider`. As far as the existing `CommandsProvider` wrappers show, that is
   `run-header.test.tsx`, `task-thread.test.tsx`, `task-changes.test.tsx`, `task-files.test.tsx`,
   `deliver-prompt.test.tsx`, `follow-up-engine.test.tsx`, `review-panel.test.tsx`,
-  `cross-project-task-navigation.test.tsx` and `routes.test.tsx`. *(Corrected in the
-  implementation PR: only the first four and `review-panel.test.tsx` render `RunHeader` outside
-  `App`; the others render `App`, which provides it, or no task page.)*
+  `cross-project-task-navigation.test.tsx` and `routes.test.tsx`.
 - **What a boundary cannot catch** (loops, handlers, async) is written down here and in the README,
   so nobody reads "isolated" as "sandboxed".
 - **Rollback.** Revert the phase 2 PR, or both. Nothing is persisted, the HTTP contract does not
@@ -574,11 +559,7 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - with a preference for a fixture extension implementation, `RunHeader` renders it, and the
      action bar and tabs are still there;
    - the build: `main.tsx`'s entry chunk contains `CoreTaskHeaderMain` but not the markdown stack
-     (`streamdown`) or `run-header`, checked against the Vite manifest. *(Corrected in the
-     implementation PR: `entryChunkGuard` in `vite.config.ts` fails `vite build` unless
-     `CoreTaskHeaderMain` is in the entry chunk or a chunk it imports statically, and its static
-     imports reach neither; see § Risks, "The entry bundle". It reads the chunk graph the manifest
-     is written from, so no manifest ships in the tarball.)*
+     (`streamdown`) or `run-header`, checked against the Vite manifest.
 
 5. **The boundary test and the failure path on a real page.**
    *Tests:*
