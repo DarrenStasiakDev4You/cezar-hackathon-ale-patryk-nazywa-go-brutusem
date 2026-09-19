@@ -91,3 +91,8 @@ PR: #25
 - [x] 3.2 Task events in the cockpit: tokens, taskEventsFor, EventBusProvider, the stream relay — beeebda5
 - [x] 3.3 Project reporter: ProjectChanged and ProjectChangeReporter — b3568aed
 - [x] 3.4 PR 2 docs: README core events table and AGENTS.md rows — 82411c93
+
+### Post-review fixes
+
+- [x] Post-review fix: mount ProjectChangeReporter beside LastLocationController (no route-table re-indent), with route-map tests for `/p/default` and legacy URLs — 69636245
+- [x] Post-review fix: boot-recovery and auto-resume claims corrected, the cache-timing claim reworded, the App-level bus wiring pinned, and the test gaps closed — 9c2e225f
