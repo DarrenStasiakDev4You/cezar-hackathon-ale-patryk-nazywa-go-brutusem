@@ -3,7 +3,10 @@ import {
   type ComponentProps,
 } from '@open-mercato/cezar-extension-api'
 
-const Greeting = defineComponentContract<{ name: string }>('example.hello.greeting', { version: 1 })
+const Greeting = defineComponentContract<{ name: string }>('example.hello.greeting', {
+  version: 1,
+  requiredCapabilities: ['greets-by-name'],
+})
 const SayHello = defineCommand<[name: string], string>('example.hello.say-hello')
 const Greeted = defineEvent<{ name: string; count: number }>('example.hello.greeted')
 
@@ -20,7 +23,7 @@ export default defineExtension({
       return `Hello, ${name}!`
     }, { title: 'Hello: say hello' })
     context.components.provide(Greeting, {
-      id: 'example.hello.loud', title: 'Loud greeting', component: LoudGreeting,
+      id: 'example.hello.loud', title: 'Loud greeting', capabilities: ['greets-by-name'], component: LoudGreeting,
     })
   },
 })

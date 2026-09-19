@@ -23,7 +23,6 @@ export function EditModeControl({ enabled, onEnabledChange }: EditModeControlPro
           type="button"
           size="sm"
           variant="outline"
-          data-edit-mode-action="allow"
           data-slot="edit-mode-exit"
           data-edit-mode-action="allow"
           className="border-border bg-card font-bold text-foreground hover:bg-muted"

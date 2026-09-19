@@ -319,8 +319,10 @@ required set. Without the gate, a single mismatch would bury the one real issue 
 
    A value that is not an object, a field that throws when read (a getter or a revoked proxy), or
    a list that is not an array of strings produces `malformed` at that field's own path (for
-   example `implementation.capabilities[1]`, or `contract` for a non-object). Any `malformed`
-   issue ends the check; nothing else is compared.
+   example `implementation.capabilities[1]`, or `contract` for a non-object). A list is read up to
+   256 names: a longer one, or a `length` that lies, is `malformed` at the list's path without
+   being walked, and a list reports at most one `malformed`. Any `malformed` issue ends the check;
+   nothing else is compared.
 2. `implemented.id !== contract.id` → `contract-id-mismatch`, and stop.
 3. `implemented.version !== contract.version` → `contract-version-mismatch` with both numbers,
    and stop.

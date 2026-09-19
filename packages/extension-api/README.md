@@ -4,8 +4,10 @@
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
 > extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands` is
 > honoured (spec `2026-09-19-command-api`); events, storage and components arrive in later items,
-> and every host item may still revise these types in the PR that implements them. The package is
-> versioned with the release but not published to npm.
+> and every host item may still revise these types in the PR that implements them. Component
+> contracts are already checkable — `checkComponentCompatibility` runs anywhere, in your own tests
+> too (spec `2026-09-19-component-contract-api`) — while `context.components` is still
+> unimplemented. The package is versioned with the release but not published to npm.
 > Design: `.ai/specs/2026-09-18-extension-api-package.md`.
 
 The one package an extension imports. It holds the vocabulary Cezar and its extensions share —
@@ -157,12 +159,76 @@ what you read (the example does). Like all Cezar state it may be deleted; work f
 
 ### Replacing a component
 
-`context.components.provide(contract, { id, title, component })` offers an implementation of a
-core contract. The contract's props **are** the functional contract, callbacks included, and the
-implementation must take exactly those props. Providing never selects: the user picks an
-implementation per contract, core's default always stays available, and a replacement that throws
-while rendering falls back to it. An implementation is bound to the contract `version` it was
-compiled against; a host on another major ignores it (`contract-version-mismatch`).
+`context.components.provide(contract, { id, title, capabilities?, component })` offers an
+implementation of a core contract. Providing never selects: the user picks an implementation per
+contract, core's default always stays available, and a replacement that throws while rendering
+falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
+goes through the same check.
+
+A contract made with `defineComponentContract<Props>(id, options)` has three parts:
+
+- **Props**, the typed half. The implementation must take exactly those props, callbacks included;
+  the TSDoc on each prop states what it promises. Data props are JSON view models declared in this
+  package, and only callbacks are functions.
+- **Capabilities**, the behaviours types cannot prove (`restores-draft`). `requiredCapabilities`
+  are the ones every implementation must declare; `optionalCapabilities` are the ones it may
+  declare, and the host relies on one only for an implementation that declares it (otherwise it
+  hides that feature, for example). An implementation lists what it honours in `capabilities`;
+  names the contract does not know are ignored. Names are one or more dot-separated segments of
+  `[a-z0-9][a-z0-9-]*`, at most 64 characters, unique, and at most 32 across both lists.
+- **Layout**, optional and advisory: the box the host gives every implementation.
+  `sizing: 'content' | 'fill'` (`fill` means stretch into the remaining space), `sticky: 'top' |
+  'bottom'`, and `minBlockSize`, the pixels (0–2048) the host reserves so the page does not shift.
+  The host keeps the breakpoints. Unknown keys are rejected.
+
+`defineComponentContract` validates all of it at module load and throws `invalid-id` with every
+issue. Capabilities are **declared, not verified**: the check below compares declarations, and a
+behaviour that is wrong without throwing is the implementation author's responsibility.
+
+**Checking an implementation.** `checkComponentCompatibility(contract, implementation, implemented?)`
+never throws and never touches React. It returns `{ compatible, issues, capabilities }`. `issues`
+holds whatever stops the check first: every `malformed` field (at most one per capability list,
+and a list over 256 names is not read), else one `contract-id-mismatch`, else one
+`contract-version-mismatch`, else every `missing-capability` at once. `capabilities` is what the
+host may rely on: the required ones plus the optional ones you declare. The host passes its own
+token, your implementation and the token `provide` received; in your tests the third argument
+defaults to the contract. From the example extension (`examples/hello-extension/index.ts`):
+
+```ts
+const Greeting = defineComponentContract<{ name: string }>('example.hello.greeting', {
+  version: 1,
+  requiredCapabilities: ['greets-by-name'],
+})
+// …in activate(context):
+context.components.provide(Greeting, {
+  id: 'example.hello.loud', title: 'Loud greeting', capabilities: ['greets-by-name'], component: LoudGreeting,
+})
+```
+
+and its test (`test/example.test.ts`), which checks it as a host does:
+
+```ts
+const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
+expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['greets-by-name'] })
+```
+
+A contract is named `id@version` (`example.hello.greeting@1`) in docs, messages and issues.
+
+#### When `version` changes
+
+A contract's major version is part of the public API. An implementation is bound to the major of
+the token it was compiled against, and a host serves one major per contract: on another major it
+ignores the implementation (`contract-version-mismatch`) rather than render it with the wrong
+props. There are no version ranges. Until the package is published the release notes are the only
+notice; at publication each core contract is listed with its major in `BACKWARD_COMPATIBILITY.md`.
+
+| Change to a contract | Bump the major? |
+| --- | --- |
+| Remove, rename or narrow a prop; make an optional prop required; add a required prop | **Yes** |
+| Change when a callback is called, or what it promises | **Yes** |
+| Add a required capability, or promote an optional one to required | **Yes**: existing implementations may not declare it |
+| Change `layout.sizing` | **Yes**: an implementation built for its own size must now stretch, or the reverse |
+| Add an optional prop; add or remove an optional capability; demote a required capability to optional; change `sticky` or `minBlockSize`; clarify TSDoc | No |
 
 ### Errors
 
