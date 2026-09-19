@@ -63,6 +63,17 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - `npm run test:package`: 1 passed, 4 existing CLI/release tests failed.
 - Browser QA and authoritative review remain the outstanding 3.2 handoff because the seeded interaction matrix is still unavailable and the full gate remains non-green.
 
+### Environment-fix continuation — 2026-09-19
+
+- Added deterministic WSL path-test isolation, a Node 25/jsdom localStorage shim, and explicit headroom for the two suites that exceed Vitest's default timeout only under the full parallel gate. — d558a5ce
+- `npm test`: passed — 416 files, 7715 tests.
+- `npm run typecheck`: passed.
+- `npm run build`: passed, including `check:pack` (534 files; 89 web assets).
+- `npm run test:unit`: passed — 36 tests.
+- `npm run test:package`: passed — 16 tests.
+- Focused layout regression tests: passed — 3 files, 16 tests.
+- The only remaining handoff is 3.2: seeded browser QA and authoritative review for the edit-mode interaction matrix.
+
 ## Risks
 
 - The handle must retain a minimum 44px target and not steal ordinary widget clicks or touch scrolling.
