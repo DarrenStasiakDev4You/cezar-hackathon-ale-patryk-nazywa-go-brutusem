@@ -31,6 +31,8 @@ Every Task UI path that continues or archives a task goes through the command re
 
 ## Progress
 
+PR: #17
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: The continue input and the helpers
