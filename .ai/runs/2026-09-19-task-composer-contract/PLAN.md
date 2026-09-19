@@ -20,7 +20,7 @@ Base: `origin/main` at `15d8a723`
 | 2 | 2.1 | Make attachment and engine capabilities optional and render core fallbacks beside replacements | group:B | done | 2ed893fe |
 | 2 | 2.2 | Add the plain external Task Composer example and boundary tests | group:B | done | 85f97920 |
 | 2 | 2.3 | Prove an external composer on the task page | group:B | done | 6401ead5 |
-| 2 | 2.4 | Complete README and AGENTS documentation for the composer contract | dispatch:cheap | done | pending |
+| 2 | 2.4 | Complete README and AGENTS documentation for the composer contract | dispatch:cheap | done | e63e0e1a |
 
 ## Goal
 
