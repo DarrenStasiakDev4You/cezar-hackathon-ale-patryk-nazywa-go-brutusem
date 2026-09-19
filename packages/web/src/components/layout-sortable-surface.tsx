@@ -11,7 +11,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core'
-import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 
 import { useLayoutRegistry, useLayoutSnapshot } from '@/components/layout-registry'
 import { isEditModeActive } from '@/components/edit-mode-interaction-guard'
@@ -136,7 +136,7 @@ export function LayoutSortableSurface({ children, enabled, className, renderOver
         onDragEnd={isEnabled ? finishDrag : undefined}
         onDragCancel={isEnabled ? handleDragCancel : undefined}
       >
-        <SortableContext items={snapshot.map((element) => element.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={snapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
           <div
             className={className}
             data-slot="layout-sortable-surface"
