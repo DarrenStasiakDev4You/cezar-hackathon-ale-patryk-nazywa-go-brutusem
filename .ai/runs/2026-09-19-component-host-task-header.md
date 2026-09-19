@@ -92,9 +92,14 @@ The spec decides on one spec, two phases, two stacked PRs (spec Q1). **This run 
   not pull in the markdown stack; the build check guards it.
 - Test churn: every wrapper that renders `RunHeader` or a task route needs `ComponentsProvider`
   inside `CommandsProvider`.
+- On phones, the actions menu now comes after the (expanded) meta row in focus and screen-reader
+  order, where it used to come right after the details toggle. That follows from the spec's layout
+  (the menu beside the slot), and the QA pass checked it.
 - The gate runs in Docker through the main checkout's untracked `in-docker.sh`.
 
 ## Progress
+
+PR: #33
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
