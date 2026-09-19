@@ -419,9 +419,10 @@ that declares `shows-meta`, the page shows that header alone, without the slot o
 Accessibility: the row keeps its markup, labels and keyboard behavior, because the code moves
 unchanged. The chevron's `aria-controls` points at the wrapper, as today. Both now live in the shell.
 
-Prototype: `.ai/specs/assets/task-metadata-contract/`. `current-01-task-header.png` is today's
-task page, reused from `assets/task-header-contract/` (captured on 2026-09-19; `run-header.tsx` on
-`main` has not changed since). `mockup-01-two-parts.png` shows the default page with the two
+Prototype: `.ai/specs/assets/task-metadata-contract/`. `current-01-task-header.png` is the task
+page, reused from `assets/task-header-contract/`. It was captured on 2026-09-19 before #37 merged.
+#37 kept the default page's title and meta rows as they were (item 11 § UI/UX lists its five
+differences, none in these two rows), and no new capture was taken for this spec. `mockup-01-two-parts.png` shows the default page with the two
 hosts' boxes outlined, at desktop and phone width. `mockup-02-plain-metadata.png` shows the plain
 example under core's title part, and under the compact header. The `.html` sources sit beside
 them. The dashed outlines mark the hosts' boxes and are not part of the design.
