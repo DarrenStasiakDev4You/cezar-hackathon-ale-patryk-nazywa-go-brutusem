@@ -10,7 +10,7 @@ import type { LayoutElementKind } from '@/lib/layout-elements'
 export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
   id: string
   kind: LayoutElementKind
-  parentId?: string
+  parentId?: string | null
   as?: 'article' | 'div' | 'section'
   /** Use a stable draggable/droppable node for full shell containers instead of sortable transforms. */
   dragMode?: LayoutDragMode
@@ -25,7 +25,8 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
   const draggable = useDraggable({ id, disabled: !enabled || dragMode !== 'container' })
   const droppable = useDroppable({ id, disabled: !enabled || dragMode !== 'container' })
   const removed = registry.isRemoved(id)
-  const order = registry.get(id)?.order ?? -1
+  const registered = registry.get(id)
+  const order = registered?.order ?? -1
   const nodeRef = React.useRef<HTMLElement | null>(null)
 
   const setNodeRef = React.useCallback((node: HTMLElement | null) => {
@@ -48,7 +49,7 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
       detach?.()
       unregister()
     }
-  }, [id, kind, parentId, registry])
+  }, [id, kind, registry])
 
   if (removed) return null
 
@@ -76,7 +77,7 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
       'data-layout-drag-mode': dragMode,
       'data-layout-dragging': isDragging ? 'true' : 'false',
       'data-layout-placeholder': activePlaceholder?.visible ? 'true' : undefined,
-      ...(parentId === undefined ? {} : { 'data-layout-parent-id': parentId }),
+      ...(registered?.parentId ? { 'data-layout-parent-id': registered.parentId } : {}),
     },
     enabled ? (
       <button

@@ -307,7 +307,7 @@ export const AppShell = React.memo(function AppShell({
   const [shellLayout, setShellLayout] = React.useState<Record<string, string[]>>({
     root: ['shell-sidebar', 'shell-main'],
   })
-  const handleShellLayoutChange = React.useCallback((snapshot: Array<{ id: string; parentId?: string; order: number }>) => {
+  const handleShellLayoutChange = React.useCallback((snapshot: Array<{ id: string; parentId: string | null; order: number }>) => {
     const next: Record<string, string[]> = { root: [] }
     for (const element of snapshot) {
       if (element.id !== 'shell-sidebar' && element.id !== 'shell-main') continue

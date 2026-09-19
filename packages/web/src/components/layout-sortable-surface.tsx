@@ -69,7 +69,7 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
   const { activeId } = useLayoutSortableContext()
   const registry = useLayoutRegistry()
   const activeElement = activeId ? registry.get(activeId) : undefined
-  const acceptsGroup = activeElement?.kind === 'group'
+  const acceptsLayoutNode = Boolean(activeElement)
   return (
     <div
       className={className}
@@ -77,11 +77,11 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
       <div
         ref={setNodeRef}
         aria-hidden="true"
-        className={acceptsGroup
+        className={acceptsLayoutNode
           ? `pointer-events-auto ${hitAreaClassName ?? 'absolute inset-0 z-30 bg-primary/5'}`
           : 'pointer-events-none absolute inset-0'}
         data-layout-drop-zone={id}
-        data-layout-drop-active={acceptsGroup && isOver ? 'true' : 'false'}
+        data-layout-drop-active={acceptsLayoutNode && isOver ? 'true' : 'false'}
       />
       {children}
     </div>
@@ -248,9 +248,6 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   const sourceIndex = siblings.indexOf(source.id)
   const targetIndex = siblings.indexOf(target.id)
   const sameParent = source.parentId === target.parentId
-  // Ordinary elements are reorderable only among their current siblings. Groups are the
-  // explicit cross-menu affordance; their complete subtree moves together.
-  if (!sameParent && source.kind !== 'group') return null
   if (sameParent && (sourceIndex < 0 || targetIndex < 0)) return null
 
   return {
@@ -259,6 +256,22 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
     position: sameParent && sourceIndex < targetIndex ? 'after' : 'before',
     ...(sameParent ? {} : { parentId: target.parentId ?? null }),
   }
+}
+
+function applyLayoutMove(registry: LayoutRegistry, move: LayoutMove): boolean {
+  const source = registry.get(move.id)
+  if (!source) return false
+  const destinationParent = move.parentId !== undefined
+    ? move.parentId
+    : registry.get(move.targetId ?? '')?.parentId ?? source.parentId
+  const siblings = registry.getSiblingIds(destinationParent)
+  const available = source.parentId === destinationParent
+    ? siblings.filter((id) => id !== source.id)
+    : siblings
+  const targetIndex = move.targetId === null
+    ? available.length
+    : available.indexOf(move.targetId) + (move.position === 'after' ? 1 : 0)
+  return targetIndex >= 0 && registry.moveNode(source.id, destinationParent, targetIndex)
 }
 
 export function LayoutSortableSurface({
@@ -364,17 +377,13 @@ export function LayoutSortableSurface({
     const activePlaceholder = placeholderRef.current
     if (dragMode === 'container' && activePlaceholder?.visible && activePlaceholder.placement) {
       const siblings = registry.getSiblingIds(source?.parentId)
-      const destinationId = activePlaceholder.placement === 'before' ? siblings.find((id) => id !== sourceId) : [...siblings].reverse().find((id) => id !== sourceId)
-      if (destinationId) {
-        moved = registry.moveToParent({
-          id: sourceId,
-          targetId: destinationId,
-          position: activePlaceholder.placement,
-        })
-      }
+      const availableCount = siblings.filter((id) => id !== sourceId).length
+      moved = source
+        ? registry.moveNode(sourceId, source.parentId, activePlaceholder.placement === 'before' ? 0 : availableCount)
+        : false
     } else if (targetId) {
       if (targetId.startsWith('layout-zone:')) {
-        if (source?.kind !== 'group') {
+        if (!source) {
           setActiveId(null)
           setOverId(null)
           setActiveGeometry(null)
@@ -384,15 +393,10 @@ export function LayoutSortableSurface({
           return
         }
         const parentId = targetId.slice('layout-zone:'.length)
-        moved = registry.moveToParent({
-          id: sourceId,
-          targetId: null,
-          position: 'after',
-          parentId: parentId === 'root' ? null : parentId,
-        })
+        moved = registry.moveNode(sourceId, parentId === 'root' ? null : parentId, registry.getSiblingIds(parentId === 'root' ? null : parentId).length)
       } else {
         const move = resolveLayoutMove(registry, sourceId, targetId)
-        if (move) moved = registry.moveToParent(move)
+        if (move) moved = applyLayoutMove(registry, move)
       }
     }
 

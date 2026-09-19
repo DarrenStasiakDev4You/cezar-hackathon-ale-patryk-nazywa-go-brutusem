@@ -131,7 +131,7 @@ describe('LayoutRegistry', () => {
     expect(registry.getSiblingIds('right')).toEqual(['card', 'other'])
 
     expect(registry.moveToParent({ id: 'card', targetId: 'right', position: 'before', parentId: null })).toBe(true)
-    expect(registry.get('card')?.parentId).toBeUndefined()
+    expect(registry.get('card')?.parentId).toBeNull()
     expect(registry.getSiblingIds()).toEqual(['left', 'card', 'right'])
   })
 
@@ -159,7 +159,46 @@ describe('LayoutRegistry', () => {
     expect(registry.getSiblingIds('right')).toEqual(['sidebar', 'content'])
   })
 
-  it('removes one element or its complete subtree in one update', () => {
+  it('supports the atomic tree operations across several levels', () => {
+    const registry = new LayoutRegistry()
+    expect(registry.createNode({ id: 'root', kind: 'group' })).toEqual({
+      id: 'root',
+      parentId: null,
+      children: [],
+      kind: 'group',
+    })
+    registry.createNode('left', 'group', 'root')
+    registry.createNode('right', 'group', 'root')
+    registry.createNode('a', 'widget', 'left')
+    registry.createNode('b', 'widget', 'left')
+    registry.createNode('c', 'widget', 'right')
+
+    // Move between parents and then make a node the new parent.
+    expect(registry.moveNode('b', 'right', 0)).toBe(true)
+    expect(registry.get('b')).toMatchObject({ parentId: 'right' })
+    expect(registry.getSiblingIds('left')).toEqual(['a'])
+    expect(registry.getSiblingIds('right')).toEqual(['b', 'c'])
+    expect(registry.moveNode('c', 'b', 0)).toBe(true)
+    expect(registry.get('c')).toMatchObject({ parentId: 'b' })
+    expect(registry.get('b')?.children).toEqual(['c'])
+
+    // Sort siblings at two levels without changing parent links.
+    expect(registry.reorderNode('a', 0)).toBe(false)
+    expect(registry.reorderNode('right', 0)).toBe(true)
+    expect(registry.getSiblingIds('root')).toEqual(['right', 'left'])
+    expect(registry.moveNode('right', null, 0)).toBe(true)
+    expect(registry.getSiblingIds()).toEqual(['right', 'root'])
+    expect(registry.getSiblingIds('root')).toEqual(['left'])
+    expect(registry.getSiblingIds('left')).toEqual(['a'])
+    expect(registry.get('c')?.parentId).toBe('b')
+
+    // Self and descendant targets are rejected without changing the tree.
+    expect(registry.moveNode('root', 'root', 0)).toBe(false)
+    expect(registry.moveNode('b', 'c', 0)).toBe(false)
+    expect(registry.getSiblingIds()).toEqual(['right', 'root'])
+  })
+
+  it('removes a child, the last child, or a parent subtree without removing its parent accidentally', () => {
     const registry = new LayoutRegistry()
     registry.register({ id: 'root', kind: 'group' })
     registry.register({ id: 'child', kind: 'widget', parentId: 'root' })
@@ -169,13 +208,23 @@ describe('LayoutRegistry', () => {
     let notifications = 0
     registry.subscribe(() => notifications++)
 
-    expect(registry.removeSubtree('nested')).toBe(true)
-    expect(registry.getSnapshot().map((item) => item.id)).toEqual(['root', 'child', 'sibling'])
+    expect(registry.removeNode('child')).toBe(true)
+    expect(registry.get('root')).toMatchObject({ children: ['nested'] })
+    expect(registry.removeNode('nested')).toBe(true)
+    expect(registry.getSnapshot().map((item) => item.id)).toEqual(['root', 'sibling'])
+    expect(registry.get('root')).toMatchObject({ children: [] })
     expect(registry.get('nested')).toBeUndefined()
     expect(registry.get('grandchild')).toBeUndefined()
-    expect(registry.getSiblingIds('root')).toEqual(['child'])
-    expect(notifications).toBe(1)
+    expect(registry.getSiblingIds('root')).toEqual([])
+    expect(notifications).toBe(2)
     expect(registry.isRemoved('nested')).toBe(true)
-    expect(registry.removeSubtree('unknown')).toBe(false)
+    expect(registry.isRemoved('grandchild')).toBe(true)
+    expect(registry.removeNode('unknown')).toBe(false)
+
+    registry.register({ id: 'new-child', kind: 'widget', parentId: 'root' })
+    expect(registry.removeSubtree('root')).toBe(true)
+    expect(registry.get('root')).toBeUndefined()
+    expect(registry.get('new-child')).toBeUndefined()
+    expect(registry.get('sibling')).toBeDefined()
   })
 })

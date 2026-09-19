@@ -138,7 +138,7 @@ describe('LayoutSortableSurface', () => {
     expect(state).toEqual({ visible: true, placement: null, order: null })
   })
 
-  it('resolves same-parent targets and limits cross-parent movement to groups', () => {
+  it('resolves same-parent and cross-parent targets for every registered node', () => {
     const registry = new LayoutRegistry()
     registry.register({ id: 'first', kind: 'widget' })
     registry.register({ id: 'second', kind: 'widget' })
@@ -149,7 +149,12 @@ describe('LayoutSortableSurface', () => {
 
     expect(resolveLayoutMove(registry, 'first', 'second')).toEqual({ id: 'first', targetId: 'second', position: 'after' })
     expect(resolveLayoutMove(registry, 'second', 'first')).toEqual({ id: 'second', targetId: 'first', position: 'before' })
-    expect(resolveLayoutMove(registry, 'first', 'child')).toBeNull()
+    expect(resolveLayoutMove(registry, 'first', 'child')).toEqual({
+      id: 'first',
+      targetId: 'child',
+      position: 'before',
+      parentId: 'group',
+    })
     expect(resolveLayoutMove(registry, 'group', 'other-child')).toEqual({
       id: 'group',
       targetId: 'other-child',
