@@ -75,4 +75,4 @@ and fit. The spec's Q1–Q4 decisions are owner-confirmed and followed as writte
 
 ### Phase 3: Documentation
 
-- [ ] 3.1 Extension API docs and routing
+- [x] 3.1 Extension API docs and routing — 890db1e3
