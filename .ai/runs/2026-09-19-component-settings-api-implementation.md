@@ -33,20 +33,24 @@ avoid painting values from a previous implementation or project after an async s
 
 ### Phase 1: Extension contract and in-memory registry
 
-- [ ] 1.1 Add the declarative settings API and boundary/type coverage.
-- [ ] 1.2 Snapshot settings definitions and implement host read/write/reset semantics.
+- [x] 1.1 Add the declarative settings API and boundary/type coverage. — d0df71bc
+- [x] 1.2 Snapshot settings definitions and implement host read/write/reset semantics. — d0df71bc
 
 ### Phase 2: Scope-aware durable store
 
-- [ ] 2.1 Extend workspace and project UI-state contracts additively.
-- [ ] 2.2 Implement the global/project UI-state adapter and wire the default boot path.
+- [x] 2.1 Extend workspace and project UI-state contracts additively. — d0df71bc
+- [x] 2.2 Implement the global/project UI-state adapter and wire the default boot path. — d0df71bc
 
 ### Phase 3: Component host integration
 
-- [ ] 3.1 Expose the implementation-specific settings reader in `ComponentHost`.
-- [ ] 3.2 Cover switching, project scope, fallback and async failure behavior.
+- [x] 3.1 Expose the implementation-specific settings reader in `ComponentHost`. — d0df71bc
+- [x] 3.2 Cover switching, project scope, fallback and async failure behavior. — d7bdd934
 
 ### Phase 4: Documentation and validation
 
-- [ ] 4.1 Document the durable contract and compatibility surface.
-- [ ] 4.2 Run the full configured validation gate and focused suites.
+- [x] 4.1 Document the durable contract and compatibility surface. — d0df71bc
+- [x] 4.2 Run the full configured validation gate and focused suites. — d7bdd934
+
+Validation: `npm run typecheck`, `npm test` (433 files / 8,140 tests), `npm run test:unit`,
+`npm run build`, and `npm run test:package` all pass. Focused extension-api and component-registry
+suites also pass. No browser QA is required: the spec adds no visible settings UI or new route.
