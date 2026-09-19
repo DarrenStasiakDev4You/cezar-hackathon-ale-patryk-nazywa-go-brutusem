@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  checkComponentCompatibility,
   defineCommand,
   defineComponentContract,
   defineEvent,
@@ -16,7 +17,10 @@ import { createFakeContext } from './fake-context.ts'
 // exactly how two separately bundled copies of a token meet: by id, never by identity.
 const SayHello = defineCommand<[name: string], string>('example.hello.say-hello')
 const Greeted = defineEvent<{ name: string; count: number }>('example.hello.greeted')
-const Greeting = defineComponentContract<{ name: string }>('example.hello.greeting', { version: 1 })
+const Greeting = defineComponentContract<{ name: string }>('example.hello.greeting', {
+  version: 1,
+  requiredCapabilities: ['greets-by-name'],
+})
 
 describe('the hello example extension', () => {
   it('is accepted by defineExtension — a valid, frozen manifest', () => {
@@ -66,5 +70,26 @@ describe('the hello example extension', () => {
     expect(loud?.implementation.title).toBe('Loud greeting')
     const render = loud?.implementation.component as unknown as (props: ComponentProps<typeof Greeting>) => string
     expect(render({ name: 'Ada' })).toBe('HELLO, ADA!')
+  })
+
+  it('declares the capabilities its Greeting contract requires, and the check sees it', async () => {
+    const fake = createFakeContext(hello.manifest)
+    await hello.activate(fake.context)
+    const loud = fake.components.get('example.hello.loud')
+    if (loud === undefined) throw new Error('example.hello.loud was not provided')
+
+    // As a host checks it: its own token, the implementation, then the token `provide` received.
+    const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
+    expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['greets-by-name'] })
+
+    // Not vacuous: without its declaration the same implementation fails.
+    const { capabilities: _declared, ...undeclared } = loud.implementation
+    expect(checkComponentCompatibility(Greeting, undeclared, loud.contract).issues).toEqual([
+      {
+        code: 'missing-capability',
+        message: 'example.hello.loud does not declare "greets-by-name", required by example.hello.greeting@1',
+        capability: 'greets-by-name',
+      },
+    ])
   })
 })
