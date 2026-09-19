@@ -37,6 +37,22 @@ export type LayoutSortableSurfaceProps = {
 
 const elementLabel = (element: LayoutElementDescriptor): string => `${element.kind === 'group' ? 'Grupa' : 'Element'} ${element.id}`
 
+function useDetectedEditMode(): boolean {
+  const [active, setActive] = React.useState(() => typeof document !== 'undefined' && isEditModeActive())
+
+  React.useEffect(() => {
+    const shell = document.querySelector('[data-slot="app-shell"]')
+    if (!shell) return
+    const update = () => setActive(isEditModeActive())
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(shell, { attributes: true, attributeFilter: ['data-edit-mode'] })
+    return () => observer.disconnect()
+  }, [])
+
+  return active
+}
+
 export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, overId: string): LayoutMove | null {
   const source = registry.get(activeId)
   const target = registry.get(overId)
@@ -54,9 +70,11 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   }
 }
 
-export function LayoutSortableSurface({ children, enabled = isEditModeActive(), className, renderOverlay }: LayoutSortableSurfaceProps) {
+export function LayoutSortableSurface({ children, enabled, className, renderOverlay }: LayoutSortableSurfaceProps) {
   const registry = useLayoutRegistry()
   const snapshot = useLayoutSnapshot()
+  const detectedEditMode = useDetectedEditMode()
+  const isEnabled = enabled ?? detectedEditMode
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -109,20 +127,20 @@ export function LayoutSortableSurface({ children, enabled = isEditModeActive(), 
     : null
 
   return (
-    <LayoutSortableContext.Provider value={{ enabled, activeId }}>
+    <LayoutSortableContext.Provider value={{ enabled: isEnabled, activeId }}>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragStart={enabled ? handleDragStart : undefined}
-        onDragOver={enabled ? handleDragOver : undefined}
-        onDragEnd={enabled ? finishDrag : undefined}
-        onDragCancel={enabled ? handleDragCancel : undefined}
+        onDragStart={isEnabled ? handleDragStart : undefined}
+        onDragOver={isEnabled ? handleDragOver : undefined}
+        onDragEnd={isEnabled ? finishDrag : undefined}
+        onDragCancel={isEnabled ? handleDragCancel : undefined}
       >
         <SortableContext items={snapshot.map((element) => element.id)} strategy={verticalListSortingStrategy}>
           <div
             className={className}
             data-slot="layout-sortable-surface"
-            data-edit-mode={enabled ? 'true' : 'false'}
+            data-edit-mode={isEnabled ? 'true' : 'false'}
             data-layout-active-id={activeId ?? undefined}
             data-layout-over-id={overId ?? undefined}
           >
@@ -132,7 +150,7 @@ export function LayoutSortableSurface({ children, enabled = isEditModeActive(), 
             ) : null}
           </div>
         </SortableContext>
-        <DragOverlay>{enabled ? overlay : null}</DragOverlay>
+        <DragOverlay>{isEnabled ? overlay : null}</DragOverlay>
       </DndContext>
       <div aria-live="polite" className="sr-only" data-slot="layout-sortable-live-region">
         {liveMessage}

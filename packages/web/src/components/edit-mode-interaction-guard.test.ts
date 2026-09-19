@@ -113,6 +113,16 @@ describe('shouldBlockEditModeKeyActivation', () => {
     expect(shouldBlockEditModeKeyActivation(key({ target: exit }))).toBe(false)
   })
 
+  it('keeps a sortable editor handle available for keyboard pickup', () => {
+    const handle = document.createElement('button')
+    handle.dataset.editModeAction = 'allow'
+    handle.dataset.layoutDragHandle = 'true'
+
+    expect(shouldBlockEditModeActivation(handle, 'click')).toBe(false)
+    expect(shouldBlockEditModeKeyActivation(key({ key: ' ', target: handle }))).toBe(false)
+    expect(shouldBlockEditModeKeyActivation(key({ target: handle }))).toBe(false)
+  })
+
   it('blocks Space only where it activates rather than types', () => {
     const input = document.createElement('input')
     const text = document.createElement('p')
