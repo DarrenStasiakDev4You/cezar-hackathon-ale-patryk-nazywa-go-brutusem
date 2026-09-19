@@ -1,6 +1,6 @@
 # Migrate the task actions to the Command API
 
-> Slug: `migrate-task-actions-to-command-api` · Status: **designed, awaiting implementation** ·
+> Slug: `migrate-task-actions-to-command-api` · Status: **implemented in #17** ·
 > Epic 1 (Extension Runtime), item 4. Builds on item 3, `2026-09-19-command-api.md` (spec merged
 > in #10; implementation complete in #11, awaiting merge). Item 3 adds the command registry, the
 > three public `cezar.task.*` commands, `CommandsProvider` / `useCommand` / `useCommands`, and
@@ -310,7 +310,15 @@ The existing fetch-level tests for each site are the proof (§ Implementation Pl
   archive is the one change: every row's Archive and Read toggle stays disabled (`busy`) until
   the cross-project index arrives, one request later than today. The global Tasks test pins
   that change: the toggles re-enable after the one index refetch, and no second refetch
-  follows.
+  follows. *Found in review of #17:* Resolve conflicts on a cross-project surface
+  (`ResolveConflictsForRun` with `projectId`) now waits for the three project keys, including the
+  cross-project index, where `useContinueRun` waited for `runs.all` alone. Its panel stays on
+  "Sending…" until that one extra request lands. That is the rule's direct consequence
+  (`refetchTask(input)` covers what the handler invalidated), and it is accepted.
+- **Repeated 409s join one refetch.** The Ask delivery's idle-teardown retry can meet up to ten
+  409s in a few seconds, and each 409 invalidates the task keys. The handler's 409 branch
+  therefore passes `{ cancelRefetch: false }`, so a retry joins the refetch already in flight
+  instead of cancelling and restarting it.
 - **More refetches after some failures.** The handler's rule is broader than two of today's
   copies. The composer, review panel and Ask delivery now also invalidate `runs.all` after a
   409 (today only the header does). Resolve conflicts on cross-project surfaces now
