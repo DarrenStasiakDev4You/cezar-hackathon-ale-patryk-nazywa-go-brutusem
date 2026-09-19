@@ -16,7 +16,7 @@ import {
 } from '@open-mercato/cezar-extension-api'
 import { registerCoreCommands } from '../commands/core-commands'
 import { createCommandRegistry } from '../commands/registry'
-import { CORE_COMPONENT_CONTRACTS } from '../component-registry/core-contracts'
+import { createCoreComponentRegistry } from '../component-registry/core-components'
 import { createComponentRegistry, type CockpitComponentRegistry } from '../component-registry/registry'
 import { resolveComponent, type ComponentResolution } from '../component-registry/resolve'
 import { createEventBus, type EventErrorReport } from '../events/bus'
@@ -44,12 +44,12 @@ function thrown(run: () => unknown): unknown {
 
 /**
  * The boot order `main.tsx` uses: the command registry with the core commands, the event bus and
- * the component registry first, then the host, with the bus's lifecycle events.
+ * the component registry with core's defaults first, then the host, with the bus's lifecycle events.
  */
 function bootCockpit(
   extensions: readonly Extension[],
   busOptions: Parameters<typeof createEventBus>[0] = {},
-  components: CockpitComponentRegistry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS }),
+  components: CockpitComponentRegistry = createCoreComponentRegistry(),
 ) {
   const commands = createCommandRegistry()
   registerCoreCommands(commands, { queryClient: new QueryClient() })

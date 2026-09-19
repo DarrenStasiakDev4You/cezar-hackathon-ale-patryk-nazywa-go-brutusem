@@ -50,15 +50,17 @@ export interface BundledFile {
 /** The build as the check reads it: the output chunks, and the module graph's static edges. */
 export interface BuildGraph {
   readonly bundle: Readonly<Record<string, BundledFile>>
-  /** A module's static imports (`this.getModuleInfo(id).importedIds`); dynamic ones stay out. */
-  readonly staticImportsOf: (moduleId: string) => readonly string[]
+  /** A module's static imports (`this.getModuleInfo(id).importedIds`); dynamic ones stay out.
+   *  `undefined` when the graph does not know the module. */
+  readonly staticImportsOf: (moduleId: string) => readonly string[] | undefined
 }
 
 /**
  * What is wrong with the first paint, one line per problem; `[]` when nothing is. Every `eager`
  * module must be in the entry chunk or a chunk it imports statically (the chunks the browser
  * fetches before the first paint, which the Vite manifest lists as the entry's `imports`), and no
- * `keptOut` module may be reachable from one through static imports.
+ * `keptOut` module may be reachable from one through static imports. It fails closed: an `eager`
+ * module whose imports the graph cannot name is a problem, never a pass.
  */
 export function entryChunkProblems(graph: BuildGraph, rules: typeof entryChunkRules = entryChunkRules): string[] {
   const { bundle } = graph
@@ -79,11 +81,16 @@ export function entryChunkProblems(graph: BuildGraph, rules: typeof entryChunkRu
     const found = eagerModules.filter((id) => rule.test(id))
     if (found.length === 0) problems.push(`no module matching ${rule} loads with the entry`)
     for (const start of found) {
+      // A core default always imports something (React, at least): no imports means the graph
+      // could not be read, and a check that passes on nothing guards nothing.
+      if ((graph.staticImportsOf(start) ?? []).length === 0) {
+        problems.push(`the module graph names no static imports of ${start}, so nothing it pulls in can be checked`)
+        continue
+      }
       // Breadth-first over static imports, keeping the way back for the message.
       const cameFrom = new Map<string, string | null>([[start, null]])
       const queue = [start]
-      while (queue.length > 0) {
-        const id = queue.shift() as string
+      for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
         const kept = rules.keptOut.find((keptOut) => keptOut.test(id))
         if (kept !== undefined) {
           const route: string[] = []
@@ -91,7 +98,7 @@ export function entryChunkProblems(graph: BuildGraph, rules: typeof entryChunkRu
           problems.push(`${start} pulls ${id} into the first paint: ${route.join(' → ')}`)
           continue
         }
-        for (const next of graph.staticImportsOf(id)) {
+        for (const next of graph.staticImportsOf(id) ?? []) {
           if (cameFrom.has(next)) continue
           cameFrom.set(next, id)
           queue.push(next)
@@ -110,7 +117,7 @@ export function entryChunkGuard(): Plugin {
     generateBundle(_options, bundle) {
       const problems = entryChunkProblems({
         bundle: bundle as Readonly<Record<string, BundledFile>>,
-        staticImportsOf: (moduleId) => this.getModuleInfo(moduleId)?.importedIds ?? [],
+        staticImportsOf: (moduleId) => this.getModuleInfo(moduleId)?.importedIds,
       })
       if (problems.length > 0) this.error(`the entry chunk check failed:\n- ${problems.join('\n- ')}`)
     },

@@ -2,7 +2,8 @@ import { TaskHeaderMain, type ComponentImplementation, type TaskHeaderMainProps 
 
 import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'
 
-import type { CockpitComponentRegistry } from './registry'
+import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
+import { createComponentRegistry, type CockpitComponentRegistry, type ComponentRegistryOptions } from './registry'
 import { coreDefaultComponentId } from './resolve'
 
 /**
@@ -10,12 +11,13 @@ import { coreDefaultComponentId } from './resolve'
  * in `CORE_COMPONENT_CONTRACTS`, each registered as `coreDefaultComponentId(contract.id)`, so the
  * resolver always has core's default to render and to fall back to.
  *
- * The ONE module that imports a core implementation. A page renders it only through
- * `ComponentHost`, and `boundary.test.ts` fails on any other import of it.
+ * The ONE module that imports a core implementation, and it keeps the implementation objects to
+ * itself: a page renders them only through `ComponentHost`, and `boundary.test.ts` fails on any
+ * other import of one.
  */
 
 /** Core's task header main part: today's title row and meta row. It shows everything the contract offers. */
-export const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.freeze({
+const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.freeze({
   id: coreDefaultComponentId(TaskHeaderMain.id),
   title: 'Task header',
   description: 'Cezar’s own title, status and meta row',
@@ -23,11 +25,21 @@ export const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = 
   component: CoreTaskHeaderMain,
 })
 
-/**
- * Registers core's default of every served contract. `main.tsx` calls it before
- * `startExtensionHost`, as it registers the core commands, so core always keeps its own ids; a
- * `ComponentsProvider` without a registry applies it to its own.
- */
-export function registerCoreComponents(registry: CockpitComponentRegistry): void {
+/** Registers core's default of every served contract. */
+export function registerCoreComponents(registry: Pick<CockpitComponentRegistry, 'register'>): void {
   registry.register(TaskHeaderMain, coreTaskHeaderMain)
+}
+
+/**
+ * The page's component registry: the served catalog, with core's defaults registered. `main.tsx`
+ * builds it before `startExtensionHost`, as it registers the core commands, so core always keeps
+ * its own ids. A `ComponentsProvider` without a registry builds its own the same way, and the gate
+ * test (`core-components.test.ts`) checks what this returns.
+ */
+export function createCoreComponentRegistry(
+  options: Omit<ComponentRegistryOptions, 'contracts'> = {},
+): CockpitComponentRegistry {
+  const registry = createComponentRegistry({ ...options, contracts: CORE_COMPONENT_CONTRACTS })
+  registerCoreComponents(registry)
+  return registry
 }

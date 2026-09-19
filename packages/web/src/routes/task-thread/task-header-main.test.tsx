@@ -10,10 +10,8 @@ import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-clien
 import { ProjectScopeContext } from '@/api/project-scope-context'
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
-import { registerCoreComponents } from '@/component-registry/core-components'
-import { CORE_COMPONENT_CONTRACTS } from '@/component-registry/core-contracts'
+import { createCoreComponentRegistry } from '@/component-registry/core-components'
 import { ComponentsProvider } from '@/component-registry/provider'
-import { createComponentRegistry } from '@/component-registry/registry'
 import { resetToasts } from '@/components/ui/toaster'
 import { fakeScope } from '@/extensions/registry.fixtures'
 import { runTitle } from '@/lib/task-groups'
@@ -186,8 +184,7 @@ describe('RunHeader with an extension’s implementation of the main part', () =
   }
 
   function renderWithJira(record: ApiRun) {
-    const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS, onDiagnostic: () => {} })
-    registerCoreComponents(registry)
+    const registry = createCoreComponentRegistry({ onDiagnostic: () => {} })
     registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeaderMain, {
       id: JIRA_ID,
       title: 'Jira header',

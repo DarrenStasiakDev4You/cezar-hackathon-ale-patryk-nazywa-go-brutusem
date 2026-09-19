@@ -5,8 +5,8 @@ import type { AnyComponentContract } from './registry'
 /**
  * The component contracts this cockpit serves (spec `2026-09-19-component-registry`): the host's
  * own tokens, one major per id, `cezar.*` only. A core contract joins this list in the same PR as
- * the slot that renders it, and `registerCoreComponents` (`core-components.ts`) registers core's
- * default for each; `core-components.test.ts` fails the gate when one is missing.
+ * the slot that renders it, and `createCoreComponentRegistry` (`core-components.ts`) registers
+ * core's default for each; `core-components.test.ts` fails the gate when one is missing.
  * `registry.test.ts` builds a registry from it, so a bad core token fails the gate instead of the
  * boot.
  *

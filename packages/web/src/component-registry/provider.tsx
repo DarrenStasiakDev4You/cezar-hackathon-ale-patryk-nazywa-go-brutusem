@@ -4,9 +4,8 @@ import type { ContributionId } from '@open-mercato/cezar-extension-api'
 
 import { toast } from '@/components/ui/toaster'
 
-import { registerCoreComponents } from './core-components'
-import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
-import { createComponentRegistry, type CockpitComponentRegistry, type ComponentRegistration } from './registry'
+import { createCoreComponentRegistry } from './core-components'
+import type { CockpitComponentRegistry, ComponentRegistration } from './registry'
 
 /**
  * React bindings for the component registry (spec `.ai/specs/2026-09-19-component-host.md`):
@@ -65,12 +64,12 @@ export function reportImplementationFailure(failure: ImplementationFailure): voi
  * Hands the component registry to the tree.
  *
  * `registry` is the page's own (`main.tsx` builds it, so the extension host shares it); it is read
- * once, at mount. Omitted (tests): a registry of its own over `CORE_COMPONENT_CONTRACTS`, with
- * core's defaults registered, so a test renders the header exactly as the page does.
+ * once, at mount. Omitted (tests): a registry of its own from `createCoreComponentRegistry`, so a
+ * test renders the header exactly as the page does.
  */
 export function ComponentsProvider(props: {
   /** `main.tsx`'s registry, shared with the extension host. Omitted (tests): a registry of its
-   *  own over `CORE_COMPONENT_CONTRACTS`, with `registerCoreComponents` applied. Read once. */
+   *  own from `createCoreComponentRegistry`, as `main.tsx` builds the page's. Read once. */
   readonly registry?: CockpitComponentRegistry
   /** The implementation the user chose for a contract. Omitted: no choice for any contract (Q5).
    *  Hosts re-resolve when this function's identity changes. */
@@ -80,12 +79,7 @@ export function ComponentsProvider(props: {
   readonly onImplementationError?: (failure: ImplementationFailure) => void
   readonly children: ReactNode
 }): ReactElement {
-  const [registry] = useState(() => {
-    if (props.registry !== undefined) return props.registry
-    const own = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
-    registerCoreComponents(own)
-    return own
-  })
+  const [registry] = useState(() => props.registry ?? createCoreComponentRegistry())
   // Keyed by the registration object, so a disposed registration drops out and a re-provided one
   // (a new object) is tried again. Mutated only from `componentDidCatch` and effects.
   const [failures] = useState(() => new WeakMap<ComponentRegistration, Set<string>>())

@@ -8,10 +8,8 @@ import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
-import { registerCoreComponents } from '@/component-registry/core-components'
-import { CORE_COMPONENT_CONTRACTS } from '@/component-registry/core-contracts'
+import { createCoreComponentRegistry } from '@/component-registry/core-components'
 import { ComponentsProvider } from '@/component-registry/provider'
-import { createComponentRegistry } from '@/component-registry/registry'
 import { fakeScope } from '@/extensions/registry.fixtures'
 import type {
   ApiRun,
@@ -1402,8 +1400,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
 
   it('shows core’s title row when a chosen extension header throws, and the task stays usable', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS, onDiagnostic: () => {} })
-    registerCoreComponents(registry)
+    const registry = createCoreComponentRegistry({ onDiagnostic: () => {} })
     const BrokenHeader = (): never => {
       throw new Error('Jira is down')
     }

@@ -39,7 +39,11 @@ const DECLARATION =
  *  type: it cannot call anything. */
 const DYNAMIC_IMPORT = /(?<!\btypeof\s*)\bimport[ \t]*\([ \t]*['"]([^'"]+)['"][ \t]*\)/g
 
-/** Every declaration of `file`, in source order, then every dynamic import, in source order. */
+/**
+ * Every declaration of `file`, in source order, then every dynamic import, in source order. A bare
+ * side-effect import (`import './x'`) is not a site: it binds nothing, so it cannot call or render
+ * anything the scans guard.
+ */
 export function importSites(file: SourceFile): ImportSite[] {
   const sites: ImportSite[] = []
   for (const match of file.source.matchAll(DECLARATION)) {

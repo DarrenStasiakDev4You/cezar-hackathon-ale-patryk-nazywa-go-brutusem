@@ -101,6 +101,15 @@ describe('the entry chunk check', () => {
     ])
   })
 
+  it('fails closed when the module graph cannot name core’s default’s imports', () => {
+    const unreadable = (_moduleId: string): readonly string[] | undefined => undefined
+
+    expect(entryChunkProblems({ bundle, staticImportsOf: unreadable })).toEqual([
+      `the module graph names no static imports of ${CORE_HEADER}, so nothing it pulls in can be checked`,
+    ])
+    expect(entryChunkProblems({ bundle, staticImportsOf: edges({}) })).toHaveLength(1)
+  })
+
   it('says so when the bundle has no entry chunk', () => {
     expect(entryChunkProblems({ bundle: { 'assets/a.js': chunk([CORE_HEADER]) }, staticImportsOf: edges({}) })).toEqual([
       'no entry chunk in the bundle',
