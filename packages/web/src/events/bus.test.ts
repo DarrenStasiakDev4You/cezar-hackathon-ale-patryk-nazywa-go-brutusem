@@ -252,6 +252,26 @@ describe('the core view', () => {
     expect(reports[0]?.error).toBeInstanceOf(Error)
   })
 
+  it('reports a synchronous fan-out’s dropped emits once per streak, not once per drop', async () => {
+    const { bus, reports } = recordingBus({ maxCascadeDepth: 5 })
+    let deliveries = 0
+    bus.on(Ping, () => {
+      deliveries += 1
+      bus.emit(Ping)
+      bus.emit(Ping)
+    })
+
+    bus.emit(Ping)
+    await vi.waitFor(() => expect(deliveries).toBe(63))
+    // A quiet macrotask ends the streak; the next runaway chain is reported again.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    bus.emit(Ping)
+    await vi.waitFor(() => expect(deliveries).toBe(126))
+
+    // Depths 0–5 are delivered (2^6 − 1 calls per chain); the 64 emits at depth 6 are dropped.
+    expect(reports.filter((report) => report.kind === 'cascade')).toHaveLength(2)
+  })
+
   it('honours a custom maxCascadeDepth, and an emit outside any listener starts again at depth 0', async () => {
     const { bus, reports } = recordingBus({ maxCascadeDepth: 2 })
     let deliveries = 0
@@ -338,6 +358,42 @@ describe('the delivery budget', () => {
     const backlog = reports.filter((report) => report.kind === 'backlog')
     expect(backlog).toHaveLength(2)
     expect(backlog[0]).toMatchObject({ extensionId: undefined, eventId: 'cezar.test.numbered' })
+  })
+
+  it('yields after the default budget of 1,000 listener calls', async () => {
+    const { bus, reports } = recordingBus()
+    const received: number[] = []
+    const Numbered = defineEvent<number>('cezar.test.numbered')
+    bus.on(Numbered, (n) => received.push(n))
+
+    for (let n = 0; n < 1_001; n += 1) bus.emit(Numbered, n)
+    await flush()
+
+    expect(received).toHaveLength(1_000)
+    expect(reports.map((report) => report.kind)).toEqual(['backlog'])
+    await vi.waitFor(() => expect(received).toHaveLength(1_001))
+    expect(received.at(-1)).toBe(1_000)
+  })
+
+  it('ends a streak even when the resumed drain finds only cancelled deliveries', async () => {
+    const { bus, reports } = recordingBus({ deliveryBudget: 3 })
+    const Numbered = defineEvent<number>('cezar.test.numbered')
+    const alpha = fakeScope('acme.alpha')
+    bus.forExtension(alpha.scope).on(Numbered, () => {})
+
+    for (let n = 0; n < 5; n += 1) bus.emit(Numbered, n)
+    await flush()
+    // Paused with two deliveries left, both cancelled before the drain resumes.
+    alpha.end()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    const received: number[] = []
+    bus.on(Numbered, (n) => received.push(n))
+    for (let n = 0; n < 5; n += 1) bus.emit(Numbered, n)
+    await vi.waitFor(() => expect(received).toHaveLength(5))
+
+    // The second storm is a new streak, so it is reported too.
+    expect(reports.filter((report) => report.kind === 'backlog')).toHaveLength(2)
   })
 
   it('preserves emit order across a pause', async () => {
@@ -583,6 +639,20 @@ describe('the extension view', () => {
       bus.emit(Started, { taskId: 't1' })
       bus.emit(Ping)
       bus.forExtension(fakeScope('acme.alpha').scope).emit(AlphaReady, { step: 1 })
+      await flush()
+
+      expect(listener).not.toHaveBeenCalled()
+      expect(alpha.tracked.size).toBe(0)
+    })
+
+    it('cancels a pending once when the scope ends — it has already left the event’s list', async () => {
+      const { bus } = recordingBus()
+      const alpha = fakeScope('acme.alpha')
+      const listener = vi.fn()
+      bus.forExtension(alpha.scope).once(Started, listener)
+
+      bus.emit(Started, { taskId: 'pending' })
+      alpha.end()
       await flush()
 
       expect(listener).not.toHaveBeenCalled()

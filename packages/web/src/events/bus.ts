@@ -47,7 +47,11 @@ export interface EventBusOptions {
   readonly onError?: (report: EventErrorReport) => void
   /** Deepest chain of emits made from inside listeners before an emit is dropped. Default 16. */
   readonly maxCascadeDepth?: number
-  /** Listener calls allowed between two macrotasks before the queue yields. Default 1_000. */
+  /**
+   * Listener calls allowed before the queue yields to the next macrotask. Default 1_000. Counted
+   * from the first delivery after the bus's own last yield, so an unrelated task in between does
+   * not reset the count: the bus may yield a little early, never late.
+   */
   readonly deliveryBudget?: number
 }
 
@@ -57,9 +61,10 @@ export interface EventErrorReport {
   readonly eventId: ContributionId
   /**
    * `listener`: a listener threw or rejected; `error` is what it threw. `cascade`: an emit made
-   * inside a listener went deeper than `maxCascadeDepth` and was dropped. `backlog`: the queue
-   * spent its delivery budget and yields until the next macrotask — reported once per streak,
-   * for the delivery that waits.
+   * inside a listener went deeper than `maxCascadeDepth` and was dropped — reported once per event
+   * id per streak, however many emits a fan-out drops. `backlog`: the queue spent its delivery
+   * budget and yields until the next macrotask — reported once per streak, for the delivery that
+   * waits. A streak ends at the first macrotask the bus reaches without having had to yield.
    */
   readonly kind: 'listener' | 'cascade' | 'backlog'
   readonly error: unknown
@@ -131,7 +136,7 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
 
   /** The depth of the delivery whose listener is running synchronously right now. */
   let runningDepth: number | undefined
-  /** Listener calls since the last macrotask. */
+  /** Listener calls since the bus's own last yield. */
   let calls = 0
   let drainScheduled = false
   let draining = false
@@ -139,15 +144,21 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
   let paused = false
   /** The current streak of pauses has been reported. */
   let backlogReported = false
+  /** Event ids whose dropped cascade has been reported in the current streak. */
+  const cascadesReported = new Set<ContributionId>()
   const macrotask = createMacrotaskScheduler(() => {
     calls = 0
     if (paused) {
       paused = false
       drain()
+      // A resumed drain that found only cancelled deliveries ran no listener, so it scheduled no
+      // tick of its own — and without one the streak would never end.
+      if (!paused) macrotask.schedule()
     } else {
       // A whole macrotask period without a pause: the storm, if there was one, is over. (Not an
       // empty queue: an async ping-pong empties it after every delivery.)
       backlogReported = false
+      cascadesReported.clear()
     }
   })
 
@@ -181,8 +192,9 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
 
   const deliver = ({ subscription, snapshot, depth }: Delivery): void => {
     if (subscription.once) {
+      // Emit already took it off the event's list; this ends it for good and untracks it from its
+      // scope (through the handle, which also drops it from its view's own index).
       subscription.live = false
-      // A delivered `once` is untracked from its scope; `unsubscribe` already ran at emit time.
       subscription.handle?.dispose()
     }
     runningDepth = depth
@@ -264,10 +276,15 @@ export function createEventBus(options: EventBusOptions = {}): EventBus {
 
     const depth = runningDepth === undefined ? 0 : runningDepth + 1
     if (depth > maxCascadeDepth) {
-      report(
-        { extensionId: emitter, eventId: id, kind: 'cascade' },
-        new Error(`Emit of "${id}" dropped: more than ${maxCascadeDepth} emits chained from inside listeners`),
-      )
+      // Once per event id per streak: a 2× fan-out drops 2^17 emits at the default depth, and one
+      // report says everything the other 131,071 would.
+      if (!cascadesReported.has(id)) {
+        cascadesReported.add(id)
+        report(
+          { extensionId: emitter, eventId: id, kind: 'cascade' },
+          new Error(`Emit of "${id}" dropped: more than ${maxCascadeDepth} emits chained from inside listeners`),
+        )
+      }
       return
     }
 
@@ -432,7 +449,7 @@ function isObjectLike(value: unknown): value is object {
   return (typeof value === 'object' && value !== null) || typeof value === 'function'
 }
 
-/** A whole number ≥ `min`; anything else (NaN, a fraction, a non-number) falls back to `fallback`. */
+/** `value` as a whole number: floored, and raised to `min` when below it. `fallback` when it is not a number (or NaN). */
 function resolveCount(value: number | undefined, fallback: number, min: number): number {
   if (typeof value !== 'number' || Number.isNaN(value)) return fallback
   return Math.max(Math.floor(value), min)

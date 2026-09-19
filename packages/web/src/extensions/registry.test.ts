@@ -739,17 +739,23 @@ describe('onStatusChange', () => {
   it('reports active once the extension’s registrations are live and its record is current', async () => {
     const log: string[] = []
     const { services } = recordingServices(log)
-    let atCallback: { status: string | undefined; registered: boolean } | undefined
+    let registration: Disposable | undefined
+    let atCallback: { status: string | undefined; registered: boolean; disposed: number } | undefined
     const registry = createExtensionRegistry({
       services,
       onStatusChange: (record) => {
-        atCallback = { status: registry.get(record.id)?.status, registered: log.length === 0 }
+        atCallback = {
+          status: registry.get(record.id)?.status,
+          registered: registration !== undefined,
+          disposed: log.length,
+        }
       },
     })
-    let registration: Disposable | undefined
     registry.register(
       fixture('acme.alpha', {
-        activate(context) {
+        async activate(context) {
+          // Registered only after an await: the callback must still come after it.
+          await Promise.resolve()
           registration = context.commands.register(pingCommand('acme.alpha'), () => {})
         },
       }),
@@ -757,9 +763,8 @@ describe('onStatusChange', () => {
 
     await registry.activate('acme.alpha')
 
-    expect(atCallback).toEqual({ status: 'active', registered: true })
-    registration?.dispose()
-    expect(log).toEqual(['dispose command acme.alpha.ping'])
+    // Registered, and still live (nothing disposed), when `active` is reported.
+    expect(atCallback).toEqual({ status: 'active', registered: true, disposed: 0 })
   })
 
   it('swallows a throwing callback: the status and the other extensions are untouched', async () => {
