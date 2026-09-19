@@ -86,6 +86,47 @@ describe('defineComponentContract', () => {
     expect(defineComponentContract('acme.hello.c', { version: 1, layout: {} }).layout).toEqual({})
   })
 
+  it('accepts a 64-character capability name', () => {
+    const name = `${'a'.repeat(31)}.${'b'.repeat(32)}`
+    expect(name).toHaveLength(64)
+    const contract = defineComponentContract('acme.hello.greeting', { version: 1, requiredCapabilities: [name] })
+    expect(contract.requiredCapabilities).toEqual([name])
+  })
+
+  it('names the exact entry of the author’s list, whatever was skipped before it', () => {
+    const badThenOverlap = thrown(() =>
+      defineComponentContract('acme.hello.greeting', {
+        version: 1,
+        requiredCapabilities: ['b'],
+        optionalCapabilities: ['Bad', 'b'],
+      }),
+    )
+    expect((badThenOverlap as ExtensionDefinitionError).issues).toEqual([
+      { path: 'optionalCapabilities[0]', message: expect.stringContaining('dot-separated segments') as unknown },
+      { path: 'optionalCapabilities[1]', message: 'must not also be required — it is requiredCapabilities[0]' },
+    ])
+
+    const repeatThenOverlap = thrown(() =>
+      defineComponentContract('acme.hello.greeting', {
+        version: 1,
+        requiredCapabilities: ['a', 'a', 'b'],
+        optionalCapabilities: ['b'],
+      }),
+    )
+    expect((repeatThenOverlap as ExtensionDefinitionError).issues).toEqual([
+      { path: 'requiredCapabilities[1]', message: 'must be unique — it repeats requiredCapabilities[0]' },
+      { path: 'optionalCapabilities[0]', message: 'must not also be required — it is requiredCapabilities[2]' },
+    ])
+  })
+
+  it('rejects an over-long list as one issue without walking it', () => {
+    const huge = new Array<string>(2 ** 32 - 1)
+    const error = thrown(() => defineComponentContract('acme.hello.greeting', { version: 1, requiredCapabilities: huge }))
+    expect((error as ExtensionDefinitionError).issues).toEqual([
+      { path: 'requiredCapabilities', message: 'must hold at most 32 names' },
+    ])
+  })
+
   it('accepts 32 capabilities across the two lists', () => {
     const names = Array.from({ length: 32 }, (_, index) => `c${index}`)
     const contract = defineComponentContract('acme.hello.greeting', {

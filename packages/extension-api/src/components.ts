@@ -31,6 +31,7 @@ export interface ComponentLayout {
   readonly minBlockSize?: number
 }
 
+/** What a contract declares beside its id: {@link defineComponentContract}'s second argument. */
 export interface ComponentContractOptions {
   /**
    * Major version of the functional contract, written `id@version` (`cezar.task.header@1`). It is
@@ -65,11 +66,14 @@ export interface ComponentContract<Props> {
   readonly id: ContributionId
   /** Major version of the functional contract. See {@link ComponentContractOptions.version}. */
   readonly version: number
-  /** Both lists are always set by the helper (`[]` when none). Optional in the type so a
-   *  structurally built token, or one from an older copy of this package, still fits; readers
-   *  treat a missing list as `[]`. */
+  /** Behaviours every implementation must declare. Always set by the helper (`[]` when none);
+   *  optional in the type so a structurally built token, or one from an older copy of this
+   *  package, still fits. Readers treat a missing list as `[]`. */
   readonly requiredCapabilities?: readonly ComponentCapability[]
+  /** Behaviours an implementation may declare; the host relies on one only for an implementation
+   *  that declares it. Always set by the helper, and read like `requiredCapabilities`. */
   readonly optionalCapabilities?: readonly ComponentCapability[]
+  /** The box the host gives every implementation; absent when the contract declares none. */
   readonly layout?: ComponentLayout
   /** Type-only phantom, as on `CommandToken`. */
   readonly __props?: (props: Props) => Props
@@ -110,15 +114,15 @@ export function defineComponentContract<Props>(
   if (!(typeof version === 'number' && Number.isInteger(version) && version >= 1)) {
     issue('version', 'must be a positive integer — the major version of the contract')
   }
-  const requiredCapabilities = capabilityList(given.requiredCapabilities, 'requiredCapabilities', issue)
-  const optionalCapabilities = capabilityList(given.optionalCapabilities, 'optionalCapabilities', issue)
-  optionalCapabilities.forEach((capability, index) => {
-    const required = requiredCapabilities.indexOf(capability)
-    if (required !== -1) {
-      issue(`optionalCapabilities[${index}]`, `must not also be required — it is requiredCapabilities[${required}]`)
+  const required = capabilityList(given.requiredCapabilities, 'requiredCapabilities', issue)
+  const optional = capabilityList(given.optionalCapabilities, 'optionalCapabilities', issue)
+  for (const [capability, index] of optional) {
+    const requiredIndex = required.get(capability)
+    if (requiredIndex !== undefined) {
+      issue(`optionalCapabilities[${index}]`, `must not also be required — it is requiredCapabilities[${requiredIndex}]`)
     }
-  })
-  const count = requiredCapabilities.length + optionalCapabilities.length
+  }
+  const count = required.size + optional.size
   if (count > MAX_CAPABILITIES) {
     issue(
       '',
@@ -132,38 +136,46 @@ export function defineComponentContract<Props>(
       kind: 'component',
       id,
       version: version as number,
-      requiredCapabilities: Object.freeze(requiredCapabilities),
-      optionalCapabilities: Object.freeze(optionalCapabilities),
+      requiredCapabilities: Object.freeze([...required.keys()]),
+      optionalCapabilities: Object.freeze([...optional.keys()]),
       ...(layout === undefined ? {} : { layout: Object.freeze(layout) }),
     },
     issues,
   )
 }
 
-/** A copy of a capability list, its well-formed unique names only; every broken rule becomes an issue. */
+/**
+ * A capability list's well-formed, unique names, each mapped to its index in the author's list so
+ * an issue names the exact entry. Every broken rule becomes an issue; a list longer than the cap is
+ * one issue and is not read further.
+ */
 function capabilityList(
   value: unknown,
   path: string,
   issue: (path: string, message: string) => void,
-): ComponentCapability[] {
-  if (value === undefined) return []
+): Map<ComponentCapability, number> {
+  const names = new Map<ComponentCapability, number>()
+  if (value === undefined) return names
   if (!Array.isArray(value)) {
     issue(path, 'must be an array of capability names')
-    return []
+    return names
   }
-  const names: ComponentCapability[] = []
+  if (value.length > MAX_CAPABILITIES) {
+    issue(path, `must hold at most ${MAX_CAPABILITIES} names`)
+    return names
+  }
   for (let index = 0; index < value.length; index += 1) {
     const name: unknown = value[index]
     if (typeof name !== 'string' || name.length > MAX_CAPABILITY_LENGTH || !CAPABILITY.test(name)) {
       issue(`${path}[${index}]`, CAPABILITY_RULE)
       continue
     }
-    const first = (value as unknown[]).indexOf(name)
-    if (first !== index) {
+    const first = names.get(name)
+    if (first !== undefined) {
       issue(`${path}[${index}]`, `must be unique — it repeats ${path}[${first}]`)
       continue
     }
-    names.push(name)
+    names.set(name, index)
   }
   return names
 }
