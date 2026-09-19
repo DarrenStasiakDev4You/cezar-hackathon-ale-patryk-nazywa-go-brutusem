@@ -5,7 +5,7 @@ export type LayoutElementKind = (typeof LAYOUT_ELEMENT_KINDS)[number]
 export type LayoutElementDescriptor = {
   id: string
   kind: LayoutElementKind
-  parentId?: string | null
+  parentId?: string
 }
 
 export type RegisteredLayoutElement = LayoutElementDescriptor & {
@@ -19,7 +19,7 @@ export type LayoutMove = {
   targetId: string | null
   position: 'before' | 'after'
   /** Destination parent. Omit to keep the source parent. */
-  parentId?: string
+  parentId?: string | null
 }
 
 export type LayoutRegistryListener = () => void
