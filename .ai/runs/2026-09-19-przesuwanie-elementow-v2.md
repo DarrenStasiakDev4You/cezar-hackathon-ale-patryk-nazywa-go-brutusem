@@ -28,8 +28,17 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 ### Phase 3: verification and handoff
 
-- [ ] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures.
+- [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
 - [ ] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow.
+
+## Validation notes
+
+- `npm run typecheck`: passed.
+- Focused web validation: passed — layout sortable surface and layout element tests, 5 tests.
+- `npm test`: stopped after the repository-wide suite entered repeated unrelated server/workspace timeout and environment failures; the changed web tests remained green.
+- `npm run test:unit`: failed in two unrelated existing tests (`skills-remote.test.ts`, `test-env-launcher.test.ts`).
+- `npm run build`: server and web builds passed; the configured `check:pack` sub-step failed because this environment denies the child Node `spawnSync` with `EPERM`.
+- `npm run test:package`: one inline-contract test passed; four existing package CLI/release tests failed under the same process/platform constraints.
 
 ## Risks
 
@@ -52,5 +61,5 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 ### Phase 3: verification and handoff
 
-- [ ] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures.
+- [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
 - [ ] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow.
