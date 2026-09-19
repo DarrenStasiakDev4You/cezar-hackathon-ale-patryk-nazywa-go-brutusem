@@ -59,8 +59,10 @@ separate PRs by the spec's own decision, not duplicates of each other.
 
 - `Events` gains two methods. That breaks only the cockpit placeholder, the package's test fake
   and `registry.fixtures.ts`'s recording services, and all three change in Step 1.1.
-- The delivery budget yields through `MessageChannel`. It exists in Node 20+, so vitest's Node
-  and jsdom environments both have it. The bus falls back to `setTimeout(0)` where it is missing.
+- The delivery budget yields to the next macrotask the way React's scheduler does. It uses
+  `setImmediate` where it exists (Node, so vitest), then a `MessageChannel` post (browsers), then
+  `setTimeout(0)`. Node handles a whole batch of `MessageChannel` messages in one loop turn, which
+  starved timers in the fan-out test, so `MessageChannel` alone was not enough.
 - `onStatusChange` runs inside the registry's lifecycle steps. A throwing callback must not change
   a status or break `activateAll`, so it is wrapped like `onError`.
 - The gate runs in Docker (`in-docker.sh`, an operator-local config), because on the WSL2 host
@@ -112,6 +114,6 @@ separate PRs by the spec's own decision, not duplicates of each other.
 
 ### Phase 2: The extension service and cezar.extension.activated
 
-- [ ] 2.1 Lifecycle event: ExtensionActivated and registry onStatusChange
-- [ ] 2.2 Boot wiring and the extension service
-- [ ] 2.3 PR 1 docs: README Events section and AGENTS.md row
+- [x] 2.1 Lifecycle event: ExtensionActivated and registry onStatusChange — e36c6a73
+- [x] 2.2 Boot wiring and the extension service — 088fb377
+- [x] 2.3 PR 1 docs: README Events section and AGENTS.md row — 5cd75876
