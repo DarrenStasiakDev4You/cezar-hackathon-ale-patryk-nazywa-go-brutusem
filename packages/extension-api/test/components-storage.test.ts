@@ -7,6 +7,7 @@ import {
   type ComponentCapability,
   type ComponentContract,
   type ComponentContractOptions,
+  type ComponentImplementation,
   type ComponentLayout,
   type ComponentProps,
   type ComponentRegistry,
@@ -252,6 +253,9 @@ describe('types', () => {
   })
 
   it('accepts an implementation of the contract’s props and rejects one with other props', () => {
+    expectTypeOf<ComponentImplementation<GreetingProps>['capabilities']>().toEqualTypeOf<
+      readonly ComponentCapability[] | undefined
+    >()
     const unused = (components: ComponentRegistry): void => {
       const disposable = components.provide(Greeting, {
         id: 'acme.hello.plain',
@@ -265,6 +269,20 @@ describe('types', () => {
       expectTypeOf(disposable).toEqualTypeOf<Disposable>()
       // An implementation may ignore props it does not need.
       components.provide(Greeting, { id: 'acme.hello.static', title: 'Static', component: () => 'Hi' })
+      // It may declare the capabilities it honours, or none.
+      components.provide(Greeting, {
+        id: 'acme.hello.capable',
+        title: 'Capable',
+        capabilities: ['greets-by-name', 'waves'],
+        component: () => 'Hi',
+      })
+      components.provide(Greeting, {
+        id: 'acme.hello.bad-capabilities',
+        title: 'Bad capabilities',
+        // @ts-expect-error — capabilities are a list of names
+        capabilities: 'greets-by-name',
+        component: () => 'Hi',
+      })
       components.provide(Greeting, {
         id: 'acme.hello.wrong',
         title: 'Wrong props',

@@ -206,13 +206,24 @@ function layoutOf(value: unknown, issue: (path: string, message: string) => void
 /** The props of a contract: `ComponentProps<typeof TaskList>`. */
 export type ComponentProps<C> = C extends ComponentContract<infer P> ? P : never
 
-/** One implementation of a contract, as an extension provides it. */
+/**
+ * One implementation of a contract. Core's default and an extension's replacement have the same
+ * shape; only the id prefix differs.
+ */
 export interface ComponentImplementation<Props> {
-  /** Namespaced under the providing extension, e.g. `acme.compact-tasks.dense`. */
+  /** Core: `cezar.…` (e.g. `cezar.task.header.default`); an extension: under its own id, e.g.
+   *  `acme.compact-tasks.dense`. */
   readonly id: ContributionId
   /** Shown to the user when they choose an implementation. */
   readonly title: string
   readonly description?: string
+  /**
+   * The capabilities this implementation declares it honours. Must include every one its
+   * contract requires, may include any of its optional ones; other names are ignored. A
+   * declaration, not a proof: `checkComponentCompatibility` compares it with the contract, and the
+   * host relies on it.
+   */
+  readonly capabilities?: readonly ComponentCapability[]
   readonly component: ComponentType<Props>
 }
 
