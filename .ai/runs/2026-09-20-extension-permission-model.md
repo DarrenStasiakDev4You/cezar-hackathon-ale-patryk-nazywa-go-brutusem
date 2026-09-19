@@ -49,26 +49,26 @@ Source doc: `.ai/specs/2026-09-19-extension-permission-model.md`
 
 ### Phase 1: Contract
 
-- [ ] 1.1 Add permission vocabulary, manifest validation, frozen permissions, and tests
-- [ ] 1.2 Add permission-denied, context.permissions, fixtures, example, and contract tests
-- [ ] 1.3 Add notifications contract and fake contexts
+- [x] 1.1 Add permission vocabulary, manifest validation, frozen permissions, and tests — e9dd40a5
+- [x] 1.2 Add permission-denied, context.permissions, fixtures, example, and contract tests — e9dd40a5
+- [x] 1.3 Add notifications contract and fake contexts — e9dd40a5
 
 ### Phase 2: Host enforcement
 
-- [ ] 2.1 Add host permission checks, grants, and denial error
-- [ ] 2.2 Add guarded services and own-command namespace handling
-- [ ] 2.3 Wire registry grants, activation checks, guarded contexts, and records
-- [ ] 2.4 Apply built-in grants and host/registry regression coverage
+- [x] 2.1 Add host permission checks, grants, and denial error — 78245d88
+- [x] 2.2 Add guarded services and own-command namespace handling — 78245d88
+- [x] 2.3 Wire registry grants, activation checks, guarded contexts, and records — 78245d88
+- [x] 2.4 Apply built-in grants and host/registry regression coverage — 78245d88
 
 ### Phase 3: Documentation
 
-- [ ] 3.1 Document the permission model in the extension API README
-- [ ] 3.2 Update repository architecture and registry documentation
+- [x] 3.1 Document the permission model in the extension API README — e9dd40a5
+- [x] 3.2 Update repository architecture and registry documentation — 78245d88
 
 ### Phase 4: Notifications
 
-- [ ] 4.1 Add notification service behavior, validation, rate limiting, and tests
-- [ ] 4.2 Add warning toast tone and UI tests
-- [ ] 4.3 Wire notification services and permission guards
-- [ ] 4.4 Add host/registry notification coverage
-- [ ] 4.5 Complete notification docs and examples
+- [x] 4.1 Add notification service behavior, validation, rate limiting, and tests — 78245d88
+- [x] 4.2 Add warning toast tone and UI tests — 78245d88
+- [x] 4.3 Wire notification services and permission guards — 78245d88
+- [x] 4.4 Add host/registry notification coverage — 78245d88
+- [x] 4.5 Complete notification docs and examples — e9dd40a5 / 78245d88
