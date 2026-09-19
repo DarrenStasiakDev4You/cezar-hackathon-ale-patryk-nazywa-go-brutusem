@@ -116,9 +116,11 @@ describe('package boundary', () => {
     expect(violations.map(describeSite)).toEqual([])
   })
 
-  it('examples/ import only themselves and the package by name', () => {
+  it('examples/ import only themselves, React and the package by name', () => {
     const violations = importsUnder('examples').filter((site) =>
-      isRelative(site.specifier) ? !staysInside(site, 'examples') : site.specifier !== PACKAGE_NAME,
+      isRelative(site.specifier)
+        ? !staysInside(site, 'examples')
+        : site.specifier !== PACKAGE_NAME && site.specifier !== 'react',
     )
     expect(violations.map(describeSite)).toEqual([])
   })
