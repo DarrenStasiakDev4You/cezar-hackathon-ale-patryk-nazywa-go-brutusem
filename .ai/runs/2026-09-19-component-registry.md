@@ -70,8 +70,8 @@ and fit. The spec's Q1–Q4 decisions are owner-confirmed and followed as writte
 
 ### Phase 2: The extension view and its wiring
 
-- [ ] 2.1 forExtension(scope).provide
-- [ ] 2.2 Wire it into the host
+- [x] 2.1 forExtension(scope).provide — 8d44bcde
+- [x] 2.2 Wire it into the host — eb43d266
 
 ### Phase 3: Documentation
 
