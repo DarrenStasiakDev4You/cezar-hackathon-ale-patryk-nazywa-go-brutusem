@@ -1,6 +1,9 @@
 import * as React from 'react'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 import { useLayoutRegistry } from '@/components/layout-registry'
+import { useLayoutSortableContext } from '@/components/layout-sortable-surface'
 import type { LayoutElementKind } from '@/lib/layout-elements'
 
 export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
@@ -13,7 +16,14 @@ export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
 /** Declares a dashboard widget/group and projects the declaration onto its DOM representative. */
 export function LayoutElement({ id, kind, parentId, as = 'div', children, ...props }: LayoutElementProps) {
   const registry = useLayoutRegistry()
+  const { enabled } = useLayoutSortableContext()
+  const sortable = useSortable({ id, disabled: !enabled })
   const nodeRef = React.useRef<HTMLElement | null>(null)
+
+  const setNodeRef = React.useCallback((node: HTMLElement | null) => {
+    nodeRef.current = node
+    sortable.setNodeRef(node)
+  }, [sortable.setNodeRef])
 
   React.useEffect(() => {
     const unregister = registry.registerDeferred({ id, kind, ...(parentId === undefined ? {} : { parentId }) })
@@ -28,12 +38,33 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
     as,
     {
       ...props,
-      ref: nodeRef,
+      ref: setNodeRef,
+      style: {
+        ...props.style,
+        ...(sortable.transform ? { transform: CSS.Transform.toString(sortable.transform) } : {}),
+        transition: sortable.transition,
+      },
       'data-layout-element': 'true',
       'data-layout-id': id,
       'data-layout-kind': kind,
+      'data-layout-sortable': enabled ? 'true' : 'false',
+      'data-layout-dragging': sortable.isDragging ? 'true' : 'false',
       ...(parentId === undefined ? {} : { 'data-layout-parent-id': parentId }),
     },
+    enabled ? (
+      <button
+        {...sortable.attributes}
+        {...sortable.listeners}
+        ref={sortable.setActivatorNodeRef}
+        type="button"
+        className="layout-drag-handle"
+        aria-label={`Przenieś ${kind === 'group' ? 'grupę' : 'element'} ${id}`}
+        data-edit-mode-action="allow"
+        data-layout-drag-handle="true"
+      >
+        ⋮⋮
+      </button>
+    ) : null,
     children,
   )
 }
