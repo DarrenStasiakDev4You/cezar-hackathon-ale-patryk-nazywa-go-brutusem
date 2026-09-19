@@ -167,6 +167,12 @@ describe('LayoutRegistry', () => {
       children: [],
       kind: 'group',
     })
+    expect(registry.getNode('root')).toEqual({
+      id: 'root',
+      parentId: null,
+      children: [],
+      kind: 'group',
+    })
     registry.createNode('left', 'group', 'root')
     registry.createNode('right', 'group', 'root')
     registry.createNode('a', 'widget', 'left')

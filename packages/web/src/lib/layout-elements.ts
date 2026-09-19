@@ -156,7 +156,8 @@ export class LayoutRegistry {
     return element ? cloneElement(element) : undefined
   }
 
-  private getNode(id: string): LayoutNode | undefined {
+  /** Read the canonical tree node without exposing mutable registry state. */
+  getNode(id: string): LayoutNode | undefined {
     const node = this.nodes.get(id)
     return node ? { ...node, children: [...node.children] } : undefined
   }
