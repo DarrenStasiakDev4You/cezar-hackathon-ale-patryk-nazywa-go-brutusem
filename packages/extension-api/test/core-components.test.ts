@@ -90,6 +90,8 @@ describe('core component contracts', () => {
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
     expect(
       checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,

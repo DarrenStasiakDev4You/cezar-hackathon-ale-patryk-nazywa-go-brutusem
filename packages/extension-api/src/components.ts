@@ -231,9 +231,9 @@ export interface ComponentImplementation<Props> {
   readonly description?: string
   /**
    * The capabilities this implementation declares it honours. Must include every one its
-   * contract requires, may include any of its optional ones; other names are ignored. A
-   * declaration, not a proof: `checkComponentCompatibility` compares it with the contract, and the
-   * host relies on it.
+   * contract requires, may include any of its optional ones; other names are kept as custom
+   * capabilities and never affect the fit. A declaration, not a proof:
+   * `checkComponentCompatibility` compares it with the contract, and the host relies on it.
    */
   readonly capabilities?: readonly ComponentCapability[]
   readonly component: ComponentType<Props>
