@@ -1,6 +1,5 @@
 import { ComposerView, type ComposerViewSkill } from '@/components/composer/composer-view'
 import { ContinuationEnginePicker } from './continuation-engine-picker'
-import { Link } from '@/lib/project-router'
 import type { TaskComposerProps } from '@open-mercato/cezar-extension-api'
 
 /** Core's default Task Composer implementation. It is intentionally prop-only. */
@@ -32,8 +31,8 @@ export function CoreTaskComposer(props: TaskComposerProps) {
       onSkillPicked={props.onUseSkill}
       footerEnd={
         props.availability.fix ? (
-          <Link
-            to={props.availability.fix.href}
+          <a
+            href={props.availability.fix.href}
             onClick={(event) => {
               event.preventDefault()
               props.onNavigate(props.availability.fix!.href)
@@ -41,7 +40,7 @@ export function CoreTaskComposer(props: TaskComposerProps) {
             className="text-xs font-medium text-foreground underline underline-offset-4"
           >
             {props.availability.fix.label}
-          </Link>
+          </a>
         ) : (
           <ContinuationEnginePicker
             engine={props.engine}
