@@ -53,6 +53,6 @@ if (!container) throw new Error('cezar: #root container is missing from index.ht
 
 createRoot(container).render(
   <StrictMode>
-    <App queryClient={queryClient} commands={commands} />
+    <App queryClient={queryClient} commands={commands} events={events} />
   </StrictMode>,
 )
