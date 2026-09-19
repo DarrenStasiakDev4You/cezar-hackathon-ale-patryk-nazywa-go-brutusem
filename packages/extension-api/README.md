@@ -195,15 +195,35 @@ your listeners may still be called. Afterwards `on`, `once`, `off` and `emit` th
 
 | Token | Id | Payload | When |
 | --- | --- | --- | --- |
+| `TaskStatusChanged` | `cezar.task.status-changed` | `TaskTransition` | Every status change of any task, in any registered project. Always first for its change. |
+| `TaskStarted` | `cezar.task.started` | `TaskTransition` | Into `running` from anything but `running`/`waiting`: a start, a Continue, a send-back, an auto-resume. Answering an agent's question is not a start. |
+| `TaskCompleted` | `cezar.task.completed` | `TaskTransition` | Into `done` or `review` from outside that pair: a successful finish. Accepting a review (`review → done`) is not a second one. |
+| `TaskFailed` | `cezar.task.failed` | `TaskTransition` | Into `failed`, a usage-limit parking included. |
+| `TaskCancelled` | `cezar.task.cancelled` | `TaskTransition` | Into `cancelled`. |
+| `TaskArchived` | `cezar.task.archived` | `TaskEvent` | Archived, from anywhere; last for its change. Restoring emits nothing. |
+| `ProjectChanged` | `cezar.project.changed` | `ProjectChange` | The registered project the cockpit shows changed. `null` on a page that belongs to no project. Starts from `null`; no replay and no getter. |
 | `ExtensionActivated` | `cezar.extension.activated` | `{ extensionId, version }` | An extension became active — after its own listeners are live, so it hears its own activation. Not replayed for extensions that activate later. |
 
-```ts
-import { ExtensionActivated } from '@open-mercato/cezar-extension-api'
+A `TaskEvent` is `{ taskId, projectId, status }` — ids and statuses only, never a prompt or a
+title — and a `TaskTransition` adds `previousStatus`. Both work as a task command's input:
 
-context.events.on(ExtensionActivated, ({ extensionId, version }) => {
-  console.info(`${extensionId}@${version} is active`)
+```ts
+import { TaskArchive, TaskCompleted } from '@open-mercato/cezar-extension-api'
+
+// Auto-archive every task that finishes successfully. Archiving twice is harmless (see below).
+context.events.on(TaskCompleted, (task) => {
+  void context.commands.execute(TaskArchive, task)
 })
 ```
+
+Two things to design for:
+
+- **Each open cockpit reacts.** Every page (a second tab, a phone) receives the same task events
+  and runs its own extensions, so a reaction runs once per open cockpit. **Never trigger a
+  non-idempotent action from a task event** — `TaskContinue` would start one session per page.
+- **A disconnect gap is not replayed.** Transitions that happen while the page's connection to the
+  server is down are lost; everything after the reconnect is exact. A task event is a nudge, not a
+  ledger: when completeness matters, read the current state instead.
 
 ### Storage
 
