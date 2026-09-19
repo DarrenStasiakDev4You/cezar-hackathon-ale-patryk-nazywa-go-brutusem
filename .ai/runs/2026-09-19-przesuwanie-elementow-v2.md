@@ -18,13 +18,13 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 ### Phase 1: explicit drag affordance
 
-- [ ] 1.1 Attach dnd-kit activation listeners and attributes to the visible handle only; preserve the wrapper as the sortable node.
-- [ ] 1.2 Add regression coverage proving normal mode has no handle and edit-mode activation is handle-scoped and keyboard accessible.
+- [x] 1.1 Attach dnd-kit activation listeners and attributes to the visible handle only; preserve the wrapper as the sortable node. — e9a63039
+- [x] 1.2 Add regression coverage proving normal mode has no handle and edit-mode activation is handle-scoped and keyboard accessible. — e9a63039
 
 ### Phase 2: constrained movement
 
-- [ ] 2.1 Treat the shell sidebar as the movable group and reject ordinary widget drops across parent/menu boundaries.
-- [ ] 2.2 Add regression coverage for allowed group movement, rejected widget cross-parent drops, and unchanged click/guard behavior.
+- [x] 2.1 Treat the shell sidebar as the movable group and reject ordinary widget drops across parent/menu boundaries. — e9a63039
+- [x] 2.2 Add regression coverage for allowed group movement, rejected widget cross-parent drops, and unchanged click/guard behavior. — e9a63039
 
 ### Phase 3: verification and handoff
 
@@ -42,13 +42,13 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 ### Phase 1: explicit drag affordance
 
-- [ ] 1.1 Attach dnd-kit activation listeners and attributes to the visible handle only; preserve the wrapper as the sortable node.
-- [ ] 1.2 Add regression coverage proving normal mode has no handle and edit-mode activation is handle-scoped and keyboard accessible.
+- [x] 1.1 Attach dnd-kit activation listeners and attributes to the visible handle only; preserve the wrapper as the sortable node. — e9a63039
+- [x] 1.2 Add regression coverage proving normal mode has no handle and edit-mode activation is handle-scoped and keyboard accessible. — e9a63039
 
 ### Phase 2: constrained movement
 
-- [ ] 2.1 Treat the shell sidebar as the movable group and reject ordinary widget drops across parent/menu boundaries.
-- [ ] 2.2 Add regression coverage for allowed group movement, rejected widget cross-parent drops, and unchanged click/guard behavior.
+- [x] 2.1 Treat the shell sidebar as the movable group and reject ordinary widget drops across parent/menu boundaries. — e9a63039
+- [x] 2.2 Add regression coverage for allowed group movement, rejected widget cross-parent drops, and unchanged click/guard behavior. — e9a63039
 
 ### Phase 3: verification and handoff
 
