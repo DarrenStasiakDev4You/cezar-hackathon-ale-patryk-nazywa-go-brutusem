@@ -24,7 +24,7 @@ export interface SourceFile {
   readonly source: string
 }
 
-/** One way a file reaches a client action: `name` is the function, or `*` for a re-export of all. */
+/** One way a file reaches a client action: `name` is the function, or `*` for the whole module. */
 export interface ClientActionImport {
   readonly path: string
   readonly name: string
@@ -37,10 +37,15 @@ const EXEMPT = 'src/commands/core-commands.ts'
 const CLIENT_MODULE = 'src/api/client'
 
 // An import or re-export declaration at the start of a line — never one quoted in a comment,
-// whose lines start with `//` or `*`. The clause may span lines (a long named list) but never
-// runs into the next declaration: a side-effect `import './x.css'` has no `from` of its own.
+// whose lines start with `//` or `*`. The clause may span lines (a long named list, comments in
+// it included) but never runs into the next declaration: a side-effect `import './x.css'` has no
+// `from` of its own. `(?=\S)` and the lazy clause leave one way to split any whitespace, so a
+// line that is not a declaration fails fast.
 const DECLARATION =
-  /^[ \t]*(import|export)[ \t]+(type[ \t]+)?((?:(?!^[ \t]*(?:import|export)\b)[^;])*?)[ \t]*\bfrom[ \t]*['"]([^'"]+)['"]/gm
+  /^[ \t]*(import|export)[ \t]+(?=\S)(type[ \t]+)?((?:(?!^[ \t]*(?:import|export)\b)[\s\S])*?)\bfrom[ \t]*['"]([^'"]+)['"]/gm
+
+/** `import('…')` — a module loaded at run time reaches every export, the six included. */
+const DYNAMIC_IMPORT = /\bimport[ \t]*\([ \t]*['"]([^'"]+)['"][ \t]*\)/g
 
 /** Every import (and re-export) of a client action from a file other than the core handlers. */
 export function findClientActionImports(files: readonly SourceFile[]): ClientActionImport[] {
@@ -48,30 +53,29 @@ export function findClientActionImports(files: readonly SourceFile[]): ClientAct
   for (const file of files) {
     if (file.path === EXEMPT) continue
     for (const match of file.source.matchAll(DECLARATION)) {
-      const [, keyword, typeOnly, clause = '', specifier = ''] = match
+      const [, , typeOnly, clause = '', specifier = ''] = match
       if (typeOnly !== undefined || resolveSpecifier(file.path, specifier) !== CLIENT_MODULE) continue
-      for (const name of actionNames(keyword === 'export', clause, file.source)) {
-        found.push({ path: file.path, name, specifier })
+      for (const name of actionNames(clause)) found.push({ path: file.path, name, specifier })
+    }
+    for (const [, specifier = ''] of file.source.matchAll(DYNAMIC_IMPORT)) {
+      if (resolveSpecifier(file.path, specifier) === CLIENT_MODULE) {
+        found.push({ path: file.path, name: '*', specifier })
       }
     }
   }
   return found
 }
 
-/** The client actions one declaration's clause brings in. */
-function actionNames(reExport: boolean, clause: string, source: string): string[] {
-  const names: string[] = []
-  // `export * from '…'` hands every export on, the six included.
-  if (reExport && clause.trim() === '*') return ['*']
-  // `import * as client` reaches them as `client.continueRun`.
-  const namespace = /\*\s+as\s+([A-Za-z_$][\w$]*)/.exec(clause)?.[1]
-  if (namespace !== undefined) {
-    for (const name of CLIENT_ACTIONS) {
-      if (new RegExp(`\\b${namespace}\\s*\\.\\s*${name}\\b`).test(source)) names.push(name)
-    }
-  }
+/** The client actions one declaration's clause brings in; `*` for all of them at once. */
+function actionNames(clause: string): string[] {
+  // `import * as client` and `export * from`: every export behind a name this scan cannot follow
+  // (`client.cancelRun`, `const { cancelRun } = client`, `client['cancelRun']`) — so the whole
+  // module counts. Import the functions you need by name instead.
+  if (/(?:^|,)\s*\*/.test(clause.trim())) return ['*']
   const named = /\{([^}]*)\}/.exec(clause)?.[1] ?? ''
-  for (const part of named.split(',')) {
+  const names: string[] = []
+  // Comments in a long list may carry commas of their own.
+  for (const part of named.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').split(',')) {
     const specifier = part.trim()
     // `type x` is erased at compile time: it cannot call anything.
     if (specifier === '' || /^type\s/.test(specifier)) continue

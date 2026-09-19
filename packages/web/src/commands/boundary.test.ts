@@ -63,18 +63,35 @@ describe('findClientActionImports', () => {
     ])
   })
 
-  it('catches a namespace import that calls one, and a re-export', () => {
+  it('catches a comment inside a long list, even one with a semicolon or a comma', () => {
+    const source = [
+      'import {',
+      '  ApiError,',
+      '  cancelRun, // stop; see #12, then archive',
+      '  /* restore, later */ archiveRun,',
+      "} from '@/api/client'",
+    ].join('\n')
+
+    expect(scan('src/routes/x.tsx', source)).toEqual(['cancelRun ← @/api/client', 'archiveRun ← @/api/client'])
+  })
+
+  it('counts the whole module for a namespace import, an export-all and a dynamic import', () => {
     const source = [
       "import * as client from '@/api/client'",
+      "import Default, * as again from '../api/client'",
       "export { archiveRun } from '@/api/client'",
       "export * from './client'",
-      'const stop = () => client.cancelRun(id)',
+      "export * as api from './client'",
+      "const lazy = () => import('@/api/client')",
     ].join('\n')
 
     expect(scan('src/api/barrel.ts', source)).toEqual([
-      'cancelRun ← @/api/client',
+      '* ← @/api/client',
+      '* ← ../api/client',
       'archiveRun ← @/api/client',
       '* ← ./client',
+      '* ← ./client',
+      '* ← @/api/client',
     ])
   })
 
@@ -82,17 +99,24 @@ describe('findClientActionImports', () => {
     const source = [
       "import './styles.css'",
       "import type { continueRun } from '@/api/client'",
+      "import type * as types from '@/api/client'",
       "import { type cancelRun, ApiError, getRuns } from '@/api/client'",
       "import { continueRun } from './client'",
       "import { archiveRun } from '@open-mercato/cezar-api-client'",
-      "import * as client from '@/api/client'",
+      "const lazy = () => import('@/routes/global-tasks')",
       '// import { cancelRun } from "@/api/client"',
       ' * import { archiveRun } from "@/api/client"',
-      'void client.getRuns()',
     ].join('\n')
 
     // `./client` from `src/routes/` is `src/routes/client`, not the API client.
     expect(scan('src/routes/x.tsx', source)).toEqual([])
+  })
+
+  it('fails fast on a line that only looks like the start of a declaration', () => {
+    const started = performance.now()
+
+    expect(scan('src/routes/x.tsx', `export ${' '.repeat(50_000)}x`)).toEqual([])
+    expect(performance.now() - started).toBeLessThan(1_000)
   })
 
   it('exempts the core handlers, the one place allowed to call them', () => {
