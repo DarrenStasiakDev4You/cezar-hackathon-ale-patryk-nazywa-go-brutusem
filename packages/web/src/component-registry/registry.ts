@@ -5,12 +5,15 @@ import {
   type ComponentCompatibilityIssue,
   type ComponentContract,
   type ComponentImplementation,
+  type ComponentRegistry,
   type ContributionId,
   type Disposable,
   type ExtensionErrorCode,
   type ExtensionId,
 } from '@open-mercato/cezar-extension-api'
 import type { ComponentType } from 'react'
+
+import type { ExtensionScope } from '../extensions/registry'
 
 /**
  * The cockpit's component registry (spec `.ai/specs/2026-09-19-component-registry.md`): every
@@ -22,6 +25,11 @@ import type { ComponentType } from 'react'
  * unchanged under vitest and outside React. `options.contracts` is the host's own catalog: every
  * implementation is checked against the host's token for its contract id, never against the token
  * the implementation brought along.
+ *
+ * Core registers with `register` and throws on any misfit. Each extension activation gets
+ * `forExtension(scope)`, the `ComponentRegistry` it sees as `context.components`: its ids stay under
+ * `${extension.id}.`, its registrations go through `scope.track()`, and an implementation that does
+ * not fit is recorded with its issues and reported, never thrown (spec Q3).
  */
 
 /** Shown to the user when they choose an implementation. */
@@ -100,6 +108,8 @@ export interface CockpitComponentRegistry {
   listUsable<P>(contract: ComponentContract<P>): readonly UsableComponent<P>[]
   /** The registration with this component id. Never throws. */
   get(componentId: ContributionId): ComponentRegistration | undefined
+  /** The `ComponentRegistry` one extension activation sees as `context.components`. */
+  forExtension(scope: ExtensionScope): ComponentRegistry
 }
 
 /** Recognised by `isExtensionError` (duck-typed on `code`), like `CommandError` and `EventError`. */
@@ -141,6 +151,7 @@ interface ServedContract {
 
 export function createComponentRegistry(options: ComponentRegistryOptions = {}): CockpitComponentRegistry {
   const served = catalogOf(options.contracts ?? [])
+  const onDiagnostic = options.onDiagnostic ?? logComponentDiagnostic
   /** Every registration by component id. The Map keeps registration order. */
   const registrations = new Map<ContributionId, ComponentRegistration>()
 
@@ -170,6 +181,32 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
     }
   }
 
+  /** § Providing, precisely, step 7: the fit against the host's token, or `unknown-contract`. */
+  const fitOf = (input: PreparedImplementation): Fit => {
+    const host = served.get(input.contractId)
+    if (host === undefined) {
+      const issue: ComponentRegistrationIssue = Object.freeze({
+        code: 'unknown-contract',
+        message: `${input.componentId} implements ${input.contractId}@${input.contractVersion}, which this Cezar does not serve`,
+        contractId: input.contractId,
+      })
+      return Object.freeze({ capabilities: Object.freeze([]), issues: Object.freeze([issue]) })
+    }
+    return checkComponentCompatibility(
+      host.token,
+      { id: input.componentId, capabilities: input.declaredCapabilities },
+      { id: input.contractId, version: input.contractVersion },
+    )
+  }
+
+  const report = (registration: ComponentRegistration): void => {
+    try {
+      onDiagnostic(registration)
+    } catch {
+      // A throwing reporter must not fail the provide.
+    }
+  }
+
   /** Every registration that `keep` accepts, in registration order, as a new frozen array. */
   const select = (keep: (registration: ComponentRegistration) => boolean): readonly ComponentRegistration[] => {
     const found: ComponentRegistration[] = []
@@ -186,20 +223,15 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       assertFree(componentId)
 
       // A core mistake is a bug for the tests to catch, not drift between versions: it throws.
-      const host = served.get(contractId)
-      if (host === undefined) {
+      if (!served.has(contractId)) {
         throw new ComponentError(
           'invalid-input',
           `Core component "${componentId}" implements ${contractId}@${contractVersion}, which is not in options.contracts`,
           { componentId },
         )
       }
-      const fit = checkComponentCompatibility(
-        host.token,
-        { id: componentId, capabilities: input.declaredCapabilities },
-        { id: contractId, version: contractVersion },
-      )
-      if (!fit.compatible) {
+      const fit = fitOf(input)
+      if (fit.issues.length > 0) {
         const mismatch = fit.issues.find((issue) => issue.code === 'contract-version-mismatch')
         if (mismatch !== undefined) {
           throw new ComponentError('contract-version-mismatch', mismatch.message, { componentId })
@@ -223,6 +255,29 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
 
     get(componentId) {
       return typeof componentId === 'string' ? registrations.get(componentId) : undefined
+    },
+
+    forExtension(scope) {
+      const extensionId = scope.extension.id
+      const prefix = `${extensionId}.`
+      return Object.freeze<ComponentRegistry>({
+        provide(contract, implementation) {
+          scope.assertLive()
+          const input = prepare(
+            contract,
+            implementation,
+            prefix,
+            (id) => `Extension "${extensionId}" may only provide components under "${prefix}", not "${id}"`,
+          )
+          assertFree(input.componentId)
+          // Provenance comes from the scope, never from anything the implementation claims.
+          const registration = registrationOf(input, extensionId, fitOf(input))
+          // On an ended activation `track` disposes the registration and throws `disposed`.
+          const handle = scope.track(add(registration))
+          if (!registration.compatible) report(registration)
+          return handle
+        },
+      })
     },
   }
 }

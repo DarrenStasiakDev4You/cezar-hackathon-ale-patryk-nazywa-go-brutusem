@@ -7,6 +7,7 @@ import {
   type ComponentImplementation,
 } from '@open-mercato/cezar-extension-api'
 
+import { fakeScope } from '../extensions/registry.fixtures'
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
 import {
   ComponentError,
@@ -532,5 +533,232 @@ describe('reading the registry', () => {
       registry.register(Header, { id: 'cezar.fixture.task-header.other', title: 'Other', component: Other })
 
     expectTypeOf(typeOnly).toBeFunction()
+  })
+})
+
+describe('forExtension(scope).provide', () => {
+  const jiraHeader: ComponentImplementation<HeaderProps> = {
+    id: 'acme.jira.task-header',
+    title: 'Jira header',
+    description: 'Shows the linked Jira issue',
+    capabilities: ['shows-title', 'compact'],
+    component: CoreHeader,
+  }
+
+  it('records the scope’s extension id as the provider, whatever the implementation claims', () => {
+    const registry = servedRegistry()
+    const { scope } = fakeScope('acme.jira')
+
+    registry.forExtension(scope).provide(Header, {
+      ...jiraHeader,
+      extensionId: 'acme.other',
+    } as ComponentImplementation<HeaderProps>)
+
+    expect(registry.get('acme.jira.task-header')).toMatchObject({
+      componentId: 'acme.jira.task-header',
+      extensionId: 'acme.jira',
+      contractId: 'cezar.fixture.task-header',
+      contractVersion: 1,
+      capabilities: ['shows-title', 'compact'],
+      metadata: { title: 'Jira header', description: 'Shows the linked Jira issue' },
+      compatible: true,
+      issues: [],
+    })
+    expect(registry.listUsable(Header).map((registration) => registration.extensionId)).toEqual(['acme.jira'])
+  })
+
+  it.each<[string, string]>([
+    ['another extension’s namespace', 'acme.compact.task-header'],
+    ['the core namespace', 'cezar.fixture.task-header.jira'],
+    ['its own id without a name under it', 'acme.jira'],
+  ])('refuses an id in %s with namespace-violation', (_label, id) => {
+    const { scope } = fakeScope('acme.jira')
+
+    const error = thrown(() => servedRegistry().forExtension(scope).provide(Header, { ...jiraHeader, id }))
+
+    expect(error.code).toBe('namespace-violation')
+  })
+
+  it('names the prefix an extension may use when it refuses an id', () => {
+    const { scope } = fakeScope('acme.jira')
+
+    const error = thrown(() =>
+      servedRegistry().forExtension(scope).provide(Header, { ...jiraHeader, id: 'acme.compact.task-header' }),
+    )
+
+    expect(error.message).toBe('Extension "acme.jira" may only provide components under "acme.jira.", not "acme.compact.task-header"')
+    expect(error.componentId).toBe('acme.compact.task-header')
+  })
+
+  it('refuses a call after the scope ended with disposed, recording nothing', () => {
+    const registry = servedRegistry()
+    const { scope, end } = fakeScope('acme.jira')
+    const components = registry.forExtension(scope)
+    end()
+
+    expect(thrown(() => components.provide(Header, jiraHeader)).code).toBe('disposed')
+    expect(registry.list(Header.id)).toEqual([])
+  })
+
+  it('refuses a built-in cezar.* extension providing an id core already registered, naming core', () => {
+    const registry = servedRegistry()
+    registry.register(Header, coreDefault)
+    const { scope } = fakeScope('cezar.fixture')
+
+    const error = thrown(() => registry.forExtension(scope).provide(Header, coreDefault))
+
+    expect(error.code).toBe('duplicate-registration')
+    expect(error.message).toBe('Component "cezar.fixture.task-header.default" is already provided by core')
+    expect(registry.get(coreDefault.id)?.extensionId).toBeNull()
+  })
+
+  it('refuses an extension providing the same id twice, naming the extension', () => {
+    const registry = servedRegistry()
+    const components = registry.forExtension(fakeScope('acme.jira').scope)
+    components.provide(Header, jiraHeader)
+
+    const error = thrown(() => components.provide(Header, jiraHeader))
+
+    expect(error.message).toBe('Component "acme.jira.task-header" is already provided by acme.jira')
+  })
+
+  it.each<[string, () => typeof Header, Partial<ComponentImplementation<HeaderProps>>, Record<string, unknown>]>([
+    [
+      'another major',
+      () => HeaderV2,
+      {},
+      {
+        code: 'contract-version-mismatch',
+        message: 'acme.jira.task-header implements cezar.fixture.task-header@2, but this Cezar serves cezar.fixture.task-header@1',
+        expected: 1,
+        actual: 2,
+      },
+    ],
+    [
+      'a missing required capability',
+      () => Header,
+      { capabilities: ['compact'] },
+      {
+        code: 'missing-capability',
+        message: 'acme.jira.task-header does not declare "shows-title", required by cezar.fixture.task-header@1',
+        capability: 'shows-title',
+      },
+    ],
+    [
+      'a contract this Cezar does not serve',
+      () => defineComponentContract<HeaderProps>('cezar.task.header', { version: 1 }),
+      {},
+      {
+        code: 'unknown-contract',
+        message: 'acme.jira.task-header implements cezar.task.header@1, which this Cezar does not serve',
+        contractId: 'cezar.task.header',
+      },
+    ],
+  ])('records %s as incompatible, reports it once, and never throws', (_label, token, fields, issue) => {
+    const diagnostics: ComponentRegistration[] = []
+    const registry = servedRegistry({ onDiagnostic: (registration) => diagnostics.push(registration) })
+    const contract = token()
+
+    expect(() => registry.forExtension(fakeScope('acme.jira').scope).provide(contract, { ...jiraHeader, ...fields })).not.toThrow()
+
+    const registration = registry.get('acme.jira.task-header')
+    expect(registration).toMatchObject({
+      extensionId: 'acme.jira',
+      contractId: contract.id,
+      contractVersion: contract.version,
+      compatible: false,
+      capabilities: [],
+      issues: [issue],
+    })
+    expect(Object.isFrozen(registration?.issues[0])).toBe(true)
+    expect(diagnostics).toEqual([registration])
+    expect(registry.list(contract.id)).toEqual([registration])
+    expect(registry.listUsable(contract)).toEqual([])
+    expect(registry.listUsable(Header)).toEqual([])
+  })
+
+  it('reports through the default diagnostic: one console.warn line', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = createComponentRegistry()
+
+    registry.forExtension(fakeScope('acme.jira').scope).provide(Header, jiraHeader)
+
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]).toEqual([
+      '[cezar:extensions] acme.jira.task-header (acme.jira) is not used: ' +
+        'acme.jira.task-header implements cezar.fixture.task-header@1, which this Cezar does not serve',
+    ])
+  })
+
+  it('swallows a throwing onDiagnostic and keeps the registration', () => {
+    const registry = createComponentRegistry({
+      onDiagnostic: () => {
+        throw new Error('reporter is down')
+      },
+    })
+
+    expect(() => registry.forExtension(fakeScope('acme.jira').scope).provide(Header, jiraHeader)).not.toThrow()
+    expect(registry.get('acme.jira.task-header')?.compatible).toBe(false)
+  })
+
+  it('reports nothing for a compatible registration', () => {
+    const onDiagnostic = vi.fn()
+    const registry = servedRegistry({ onDiagnostic })
+
+    registry.forExtension(fakeScope('acme.jira').scope).provide(Header, jiraHeader)
+
+    expect(onDiagnostic).not.toHaveBeenCalled()
+  })
+
+  it('tracks the registration in the scope: ending the scope removes it and frees its id', () => {
+    const registry = servedRegistry()
+    const first = fakeScope('acme.jira')
+    const handle = registry.forExtension(first.scope).provide(Header, jiraHeader)
+
+    expect(first.tracked.has(handle)).toBe(true)
+
+    first.end()
+
+    expect(registry.list(Header.id)).toEqual([])
+    const second = fakeScope('acme.jira')
+    registry.forExtension(second.scope).provide(Header, jiraHeader)
+    expect(registry.get('acme.jira.task-header')?.extensionId).toBe('acme.jira')
+  })
+
+  it('disposes early through the returned handle, which also untracks it', () => {
+    const registry = servedRegistry()
+    const { scope, tracked } = fakeScope('acme.jira')
+    const handle = registry.forExtension(scope).provide(Header, jiraHeader)
+
+    handle.dispose()
+
+    expect(tracked.size).toBe(0)
+    expect(registry.get('acme.jira.task-header')).toBeUndefined()
+  })
+
+  it('keeps a snapshot: changing the implementation object afterwards has no effect', () => {
+    const registry = servedRegistry()
+    const implementation = { ...jiraHeader, capabilities: ['shows-title'] }
+    registry.forExtension(fakeScope('acme.jira').scope).provide(Header, implementation)
+
+    implementation.title = 'Renamed'
+    implementation.capabilities.push('compact')
+
+    expect(registry.get('acme.jira.task-header')).toMatchObject({
+      metadata: { title: 'Jira header' },
+      declaredCapabilities: ['shows-title'],
+      capabilities: ['shows-title'],
+    })
+  })
+
+  it('runs the same field rules as core, with the same codes', () => {
+    const { scope } = fakeScope('acme.jira')
+    const components = servedRegistry().forExtension(scope)
+
+    expect(thrown(() => components.provide(Header, { ...jiraHeader, title: '' })).code).toBe('invalid-input')
+    expect(thrown(() => components.provide(revoked() as typeof Header, jiraHeader)).code).toBe('invalid-id')
+    expect(
+      thrown(() => components.provide(Header, { ...jiraHeader, capabilities: revoked() as readonly string[] })).code,
+    ).toBe('invalid-input')
   })
 })
