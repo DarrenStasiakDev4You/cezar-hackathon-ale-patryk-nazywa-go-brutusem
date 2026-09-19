@@ -12,7 +12,7 @@ import {
 import { resetToasts, Toaster } from '@/components/ui/toaster'
 
 import { fakeScope } from '../extensions/registry.fixtures'
-import { boxOf, ComponentHost } from './component-host'
+import { boxOf, ComponentHost, useHostedComponent } from './component-host'
 import { ComponentsProvider, useComponentRegistry, type ImplementationFailure } from './provider'
 import { createComponentRegistry, type CockpitComponentRegistry } from './registry'
 
@@ -559,5 +559,87 @@ describe('ComponentsProvider', () => {
     )
 
     expect(screen.getByTestId('core-header')).toBeTruthy()
+  })
+})
+
+/** What the shell around a slot reads: the implementation the host renders now. */
+function HostedProbe({ subject = 'task-1' }: { subject?: string }) {
+  const hosted = useHostedComponent(Header, subject)
+  return <output data-testid={`hosted-${subject}`}>{hosted === null ? 'null' : hosted.componentId}</output>
+}
+
+/** The host and the probe for one subject, side by side. */
+const hostAndProbe = (subject = 'task-1') => (
+  <>
+    {header(subject)}
+    <HostedProbe subject={subject} />
+  </>
+)
+
+describe('useHostedComponent: what the host renders now', () => {
+  const named = (subject = 'task-1') => screen.getByTestId(`hosted-${subject}`).textContent
+
+  it('names core’s default without a preference, and the preferred implementation with one', () => {
+    const { registry } = fixture()
+    const { container, rerender } = render(tree(hostAndProbe(), { registry }))
+    expect(named()).toBe(DEFAULT_ID)
+    expect(hostBox(container).dataset.component).toBe(named())
+
+    rerender(tree(hostAndProbe(), { registry, preferenceOf: prefer(JIRA_ID) }))
+    expect(named()).toBe(JIRA_ID)
+    expect(hostBox(container).dataset.component).toBe(named())
+  })
+
+  it('names core’s default for the subject whose implementation threw, and only for that one', () => {
+    const { registry } = fixture()
+    behaviour.jira = 'render'
+    const onImplementationError = vi.fn()
+    const { container, rerender } = render(
+      tree(hostAndProbe('task-1'), { registry, preferenceOf: prefer(JIRA_ID), onImplementationError }),
+    )
+    expect(named('task-1')).toBe(DEFAULT_ID)
+    expect(hostBox(container).dataset.component).toBe(DEFAULT_ID)
+
+    behaviour.jira = 'ok'
+    rerender(
+      tree(
+        <>
+          {hostAndProbe('task-1')}
+          {hostAndProbe('task-2')}
+        </>,
+        { registry, preferenceOf: prefer(JIRA_ID), onImplementationError },
+      ),
+    )
+    expect(named('task-1')).toBe(DEFAULT_ID)
+    expect(named('task-2')).toBe(JIRA_ID)
+    expect(hostBox(container, 1).dataset.component).toBe(JIRA_ID)
+  })
+
+  it('names core’s default after the chosen implementation is disposed', () => {
+    const { registry, jiraHandle } = fixture()
+    const { container } = render(tree(hostAndProbe(), { registry, preferenceOf: prefer(JIRA_ID) }))
+    expect(named()).toBe(JIRA_ID)
+
+    act(() => jiraHandle.dispose())
+    expect(named()).toBe(DEFAULT_ID)
+    expect(hostBox(container).dataset.component).toBe(DEFAULT_ID)
+  })
+
+  it('is null while the contract is unresolved', () => {
+    const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
+    const { container } = render(tree(hostAndProbe(), { registry }))
+
+    expect(named()).toBe('null')
+    expect(hostBox(container).dataset.state).toBe('unresolved')
+    expect(hostBox(container).dataset.component).toBeUndefined()
+  })
+
+  it('carries the implementation’s checked capabilities', () => {
+    const { registry } = fixture()
+    const { result } = renderHook(() => useHostedComponent(Header, 'task-1'), {
+      wrapper: ({ children }) => tree(children, { registry, preferenceOf: prefer(JIRA_ID) }),
+    })
+
+    expect(result.current?.capabilities).toEqual(['shows-title'])
   })
 })

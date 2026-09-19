@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 
 import { useComponentsRuntime } from './provider'
 import type { ComponentRegistration, UsableComponent } from './registry'
-import { resolveComponent } from './resolve'
+import { resolveComponent, type ComponentResolution } from './resolve'
 
 /**
  * The component host (spec `.ai/specs/2026-09-19-component-host.md`, § Hosting, precisely): the
@@ -41,9 +41,22 @@ export interface ComponentHostProps<P> {
 
 type HostState = 'resolved' | 'fallback' | 'failed' | 'unresolved'
 
-export function ComponentHost<P extends object>({ contract, subject = '', props }: ComponentHostProps<P>): ReactElement {
+/** What the host for one (contract, subject) resolved, and which implementation it renders now. */
+interface HostedChoice<P> {
+  readonly resolution: ComponentResolution<P>
+  /** The resolved component, or core's default once the resolved one failed for this subject;
+   *  `null` while unresolved. */
+  readonly current: UsableComponent<P> | null
+}
+
+/**
+ * Steps 1, 2 and 4 of the host (spec `2026-09-19-component-host`, § Hosting, precisely): subscribe,
+ * resolve, choose. One function, so `ComponentHost` and `useHostedComponent` make the same choice
+ * from the provider's one failure record and cannot disagree.
+ */
+function useHostedChoice<P extends object>(contract: ComponentContract<P>, subject: string): HostedChoice<P> {
   const runtime = useComponentsRuntime()
-  const { registry, hasFailed, recordFailure, reportCoreFailure, reportUnresolved } = runtime
+  const { registry, hasFailed } = runtime
 
   // 1. Subscribe: an extension that activates or deactivates re-resolves every host.
   const revision = useSyncExternalStore(registry.subscribe, registry.revision)
@@ -54,6 +67,32 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
     // `revision` stands for the registry's contents, which the resolver reads.
     [registry, revision, contract, preference],
   )
+  // 4. Choose: core's default once the resolved implementation failed for this subject.
+  const current =
+    resolution.status === 'unresolved'
+      ? null
+      : hasFailed(registrationOf(resolution.component), subject)
+        ? resolution.fallback
+        : resolution.component
+  return { resolution, current }
+}
+
+/**
+ * The implementation the host for (`contract`, `subject`) renders now: the resolved component, or
+ * core's default once the resolved one has failed for this subject. `null` while unresolved.
+ *
+ * For core code around a slot that must follow what renders in it (spec
+ * `2026-09-19-task-header-contract`: the task header's shell reads the checked `capabilities` of
+ * the implementation it hosts). `ComponentHost` makes its choice through the same function.
+ */
+export function useHostedComponent<P extends object>(contract: ComponentContract<P>, subject = ''): UsableComponent<P> | null {
+  return useHostedChoice(contract, subject).current
+}
+
+export function ComponentHost<P extends object>({ contract, subject = '', props }: ComponentHostProps<P>): ReactElement {
+  const { recordFailure, reportCoreFailure, reportUnresolved } = useComponentsRuntime()
+  // 1, 2 and 4: subscribe, resolve, choose.
+  const { resolution, current } = useHostedChoice(contract, subject)
   const [retry, setRetry] = useState(0)
   // The boundary whose core default threw (its key and subject), so the box can say `failed`.
   const [broken, setBroken] = useState<string | null>(null)
@@ -66,13 +105,11 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
   const box = boxOf(contract.layout)
 
   // 3. Unresolved: a core bug the gate test forbids. Never an extension instead.
-  if (resolution.status === 'unresolved') {
+  if (resolution.status === 'unresolved' || current === null) {
     return <HostBox contractId={contract.id} state="unresolved" box={box} />
   }
 
-  // 4. Choose.
   const { fallback } = resolution
-  const current = hasFailed(registrationOf(resolution.component), subject) ? fallback : resolution.component
   const isFallback = current === fallback
   const key = `${current.componentId}:${retry}`
   const identity = `${key}|${subject}`
