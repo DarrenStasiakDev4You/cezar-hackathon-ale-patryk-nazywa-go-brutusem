@@ -10,7 +10,14 @@ export type LayoutElementDescriptor = {
 
 export type RegisteredLayoutElement = LayoutElementDescriptor & {
   children: string[]
+  order: number
   domNode?: Element
+}
+
+export type LayoutMove = {
+  id: string
+  targetId: string | null
+  position: 'before' | 'after'
 }
 
 export type LayoutRegistryListener = () => void
@@ -54,6 +61,7 @@ export class LayoutRegistry {
   private readonly pendingElements = new Map<string, PendingLayoutElement>()
   private readonly pendingRemovals = new Set<string>()
   private readonly domNodes = new Map<string, Element>()
+  private readonly siblingOrder = new Map<string | undefined, string[]>()
   private readonly listeners = new Set<LayoutRegistryListener>()
   private snapshotCache: RegisteredLayoutElement[] = []
 
@@ -67,6 +75,8 @@ export class LayoutRegistry {
     }
 
     this.elements.set(descriptor.id, { ...descriptor })
+    const siblings = this.siblingOrder.get(descriptor.parentId) ?? []
+    this.siblingOrder.set(descriptor.parentId, [...siblings, descriptor.id])
     this.rebuildSnapshot()
     this.promotePendingChildren(descriptor.id)
     let active = true
@@ -129,6 +139,43 @@ export class LayoutRegistry {
     return this.snapshotCache.filter((element) => element.parentId === id).map(cloneElement)
   }
 
+  getSiblingIds(parentId?: string): string[] {
+    return [...(this.siblingOrder.get(parentId) ?? [])]
+  }
+
+  /**
+   * Moves one entry within its current parent without mutating the caller's move or snapshot.
+   * Children never become targets across parent boundaries, and a group cannot be moved into
+   * its own subtree.
+   */
+  moveWithinParent(move: LayoutMove): boolean {
+    const source = this.elements.get(move.id)
+    if (!source || (move.targetId !== null && move.targetId === move.id)) return false
+
+    const siblings = this.siblingOrder.get(source.parentId)
+    if (!siblings) return false
+
+    const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
+    if (move.targetId !== null && (!target || target.parentId !== source.parentId)) return false
+    if (target && this.getSubtreeIds(move.id).has(target.id)) return false
+
+    const next = siblings.filter((id) => id !== move.id)
+    const targetIndex = move.targetId === null ? next.length : next.indexOf(move.targetId)
+    if (targetIndex < 0) return false
+    const insertionIndex = move.targetId === null
+      ? next.length
+      : targetIndex + (move.position === 'after' ? 1 : 0)
+    const currentIndex = siblings.indexOf(move.id)
+    if (currentIndex < 0 || insertionIndex === currentIndex || insertionIndex === currentIndex + 1) {
+      return false
+    }
+
+    next.splice(insertionIndex, 0, move.id)
+    this.siblingOrder.set(source.parentId, next)
+    this.rebuildSnapshot()
+    return true
+  }
+
   getSubtree(id: string): RegisteredLayoutElement[] {
     const root = this.get(id)
     if (!root) return []
@@ -156,14 +203,13 @@ export class LayoutRegistry {
 
   private rebuildSnapshot(): void {
     const childrenByParent = new Map<string | undefined, string[]>()
-    for (const descriptor of this.elements.values()) {
-      const children = childrenByParent.get(descriptor.parentId) ?? []
-      children.push(descriptor.id)
-      childrenByParent.set(descriptor.parentId, children)
+    for (const [parentId, ids] of this.siblingOrder) {
+      childrenByParent.set(parentId, [...ids])
     }
     this.snapshotCache = [...this.elements.values()].map((descriptor) => ({
       ...descriptor,
       children: [...(childrenByParent.get(descriptor.id) ?? [])],
+      order: this.siblingOrder.get(descriptor.parentId)?.indexOf(descriptor.id) ?? -1,
       ...(this.domNodes.has(descriptor.id) ? { domNode: this.domNodes.get(descriptor.id) } : {}),
     }))
     for (const listener of this.listeners) listener()
@@ -198,10 +244,30 @@ export class LayoutRegistry {
   }
 
   private removeRegistered(id: string): void {
+    const descriptor = this.elements.get(id)
     this.elements.delete(id)
     this.domNodes.delete(id)
+    if (descriptor) {
+      const siblings = this.siblingOrder.get(descriptor.parentId)
+      if (siblings) {
+        const next = siblings.filter((siblingId) => siblingId !== id)
+        if (next.length > 0) this.siblingOrder.set(descriptor.parentId, next)
+        else this.siblingOrder.delete(descriptor.parentId)
+      }
+    }
     this.rebuildSnapshot()
     this.flushPendingRemovals()
+  }
+
+  private getSubtreeIds(id: string): Set<string> {
+    const result = new Set<string>()
+    const visit = (currentId: string) => {
+      if (result.has(currentId)) return
+      result.add(currentId)
+      for (const childId of this.siblingOrder.get(currentId) ?? []) visit(childId)
+    }
+    visit(id)
+    return result
   }
 }
 

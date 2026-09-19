@@ -73,4 +73,48 @@ describe('LayoutRegistry', () => {
     expect(registry.get('widget')?.domNode).toBeUndefined()
     unregister()
   })
+
+  it('keeps sibling order stable and moves only within one parent', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'group', kind: 'group' })
+    registry.register({ id: 'first', kind: 'widget' })
+    registry.register({ id: 'second', kind: 'widget' })
+    registry.register({ id: 'third', kind: 'widget' })
+    registry.register({ id: 'nested', kind: 'group', parentId: 'group' })
+    registry.register({ id: 'nested-child', kind: 'widget', parentId: 'nested' })
+
+    expect(registry.getSiblingIds()).toEqual(['group', 'first', 'second', 'third'])
+    expect(registry.moveWithinParent({ id: 'third', targetId: 'first', position: 'before' })).toBe(true)
+    expect(registry.getSiblingIds()).toEqual(['group', 'third', 'first', 'second'])
+    expect(registry.moveWithinParent({ id: 'second', targetId: null, position: 'after' })).toBe(false)
+    expect(registry.moveWithinParent({ id: 'first', targetId: 'nested', position: 'after' })).toBe(false)
+    expect(registry.getSiblingIds('nested')).toEqual(['nested-child'])
+    expect(registry.get('nested')?.children).toEqual(['nested-child'])
+  })
+
+  it('publishes one immutable snapshot for a successful move', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'first', kind: 'widget' })
+    registry.register({ id: 'second', kind: 'widget' })
+    let notifications = 0
+    registry.subscribe(() => notifications++)
+
+    expect(registry.moveWithinParent({ id: 'second', targetId: 'first', position: 'before' })).toBe(true)
+    expect(notifications).toBe(1)
+    const snapshot = registry.getSnapshot()
+    snapshot[0]!.children.push('not-real')
+    snapshot[0]!.order = 99
+    expect(registry.getSiblingIds()).toEqual(['second', 'first'])
+    expect(registry.get('second')?.order).toBe(0)
+  })
+
+  it('rejects moving a group into its own subtree', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'root', kind: 'group' })
+    registry.register({ id: 'child', kind: 'group', parentId: 'root' })
+    registry.register({ id: 'grandchild', kind: 'widget', parentId: 'child' })
+
+    expect(registry.moveWithinParent({ id: 'root', targetId: 'child', position: 'after' })).toBe(false)
+    expect(registry.getSiblingIds()).toEqual(['root'])
+  })
 })
