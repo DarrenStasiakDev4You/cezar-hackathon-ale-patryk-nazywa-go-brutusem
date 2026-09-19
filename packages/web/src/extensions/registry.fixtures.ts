@@ -79,6 +79,45 @@ export function recordingServices(log: string[] = []): RecordingServices {
   return { services, scopes }
 }
 
+/**
+ * A recording ExtensionScope with the registry's contract, for testing a service on its own:
+ * `track` returns an idempotent handle, `end()` disposes what is still tracked (newest first) and
+ * from then on every call fails with `disposed`.
+ */
+export function fakeScope(extensionId: string) {
+  let live = true
+  const tracked = new Set<Disposable>()
+  const disposedError = () =>
+    Object.assign(new Error(`Extension "${extensionId}" has been deactivated`), { code: 'disposed' as const })
+  const scope: ExtensionScope = {
+    extension: fixtureManifest(extensionId),
+    track(registration) {
+      if (!live) {
+        registration.dispose()
+        throw disposedError()
+      }
+      const handle: Disposable = {
+        dispose() {
+          if (tracked.delete(handle)) registration.dispose()
+        },
+      }
+      tracked.add(handle)
+      return handle
+    },
+    assertLive() {
+      if (!live) throw disposedError()
+    },
+  }
+  return {
+    scope,
+    tracked,
+    end() {
+      live = false
+      for (const handle of [...tracked].reverse()) handle.dispose()
+    },
+  }
+}
+
 export interface Deferred {
   readonly promise: Promise<void>
   resolve(): void
