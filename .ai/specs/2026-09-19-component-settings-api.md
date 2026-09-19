@@ -1,27 +1,34 @@
-# Component Settings API — implementation-owned schemas with persisted values
+# Component Settings API — implementation-owned, scoped and persisted settings
 
 > Slug: `component-settings-api` · Status: **designed, awaiting implementation** · Epic 2
 > (Component Platform). Builds on `2026-09-19-component-contract-api.md`,
 > `2026-09-19-component-registry.md`, `2026-09-19-component-resolver.md`,
-> `2026-09-19-component-host.md` and the existing workspace UI-state store. This is an API and
-> persistence item, not the settings picker UI.
+> `2026-09-19-component-host.md`, `2026-09-19-extension-storage-api.md` and
+> `2026-09-19-extension-project-storage.md`. This is an API and persistence item, not the
+> settings picker UI.
 
 ## 📝 TLDR
 
-Today a component contract describes the props and capabilities shared by every implementation,
-but an implementation has no typed place for its own behavior knobs. A Jira header and a compact
-header therefore cannot each declare settings without incorrectly adding those fields to the common
-contract, and the host has no durable value to pass after a reload.
+Component contracts describe the props and capabilities shared by every implementation, but an
+implementation also needs private behavior knobs. A Jira header and a compact header must be able
+to define different settings without adding either set of fields to the shared contract.
 
-**Future behavior:** a `ComponentImplementation` may declare a Zod-compatible settings schema. The
-component host stores validated JSON under the implementation's exact `componentId` and injects the
-validated snapshot as the implementation-only `settings` prop. Two implementations of one contract
-remain independent, an implementation can read the settings it owns, and values survive a cockpit
+Each `ComponentImplementation` may declare a Cezar-owned settings definition with:
+
+- an explicit default scope: `global` or `project`;
+- a library-independent declarative schema;
+- typed defaults used before the first write and after a reset.
+
+Cezar validates, persists, scopes, migrates and resets the values. The persisted namespace is the
+implementation's exact id, so two implementations of one contract never share a value. The
+implementation reads its resolved settings through the type-safe `useComponentSettings()` surface
+provided to its component. Global values live in workspace UI state; project values live in the
+existing per-project UI-state path. A fresh registry/host therefore reads the same values after a
 reload.
 
 ## 📝 Problem Statement
 
-The component platform already has the right ownership boundary for this feature:
+The component platform already has the right ownership boundary:
 
 - `ComponentContract<Props>` owns the props and capabilities every implementation must understand.
 - `ComponentImplementation` owns the implementation id, display metadata, component and declared
@@ -30,259 +37,328 @@ The component platform already has the right ownership boundary for this feature
   `componentId`.
 - `ComponentHost` is the single place that turns a resolved registration into React output.
 
-The missing boundary is settings. A setting such as `compact` belongs to `acme.jira.task-header`,
-not to `cezar.task.header.main@1`; adding it to the contract would force every implementation to
-understand a field it does not own. Keeping settings only in a component's closure would make them
-unavailable to the host, impossible to validate at the storage boundary, and lost on reload.
+The missing boundary is implementation settings. A setting such as `compact` belongs to
+`acme.jira.task-header`, not to `cezar.task.header.main@1`. Keeping settings in a component closure
+would make them unavailable to the host, impossible to persist consistently and lost on reload.
 
-The Definition of Done is therefore one capability with three coupled guarantees:
+The Definition of Done is one capability with three coupled guarantees:
 
 | Requirement | Required behavior | Proof |
 |---|---|---|
-| Different implementations | Two implementations of the same contract may declare different schemas and values without a collision. | Registry and type tests register two schemas under distinct ids and render each selected implementation with its own value. |
-| Own settings are readable | The selected implementation receives only the snapshot parsed by its own schema; another implementation's value is never substituted. | Component-host test captures `props.settings` for both implementations and checks the ids and parsed shapes. |
-| Reload persistence | A fresh registry/host reads the values stored by the previous page and passes them after hydration. | Store test writes, disposes, recreates and reads both namespaces. |
+| Different implementations | Two implementations of one contract may declare different settings definitions, scopes and values without collision. | Registry and type tests register both implementations under distinct ids and assert independent stored entries. |
+| Own settings are readable | A selected implementation reads only the resolved value from its own definition and namespace. | Component-host test renders both implementations and checks typed `useComponentSettings()` values. |
+| Reload persistence | Global and project values survive a fresh registry/host instance and remain attached to their selected scope. | Store test writes, disposes, recreates and reads both scope targets. |
 
 ## 📝 Proposed Solution
 
-1. Add an optional, structural `ComponentSettingsSchema<Settings>` to the extension API. It exposes
-   only `parse(input: unknown): Settings`; a Zod object satisfies this shape, but the node-free,
-   zero-runtime-dependency extension package does not import or bundle Zod.
-2. Extend `ComponentImplementation<Props, Settings>` with `settings?: schema` and define the
-   implementation render props as `Props & { readonly settings: Settings | undefined }`. The
-   contract's `Props` stays unchanged. A component without a schema receives `undefined`, preserving
-   the existing behavior.
-3. Extend the cockpit registry with a host-side settings store. `getSettings(componentId)` reads
-   the raw JSON value, parses it with that registration's schema and returns `undefined` when there
-   is no value. `setSettings(componentId, input)` parses before writing, persists the canonical
-   parsed JSON and leaves the old value untouched on validation failure. The `provide` result becomes
-   a scoped registration handle with `getSettings()` and `onSettingsChange()`, so an extension can
-   read/listen to the settings of the implementation it just registered; only the host/picker can
-   write.
-4. Back the store by the existing workspace UI-state API, adding one optional
-   `componentSettings` map. The map is keyed directly by `componentId`, not by contract id, title or
-   extension display name. It is global user state, so it is available to every project and survives
-   a new cockpit process/page.
-5. Make `ComponentHost` load settings for the currently resolved implementation and pass them to
-   the component. Registry/store changes trigger the existing registry revision subscription; late
-   reads for a previous implementation are ignored. A missing or malformed setting never prevents
-   the component from rendering: the component receives `undefined` and the host emits one
-   diagnostic.
+1. Add a Cezar-owned, library-independent `defineSettings()` API to the extension contract. The
+   definition contains `scope`, a declarative schema and defaults. `booleanSetting()` is the first
+   field helper; the format is designed to grow without binding extensions to Zod or another
+   validation library.
+2. Extend `ComponentImplementation<Props, Settings>` with an optional settings definition. The
+   contract props remain unchanged. For an implementation with settings, the host supplies an
+   implementation-only `useComponentSettings()` reader; it is not part of `ComponentContract`.
+3. Keep writes host-owned. The extension declares field types and defaults but has no settings
+   setter. The host/picker calls registry methods for set, partial update and reset; Cezar performs
+   validation, canonicalization, persistence, scope resolution and storage migrations.
+4. Namespace settings by the exact implementation `componentId` inside the selected scope's UI
+   state. `global` uses `~/.cezar/ui-state.json`; `project` uses the existing
+   `<repo>/.ai/cezar/ui-state.json` path and project-scoped UI-state route.
+5. Make `ComponentHost` hydrate the selected implementation's resolved settings and provide the
+   reader. Registry/store changes rerender the current implementation; late reads for a previous
+   implementation or project are ignored.
 
-The resulting shape is intentionally close to the brief:
+The resulting public shape is intentionally not a Zod API:
 
 ```ts
-import { z } from 'zod'
 import {
+  booleanSetting,
   defineComponentContract,
+  defineSettings,
   type ComponentImplementation,
+  type SettingsOf,
 } from '@open-mercato/cezar-extension-api'
 
 const Header = defineComponentContract<HeaderProps>('cezar.task.header.main', { version: 1 })
-const JiraSettings = z.object({
-  compact: z.boolean(),
-  showToolCalls: z.boolean(),
-})
-type JiraSettings = z.infer<typeof JiraSettings>
 
-const jiraHeader: ComponentImplementation<HeaderProps, JiraSettings> = {
+const JiraHeaderSettings = defineSettings({
+  scope: 'global',
+  schema: {
+    compact: booleanSetting({ default: false }),
+    showToolCalls: booleanSetting({ default: true }),
+  },
+})
+type JiraHeaderSettings = SettingsOf<typeof JiraHeaderSettings>
+
+const jiraHeader: ComponentImplementation<HeaderProps, JiraHeaderSettings> = {
   id: 'acme.jira.task-header',
   title: 'Jira header',
-  settings: JiraSettings,
-  component: ({ task, settings }) => (
-    <HeaderView task={task} compact={settings?.compact ?? false} showToolCalls={settings?.showToolCalls ?? true} />
-  ),
+  settings: JiraHeaderSettings,
+  component: ({ task, useComponentSettings }) => {
+    const settings = useComponentSettings()
+    return (
+      <HeaderView
+        task={task}
+        compact={settings.compact}
+        showToolCalls={settings.showToolCalls}
+      />
+    )
+  },
 }
 ```
 
-The extension API accepts Zod structurally, so an extension may use its own Zod version or another
-parser with the same `parse` result. Cezar persists only the parser's JSON result; dates, functions,
-cycles and other non-JSON outputs are rejected at the host boundary.
+`useComponentSettings()` returns a complete value: stored overrides merged with the definition's
+defaults. A component with no settings definition keeps its current props contract and does not
+cause a settings read. The host may use Zod internally at a Cezar boundary, but no extension is
+required to depend on Zod and Zod is not exported by `@open-mercato/cezar-extension-api`.
 
 ### Prior art
 
 - [VS Code configuration](https://code.visualstudio.com/api/references/vscode-api) scopes extension
-  settings by a named section. We take the stable owner namespace, but keep the scope at the
-  implementation id because one Cezar contract intentionally has several alternatives.
+  settings by a named section. Cezar uses the stable implementation id as the namespace and makes
+  the global/project scope an explicit implementation choice.
 - [Grafana plugin configuration](https://grafana.com/developers/plugin-tools/reference/plugin-json)
-  pairs plugin identity with a declared schema/configuration surface. We take the explicit
-  declaration and host validation, but avoid a second plugin-wide settings namespace when the
-  registry already has a globally unique implementation id.
+  pairs plugin identity with a declared configuration surface. Cezar keeps that declaration in the
+  implementation registration and lets the host own persistence.
 - [Backstage frontend extension configuration](https://backstage.io/docs/frontend-system/building-apps/configuring-extensions/)
-  gives each extension its own config and requires defaults. Cezar keeps defaults in the component
-  (`undefined` means use the implementation's safe default) because this item has no settings UI and
-  must preserve zero-config boot behavior.
+  gives each extension its own configuration and defaults. Cezar applies the same default-first
+  behavior while keeping settings at implementation scope rather than contract scope.
 
 ### Alternatives considered
 
 - **Put settings on `ComponentContract`.** Rejected: it couples all implementations to fields owned
-  by one implementation and makes adding a Jira-only setting a contract-version decision.
-- **Use a single `Record<string, JsonValue>` with no schema.** Rejected: storage would survive
-  reload, but the host could pass a stale or malformed shape to a component and the extension would
-  have to duplicate validation everywhere.
-- **Import Zod from `@open-mercato/cezar-extension-api`.** Rejected: AGENTS.md makes that package
-  node-free, DOM-free and zero-runtime-dependency; a type-only structural adapter accepts Zod without
-  moving its runtime into the extension contract.
-- **Expose one React context for settings.** Rejected: it would couple the public extension API to
-  React context and make the host inject settings through an implicit global. The existing host
-  already owns the explicit props handoff and can test it without a browser context.
-- **Persist through `context.storage.global`.** Deferred: extension storage is independently scoped
-  by extension id, while this setting is host-owned and must also support core implementations. The
-  shared workspace UI-state map gives core and extensions one persistence path; a later storage item
-  can offer extension-owned data for non-component use cases.
+  by one implementation and makes a Jira-only setting a contract-version decision.
+- **Use `settings: z.object(...)` in the public API.** Rejected: extension developers should not be
+  forced to depend on Zod, and `extension-api` must remain zero-runtime-dependency and node/DOM-free.
+  Cezar may use Zod internally behind the host boundary.
+- **Use one untyped `Record<string, JsonValue>`.** Rejected: the host could persist malformed data,
+  defaults would not be discoverable and every extension would duplicate validation.
+- **Let extensions write their own settings.** Rejected: Cezar must own validation, persistence,
+  scopes, migrations and reset so core and extension implementations follow one lifecycle.
+- **Inject a `settings` prop into contract props.** Rejected: settings are implementation-owned, not
+  contract-owned. The host instead supplies `useComponentSettings()` in the implementation render
+  context.
+- **Export a React hook implementation from `extension-api`.** Rejected for this item because the
+  package is deliberately React-runtime-free. The public package types the hook-shaped reader and
+  `ComponentHost` supplies it; extensions can call it at the top level of their React component.
+  A separate React adapter is not needed to meet this item's boundary.
+- **Support global defaults plus project overrides immediately.** Deferred: this item supports one
+  declared scope per implementation. Layering can be added later without changing the id namespace
+  or the two backing files.
+- **Persist through `context.storage.global/project`.** Deferred: component settings are host-owned
+  and must also work for core implementations. The existing UI-state paths provide one host store;
+  extension storage remains the right API for extension data unrelated to component configuration.
 
-## Resolved assumptions (autonomous defaults)
+## Resolved decisions from PR #46
 
-The brief left four design questions. Each choice is the smallest reversible surface that completes
-the Definition of Done and preserves the repository's zero-config and package-boundary rules.
+The owner answered the four open questions in [PR #46](https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/46#issuecomment-5745404062).
 
-| # | Question | Applied default | Why | Confirm? |
-|---|---|---|---|---|
-| Q1 | Should settings be global or project-scoped? | **Global workspace settings**, keyed only by implementation id. | The resolver preference and the component registry are page/workspace-level; the brief does not name project scope. A future project-specific setting can add a separate store without changing this namespace. | reversible |
-| Q2 | Must the extension API import Zod to type `settings: z.object(…)`? | **No. Define a structural `parse` schema interface; accept Zod objects without importing Zod.** | Preserves `packages/extension-api`'s node-free, DOM-free, zero-runtime-dependency boundary while supporting the requested syntax. | reversible |
-| Q3 | Who writes settings, and what happens before the first write? | **The host/picker writes through the cockpit registry; a missing setting is `undefined`, and the implementation chooses its safe default.** | This item delivers the durable API and host seam without inventing a UI. No implicit write keeps zero-config boot and makes reset a delete/clear operation. | reversible |
-| Q4 | How does an implementation read settings? | **The host injects a validated `settings` prop; the contract's shared props remain unchanged.** | It is explicit, testable and renderer-neutral at the public contract boundary; no React context or hidden global is added. | reversible |
+| # | Question | Decision | Consequence |
+|---|---|---|---|
+| Q1 | Global or project-scoped? | **Both. Each implementation declares one default scope: `global` or `project`.** | UI preferences such as compactness and appearance can be global; repository integrations can follow one project. Global-default/project-override layering is a follow-on. |
+| Q2 | Must the public API import Zod? | **No. Use Cezar's own declarative settings API, starting with `defineSettings()` and `booleanSetting()`.** | The extension contract owns types/defaults without a dependency on a schema library. Cezar may use Zod internally. |
+| Q3 | Who writes and migrates values? | **Cezar/host only.** The extension declares fields, types and defaults; the host validates, persists, scopes, migrates and resets. | The extension API exposes no setter. Persisted values are sparse overrides and defaults are resolved by the host. |
+| Q4 | How does an implementation read values? | **Through a type-safe implementation-specific `useComponentSettings()` reader.** | The reader is provided in the implementation render context, separate from contract props. The extension package remains React-runtime-free. |
 
 ## 📝 Architecture
 
 ```mermaid
 flowchart LR
-  ext["extension implementation\nsettings: z.object(...)"] --> reg["component registry\nexisting + settings validation"]
-  reg --> host["ComponentHost\nexisting resolver/host"]
-  store["ComponentSettingsStore\nnew web seam"] <--> ui["workspace ui-state\nexisting API + new optional map"]
+  ext["extension implementation\ndefineSettings({ scope, schema })"] --> reg["component registry\nregistration + id namespace"]
+  reg --> host["ComponentHost\nresolution + settings reader"]
+  host --> rendered["selected implementation\nuseComponentSettings()"]
+  global["workspace ui-state\n~/.cezar/ui-state.json"] <--> store["ComponentSettingsStore\nscope-aware host adapter"]
+  project["project ui-state\n<repo>/.ai/cezar/ui-state.json"] <--> store
   reg <--> store
-  host --> rendered["selected component\nprops + settings snapshot"]
 ```
 
-The public extension package contributes only types and the schema boundary. The cockpit registry
-owns registration identity and validation; the persistent store owns transport/cache/write ordering;
-the host owns hydration and render timing. No service, CLI runner or project context is involved.
+The public extension package contributes the settings definition and types. The cockpit registry
+owns registration identity and host-only writes. The persistent adapter owns transport, cache,
+read-modify-write ordering and scope resolution. `ComponentHost` owns hydration and render timing.
+No service runner or agent backend is involved.
 
 ### Modules and ownership
 
-- `packages/extension-api/src/components.ts`: add the structural settings schema, settings render
-  props and the second generic on `ComponentImplementation`; keep `ComponentContract<Props>` intact.
-- `packages/web/src/component-registry/registry.ts`: snapshot the schema on registration; add the
-  injected `ComponentSettingsStore`, parsed reads/writes, settings-change revision bumps and
-  diagnostics. Registration id uniqueness remains the namespace guard.
-- `packages/web/src/component-registry/settings.ts` (new): implement the store adapter over the
-  existing workspace UI-state client. It caches the last successful map, serializes read-modify-write
-  operations, and degrades to in-memory `undefined` reads when the server is unavailable.
-- `packages/web/src/component-registry/component-host.tsx`: load settings for the current resolved
-  registration, pass a fresh props object with `settings`, and ignore stale promises after a
-  resolution change or unmount.
-- `packages/web/src/main.tsx`: construct the persistent store before starting the extension host and
-  pass it to the page's shared component registry. The default main path must remain persisted; tests
-  may use the in-memory fallback.
-- `packages/contract/src/workspace.ts`: add the optional, bounded `componentSettings` field to the
-  workspace UI-state response and PUT schemas. `packages/api-client` consumes the inferred shape;
-  no new route is introduced.
-- `packages/cezar/src/server/server.ts` and workspace state helpers: preserve/validate the map through
-  the existing chained `GET/PUT /api/v1/workspace/ui-state` family and its atomic merge-write.
-- `BACKWARD_COMPATIBILITY.md`, `AGENTS.md` and `packages/extension-api/README.md`: document the
-  additive persisted field, the implementation-owned schema and the reserved render prop.
+- `packages/extension-api/src/components.ts`: add setting descriptors, `defineSettings`,
+  `SettingsOf`, the scope type and the implementation render context; keep
+  `ComponentContract<Props>` unchanged.
+- `packages/web/src/component-registry/registry.ts`: capture the immutable definition at
+  registration; expose host-only read/write/reset methods and implementation-scoped registration
+  reads; emit revision changes after successful writes or external invalidation.
+- `packages/web/src/component-registry/settings.ts` (new): implement the scope-aware store adapter
+  over the existing workspace and project UI-state clients. It resolves the project from the URL on
+  each project operation, serializes read-modify-write operations and degrades to defaults when the
+  service is unavailable.
+- `packages/web/src/component-registry/component-host.tsx`: hydrate the current implementation,
+  supply `useComponentSettings()` and discard stale reads after an implementation, subject, project
+  or host instance changes.
+- `packages/web/src/main.tsx`: construct one persistent store before extension activation and pass it
+  to the shared component registry. Test factories may use an in-memory store.
+- `packages/contract/src/workspace.ts`: add the optional bounded `componentSettings` field to both
+  workspace and project UI-state schemas, preserving the existing open sibling-key behavior.
+- `packages/cezar/src/server/server.ts` and UI-state helpers: preserve/validate both maps through
+  the existing chained `GET/PUT /api/v1/workspace/ui-state` and project `/ui-state` families. No new
+  route is introduced.
+- `packages/extension-api/README.md`, `BACKWARD_COMPATIBILITY.md` and the relevant `AGENTS.md`
+  routing row: document scope, defaults, host ownership, the implementation-only reader and the
+  non-secret rule.
 
 ## 📝 Data Model
 
-### In-memory registration
-
-`ComponentRegistration` gains the schema by reference, captured once at registration:
+### In-memory definition and render context
 
 ```ts
-export interface ComponentSettingsSchema<Settings> {
-  /** A Zod schema or compatible parser. It may throw for invalid input. */
+export type ComponentSettingsScope = 'global' | 'project'
+
+export interface BooleanSettingDefinition {
+  readonly type: 'boolean'
+  readonly default: boolean
+}
+
+export type ComponentSettingDefinition = BooleanSettingDefinition
+export type ComponentSettingsSchema = Readonly<Record<string, ComponentSettingDefinition>>
+
+export type InferSettings<Schema extends ComponentSettingsSchema> = {
+  -readonly [Key in keyof Schema]: Schema[Key] extends BooleanSettingDefinition ? boolean : never
+}
+
+export interface ComponentSettingsDefinition<Settings> {
+  readonly scope: ComponentSettingsScope
+  readonly schema: ComponentSettingsSchema
+  readonly defaults: Settings
+  /** Parses sparse persisted overrides and returns a complete resolved value. */
   readonly parse: (input: unknown) => Settings
 }
 
-export type ComponentRenderProps<Props, Settings> = Props & {
-  /** `undefined` when no schema/value exists or the stored value is invalid. */
-  readonly settings: Settings | undefined
-}
+export type SettingsOf<Definition> = Definition extends ComponentSettingsDefinition<infer Settings>
+  ? Settings
+  : never
 
-export interface ComponentImplementation<Props, Settings = unknown> {
+export type ComponentRenderProps<Props, Settings = never> = [Settings] extends [never]
+  ? Props
+  : Props & { readonly useComponentSettings: () => Settings }
+
+export interface ComponentImplementation<Props, Settings = never> {
   readonly id: ContributionId
   readonly title: string
   readonly description?: string
   readonly capabilities?: readonly ComponentCapability[]
-  readonly settings?: ComponentSettingsSchema<Settings>
+  readonly settings?: ComponentSettingsDefinition<Settings>
   readonly component: ComponentType<ComponentRenderProps<Props, Settings>>
 }
 
 export interface ComponentRegistrationHandle<Settings> extends Disposable {
-  /** The id supplied in the registration. */
   readonly componentId: ContributionId
-  /** Reads this implementation's parsed settings; no other implementation id is accepted. */
+  /** Reads this implementation's complete resolved value; no other id is accepted. */
   getSettings(): Promise<Settings | undefined>
-  /** Receives this implementation's parsed value after a successful host write or reload event. */
+  /** Receives the complete value after a successful host write, reset or reload event. */
   onSettingsChange(listener: (settings: Settings | undefined) => void): Disposable
 }
 ```
 
-The registry does not mutate the schema or call it during `provide`. The registration is compatible
-based on the component contract/capabilities as today; settings incompatibility is a value problem,
-not a reason to hide an otherwise valid implementation.
+`defineSettings()` creates the definition and derives `defaults` and `parse` from the declarative
+schema. The host may add internal field types later; extensions do not import a validator to use the
+public contract. `parse()` accepts a sparse JSON object, applies declared defaults, rejects unknown
+or invalid fields and returns a JSON-safe complete value.
 
-### Persisted workspace state
+`useComponentSettings()` is a reader supplied only when the implementation declares settings. It is
+called unconditionally at the top level of the implementation component, like a React hook, and
+returns the current render snapshot. The reader has no setter, component-id argument or access to
+another implementation. A settings update causes the host to render a new snapshot, so the reader
+never exposes a value from a previous implementation or project.
 
-The existing `~/.cezar/ui-state.json` gains one optional map:
+### Persisted state and scope
+
+Each selected scope has its own UI-state file and therefore does not need a scope key inside the
+component map:
 
 ```json
+// ~/.cezar/ui-state.json — global settings
 {
   "componentSettings": {
-    "acme.jira.task-header": { "compact": true, "showToolCalls": false },
-    "acme.compact.task-header": { "dense": true }
+    "acme.jira.task-header": {
+      "compact": true
+    },
+    "acme.compact.task-header": {
+      "showToolCalls": false
+    }
+  }
+}
+```
+
+```json
+// <repo>/.ai/cezar/ui-state.json — project settings
+{
+  "componentSettings": {
+    "acme.jira.integration-header": {
+      "projectKey": "ABC"
+    }
   }
 }
 ```
 
 Rules:
 
-- The key is the exact `ContributionId` of the implementation. The same contract id may have many
-  entries; implementation id collisions are already rejected by the registry.
-- Values are JSON objects/arrays/primitives accepted by the existing JSON boundary. A parsed schema
-  output must round-trip through JSON before it is stored.
-- The map is optional and absent means no settings have been written. An empty map is a valid clear
-  result and is not synthesized on read.
-- The existing workspace UI-state body cap remains the aggregate limit; each setting value gets an
-  explicit serialized-size bound and the map gets a bounded entry count in the contract schema.
-- Clearing an implementation's settings deletes only its map entry. Removing an implementation does
-  not garbage-collect its entry, so reinstalling it can recover the user's previous choice.
-- This is global user preference state, not project data and never a secret store. A settings schema
-  must not be used for credentials or tokens.
+- The key is the exact `ContributionId` of the implementation. Contract id, title and extension
+  display name are never used as namespaces.
+- Each map value is a sparse JSON object of explicit overrides. The host resolves it against the
+  definition's defaults before exposing it to the implementation.
+- An absent map or entry resolves to defaults and is not synthesized on disk. Reset deletes one
+  implementation entry; resetting one field removes only that field and falls back to its default.
+- `global` values are available on every project and global cockpit page. `project` values resolve
+  from the project in the cockpit URL on every operation, following `context.storage.project`.
+  A page with no project rejects project reads/writes as `settings-unavailable` instead of guessing
+  the boot project.
+- The global and project UI-state schemas remain additive and tolerant of unknown sibling keys. The
+  existing body cap, per-entry size bound and map entry-count bound apply.
+- Cezar owns storage-format migrations. A schema version change that cannot be normalized safely
+  clears only that implementation's overrides and returns its declared defaults; this item does not
+  add extension-provided migration callbacks.
+- These values are ordinary UI/configuration state, never a secret store. Credentials and tokens
+  belong in extension storage/secret handling.
 
 ### Store seam
 
 ```ts
+export type ComponentSettingsTarget =
+  | { readonly scope: 'global' }
+  | { readonly scope: 'project'; readonly projectId: string }
+
 export interface ComponentSettingsStore {
-  get(componentId: ContributionId): Promise<JsonValue | undefined>
-  set(componentId: ContributionId, value: JsonValue): Promise<void>
-  delete(componentId: ContributionId): Promise<void>
-  subscribe(listener: (componentId: ContributionId) => void): () => void
+  get(target: ComponentSettingsTarget, componentId: ContributionId): Promise<JsonValue | undefined>
+  set(target: ComponentSettingsTarget, componentId: ContributionId, value: JsonValue): Promise<void>
+  clear(target: ComponentSettingsTarget, componentId: ContributionId): Promise<void>
+  subscribe(listener: (target: ComponentSettingsTarget, componentId: ContributionId) => void): () => void
 }
 ```
 
-The adapter loads the workspace state lazily, uses the existing query/client cache, and serializes
-read-modify-write operations so two settings writes in one cockpit do not drop each other. It emits a
-component id after a successful local write. An external workspace-state event or a reconnect causes
-the adapter to invalidate/re-read and emit affected ids; the setting value never travels in a live
-event.
+The web adapter maps `global` to workspace UI state and `project` to project UI state. It resolves
+the current project from the URL, never from a boot-project fallback, and pins the target for one
+read-modify-write operation. It serializes writes within a cockpit and uses the existing server
+merge-write so two implementation ids do not drop one another. An external UI-state refresh emits
+affected ids; the setting value is not sent through a live event bus.
 
 ## 📝 API Contracts
 
 ### Extension API (`packages/extension-api`)
 
 ```ts
-export interface ComponentSettingsSchema<Settings> {
-  readonly parse: (input: unknown) => Settings
-}
+export function booleanSetting(options: {
+  readonly default: boolean
+}): BooleanSettingDefinition
 
-export type ComponentRenderProps<Props, Settings> = Props & {
-  readonly settings: Settings | undefined
-}
+export function defineSettings<const Schema extends ComponentSettingsSchema>(options: {
+  readonly scope: ComponentSettingsScope
+  readonly schema: Schema
+}): ComponentSettingsDefinition<InferSettings<Schema>>
 
-export interface ComponentImplementation<Props, Settings = unknown> {
+export type SettingsOf<Definition> = Definition extends ComponentSettingsDefinition<infer Settings>
+  ? Settings
+  : never
+
+export interface ComponentImplementation<Props, Settings = never> {
   // …existing fields…
-  readonly settings?: ComponentSettingsSchema<Settings>
+  readonly settings?: ComponentSettingsDefinition<Settings>
   readonly component: ComponentType<ComponentRenderProps<Props, Settings>>
 }
 
@@ -293,196 +369,213 @@ export interface ComponentRegistrationHandle<Settings> extends Disposable {
 }
 
 export interface ComponentRegistry {
-  provide<Props, Settings>(
-    contract: ComponentContract<Props>,
-    implementation: ComponentImplementation<NoInfer<Props>, Settings>,
+  provide<P, Settings>(
+    contract: ComponentContract<P>,
+    implementation: ComponentImplementation<NoInfer<P>, Settings>,
   ): ComponentRegistrationHandle<Settings>
 }
 ```
 
-`ComponentRegistry.provide` returns `ComponentRegistrationHandle<Settings>` instead of the bare
-`Disposable`. Its read and subscription methods are scoped to that one registration and fail with
-`disposed` after deactivation. There is no `getSettings(componentId)` method on the extension-facing
-registry, so an extension cannot probe another implementation. The implementation reads
-`props.settings` when rendered, or the handle's parsed value from activation code; its own parser is
-the authority for the value's shape.
-The extension API's `index.ts` re-exports the new types; it does not export Zod or add a runtime
-dependency. The package's existing single-entry-point, boundary and surface tests remain mandatory.
+`defineSettings()` and the descriptors are the public schema contract. `InferSettings` maps a schema
+to the corresponding TypeScript object (`booleanSetting` maps to `boolean`). The implementation's
+component receives `useComponentSettings()` only when `Settings` is declared. The registration
+handle can read and subscribe to the same implementation's value for activation code; it exposes
+no setter and accepts no arbitrary component id.
+
+The `index.ts` barrel re-exports the new types and helpers. It does not export Zod, import React as
+a runtime dependency or add a second public entry point. The package's node-free, DOM-free boundary,
+single-entry-point and surface tests remain mandatory.
 
 ### Cockpit registry (`packages/web/src/component-registry/registry.ts`)
 
 ```ts
 export interface ComponentRegistryOptions {
   readonly contracts?: readonly AnyComponentContract[]
-  readonly onDiagnostic?: (registration: ComponentRegistration) => void
+  readonly onDiagnostic?: (registration: ComponentRegistration, error?: unknown) => void
   readonly settings?: ComponentSettingsStore
 }
 
 export interface CockpitComponentRegistry {
   // …existing registration, list, resolve and subscription methods…
   getSettings(componentId: ContributionId): Promise<unknown | undefined>
-  setSettings(componentId: ContributionId, input: unknown): Promise<void>
-  clearSettings(componentId: ContributionId): Promise<void>
+  setSettings(componentId: ContributionId, patch: unknown): Promise<void>
+  resetSettings(componentId: ContributionId, key?: string): Promise<void>
 }
 ```
 
-These three methods are host-side. `getSettings` returns `undefined` for an unknown implementation,
-one without a schema, or an absent setting. For a known schema it parses the stored raw JSON and
-returns the parsed result. `setSettings` requires a live registration with a schema, parses first,
-verifies a JSON round trip and writes only the canonical result. A parse failure is
-`ComponentSettingsError('invalid-settings')`; the previous value remains intact. A store failure is
-`ComponentSettingsError('settings-unavailable')`; it never breaks boot or unregisters the component.
-`clearSettings` is idempotent and emits a registry revision only after the delete succeeds.
+These methods are host/picker methods, not extension-facing methods. `getSettings` returns the
+complete resolved value for a live implementation, including defaults. `setSettings` accepts a
+sparse patch, merges it with the current sparse value, parses/canonicalizes it with that
+implementation's definition and writes only the canonical JSON override. `resetSettings` removes
+one field or the whole implementation entry. All methods resolve the definition's declared scope;
+project scope without an active project returns `settings-unavailable`.
 
-`forExtension(scope)` does not expose these host methods. This prevents one extension from reading or
-overwriting another implementation's settings. Its implementation gets only the selected value for
-its own component when the host renders it.
+Invalid input is `ComponentSettingsError('invalid-settings')`; the previous persisted value remains
+unchanged. A store/network or missing-project failure is
+`ComponentSettingsError('settings-unavailable')`; it never unregisters an implementation or blocks
+boot. A disposed registration returns `ComponentSettingsError('disposed')` from its handle methods.
+
+`forExtension(scope)` exposes the registration handle but not these host methods. The extension can
+read its own settings and subscribe to changes, but cannot inspect or overwrite another
+implementation's namespace.
 
 ### Host render behavior
 
 `ComponentHost` keeps the existing resolution and error-boundary semantics, with settings added to
 the render step:
 
-1. Resolve the implementation and fallback by contract/preference.
-2. Read settings for the implementation currently being rendered.
-3. Render a fresh `{ ...props, settings }` object. The caller's contract props are never mutated.
-4. On a registry/store revision, repeat for the current implementation. Ignore a read that completes
-   after the component id, subject or host instance has changed.
-5. If the selected implementation throws, render the fallback with the fallback's own settings. A
-   failed implementation's setting value must not leak into its fallback.
+1. Resolve the implementation and fallback by contract and preference.
+2. Read the selected implementation's sparse value from the definition's declared scope.
+3. Parse it with the definition and resolve defaults.
+4. Render a fresh implementation context containing `useComponentSettings()`. Contract props are
+   passed unchanged and never mutated.
+5. On a registry/store revision, repeat for the current implementation. Ignore a read that
+   completes after the component id, subject, project or host instance changes.
+6. If the selected implementation throws, render the fallback with the fallback's own reader and
+   settings. A failed implementation's value must not leak into the fallback.
 
-The `settings` prop name is reserved for this feature. A future contract that needs a contract-owned
-field with that name must use a new contract major or wait for a separate adapter design.
+A missing or malformed value does not prevent rendering: missing values become defaults; malformed
+stored overrides produce one diagnostic, are ignored for the current render and remain available for
+host reset/recovery. The implementation `settings` definition and `useComponentSettings` context are
+reserved names; a future contract that needs either name must use a new contract major or a
+separate adapter design.
 
 ## 📝 UI/UX
 
 None in this item. There is no settings page, picker, form generator or new route. A later picker
-item may read registrations, show each implementation's declared schema through an explicit UI
-adapter, and call the host-side `setSettings`/`clearSettings` seam. This spec deliberately does not
-assume that arbitrary Zod schemas can be rendered automatically as forms.
+item may inspect the declarative definition, render supported field types and call the host-side
+registry methods for partial updates and reset. This spec does not assume that arbitrary extension
+code or a schema library can be rendered as a form.
 
 ## 📝 Edge Cases & Failure Scenarios
 
 | Scenario | Behavior |
 |---|---|
-| Two implementations share one contract but declare different schemas | Both register; each id gets an independent map entry and parser. Selecting A never reads B's value. |
-| No stored value | The component receives `settings: undefined` and must use its own safe default. No file key is synthesized. |
-| Stored value no longer matches the schema | Read returns `undefined`, one diagnostic is emitted per component/page load, the raw value is preserved for recovery or overwrite, and rendering continues. |
-| A schema parser returns a non-JSON value | The host rejects the read/write as invalid settings; no non-JSON value reaches the component or disk. |
-| `setSettings` receives invalid input | It rejects with `invalid-settings`; the previous persisted value remains unchanged. |
-| Workspace UI-state service is offline/read-only | Existing component behavior continues with `undefined`; writes reject as `settings-unavailable` and do not block cockpit boot. |
-| Workspace state is missing/corrupt/newer | Existing UI-state degradation rules apply: read defaults to an empty map with one warning, writes use atomic merge-write, and unknown state is not destructively rewritten. |
-| A component is deactivated and later re-provided | The registration is new, but the old `componentId` entry remains and is reused if the new schema accepts it. |
-| Selected implementation changes while a read is pending | The pending result is discarded by id/generation; the new implementation is loaded independently. |
-| Core fallback renders after an extension failure | Fallback receives only its own parsed settings, not the failed extension's settings. |
-| An extension tries to read another id | The extension-facing registry has no id-based reader; a handle can read only the implementation it registered, and component code receives only its own injected prop. |
-| A contract has a `settings` prop | The registration is rejected by the contract/host typing rule or requires a new major; the reserved implementation prop must not be silently overwritten. |
-| Two tabs write different component ids | The adapter performs serialized read-modify-write and the server's existing merge-write preserves both entries. Cross-process last-writer behavior remains the existing UI-state trade-off and is documented. |
-| The value contains a secret | It is rejected by product guidance: component settings are ordinary global UI state, not encrypted secret storage. |
+| Two implementations share one contract but declare different schemas | Both register; each exact id has an independent definition, scope and map entry. Selecting A never reads B. |
+| One implementation is global and another is project-scoped | Each uses its declared backing UI-state file. The same contract can mix scopes without a special case in the contract. |
+| No stored value | The host returns the definition's complete defaults. No file key is synthesized. |
+| Only one field is stored | The host merges that sparse override with all other declared defaults. |
+| Project implementation on a global/no-project page | Read/write returns `settings-unavailable`; the host renders declared defaults and never guesses a project. |
+| Stored value no longer matches the definition | The host emits one diagnostic, ignores the invalid override, renders defaults and preserves the raw entry for reset/recovery. |
+| `setSettings` receives an invalid patch | It rejects with `invalid-settings`; the previous persisted value remains intact. |
+| A parser/canonicalizer produces a non-JSON value | The host rejects it before persistence or rendering. |
+| UI-state service is offline/read-only | Existing component behavior continues with defaults; writes reject as `settings-unavailable` and do not block boot. |
+| UI state is missing, corrupt or newer | Existing UI-state degradation rules apply: reads use defaults with one warning, writes use atomic merge-write and unknown sibling state is not destructively rewritten. |
+| Cezar changes the storage format | Host-owned migration updates both scope paths. An unnormalizable implementation entry is cleared to defaults without affecting other ids. |
+| An implementation is deactivated and later re-provided | Its exact id entry remains and is reused if the new definition accepts it. |
+| Selected implementation/project changes while a read is pending | The pending result is discarded by id, scope and generation; the new target loads independently. |
+| Core fallback renders after an extension failure | Fallback receives only its own settings reader and resolved value. |
+| An extension tries to read another id or write settings | The extension-facing API has no id-based reader or setter; the attempt is impossible at the type and runtime boundary. |
+| Existing component contract has a conflicting implementation context name | The registration/contract boundary rejects the conflict or requires a new major; it is never silently overwritten. |
+| Two tabs write different ids or scopes | Each operation uses read-modify-write; server merge-write preserves unrelated entries. Existing last-writer behavior for the same key remains documented. |
+| Settings contain a secret | Product guidance rejects the use case; secrets belong in extension storage/secret handling. |
 
 ## 📝 Risks & Impact Review
 
-- **Public extension type change.** `ComponentImplementation` gains a second generic and a settings
-  prop. It is additive for existing implementations because `settings` is optional and existing
-  components may ignore the extra prop. The experimental private package is versioned with the
-  release; update its README, surface/type tests and lockstep web range as required by AGENTS.md.
-- **Reserved prop.** A contract that already owns `settings` cannot adopt this feature without a
-  major. Current core contracts do not use it; a boundary test must pin the reservation.
-- **Persisted state surface.** `componentSettings` is a new optional key in the protected workspace
-  UI-state file and response. Older Cezar versions must preserve it through the loose UI-state
-  schema; the new writer must never drop unknown sibling keys. Add the field to
-  `BACKWARD_COMPATIBILITY.md` §2/§9 as appropriate and keep the contract/schema/client parity tests
-  green.
-- **Schema execution.** A schema is extension code and can throw or be expensive. The registry calls
-  it only around a value read/write, catches failures, and never calls it during registration or
-  boot. A bad schema affects its implementation's settings, not the whole page.
-- **Stale asynchronous reads.** The host must key every read by implementation id and a monotonic
-  request generation. Without that guard, switching from Jira to compact could paint Jira settings
-  into compact's component.
-- **Zero-config path.** The persistent store is used by the normal `main.tsx` path, but the store is
-  lazy and optional. With no settings written, no new network request or UI is required to render a
-  component. If the store is unavailable, the page still renders with implementation defaults.
-- **Rollback.** Reverting the code leaves `componentSettings` as an unknown optional UI-state key for
-  older versions; no user task state or runner state changes. A later implementation may read the
-  values again without migration.
+- **Public extension type change.** `ComponentImplementation` gains a settings generic and
+  implementation render context. It is additive for implementations without settings; the private
+  experimental package must update its README, surface/type tests and lockstep web range as required
+  by `AGENTS.md`.
+- **React boundary.** The public package must not gain a React runtime dependency. The host-supplied
+  hook-shaped reader is deliberate: it provides the requested ergonomics while keeping
+  `extension-api` type-only with respect to React.
+- **Reserved implementation context.** The implementation-only reader must not become part of a
+  contract's shared props. A boundary test pins that separation.
+- **Persisted state surface.** `componentSettings` is an optional field in both protected UI-state
+  shapes. Older Cezar versions must preserve it as unknown state; new writers must never drop
+  sibling keys. Contract-parity, typed-body and UI-state merge tests remain required.
+- **Scope ambiguity.** Project scope follows the URL, as project storage does. A missing project is
+  an explicit unavailable state, not an implicit boot-project fallback.
+- **Schema execution.** Definitions are extension code and can throw or be expensive. The registry
+  calls parsing only around read/write/hydration, catches failures and isolates diagnostics to that
+  implementation.
+- **Stale asynchronous reads.** The host must key every read by implementation id, target scope and
+  monotonic generation. Without that guard, switching project or implementation could paint the
+  previous value into the new component.
+- **Zero-config path.** The persistent store is lazy and optional. With no settings definition or no
+  stored overrides, no new request or UI is needed to render a component. If storage is unavailable,
+  defaults keep the page working.
+- **Rollback.** Reverting the code leaves `componentSettings` as an unknown optional UI-state key;
+  no task or runner state changes. A later implementation can read the values again without a
+  destructive migration.
 
 ## 📋 Phasing
 
-1. **Phase 1 — Extension contract and pure registry.** Add the Zod-compatible type, implementation
-   generic, registration snapshot and in-memory settings behavior. Prove two schemas under one
-   contract and compatibility with old implementations.
-2. **Phase 2 — Durable workspace store.** Add the optional `componentSettings` contract field and
-   the web adapter over workspace UI-state, with atomic read-modify-write, cache invalidation and
-   graceful degradation. The API remains the existing versioned UI-state route family.
-3. **Phase 3 — Component host integration.** Hydrate the selected implementation, inject its parsed
-   settings, handle changes/races/fallbacks and prove reload behavior through host tests.
-4. **Phase 4 — Documentation and handoff.** Update the extension API README, AGENTS routing row,
-   compatibility inventory and release notes. Leave the picker/form UI as a separate follow-on item.
+1. **Phase 1 — Extension contract and pure registry.** Add the declarative definition, defaults,
+   parser, scope type, implementation render context and in-memory host semantics. Prove two
+   implementations of one contract can use different settings.
+2. **Phase 2 — Scope-aware durable store.** Add the optional `componentSettings` field to both
+   project and workspace UI-state contracts and adapt the existing route/client families with
+   serialized merge writes and graceful degradation. The API remains the existing versioned routes.
+3. **Phase 3 — Component host integration.** Hydrate the selected implementation, expose
+   `useComponentSettings()`, handle changes/races/fallbacks and prove both scopes after reload.
+4. **Phase 4 — Documentation and handoff.** Update the extension README, AGENTS routing row,
+   compatibility inventory and release notes. Leave picker/form UI and layered scopes as separate
+   follow-ons.
 
 ## 📋 Implementation Plan
 
-Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build` and
-`npm run test:package` green.
+Every implementation step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build`
+and `npm run test:package` green.
 
 ### Phase 1 — Extension contract and pure registry
 
-1. **Add the schema and render-prop types.**
+1. **Add the declarative settings API.**
    - Code: `packages/extension-api/src/components.ts`, `src/index.ts`, README and surface/boundary
      tests.
-   - Test: the requested `z.object({ compact: z.boolean(), showToolCalls: z.boolean() })` shape
-     type-checks through a fixture adapter without importing Zod into `extension-api`; existing
-     implementations with no settings still type-check; a component receives its typed settings.
-2. **Snapshot and validate settings on registration.**
-   - Code: `packages/web/src/component-registry/registry.ts` and its settings error/store seam.
-   - Test: schemas are retained per implementation id; malformed registration fields still use the
-     existing error behavior; duplicate ids remain rejected; two implementations of one contract can
-     have unrelated settings schemas.
-3. **Implement host read/write semantics in memory.**
-   - Test: missing returns `undefined`, valid values parse and round-trip, invalid writes preserve the
-     old value, invalid stored values degrade without throwing from `getSettings`, clear is idempotent,
-     and store notifications bump the registry revision.
+   - Test: `defineSettings({ scope: 'global', schema: { compact: booleanSetting(...) } })` infers
+     the settings type and defaults; no Zod import is needed; existing implementations without
+     settings still type-check; a settings implementation receives a typed reader.
+2. **Snapshot and validate definitions on registration.**
+   - Code: `packages/web/src/component-registry/registry.ts` and settings error/store seam.
+   - Test: definitions are retained per exact implementation id; invalid definitions use existing
+     error behavior; duplicate ids remain rejected; two implementations under one contract can have
+     unrelated schemas and scopes.
+3. **Implement host read/write/reset semantics in memory.**
+   - Test: missing values resolve to defaults, valid sparse patches parse/canonicalize, invalid writes
+     preserve old state, reset removes one field/entry, and store notifications bump registry revision.
 
-### Phase 2 — Durable workspace store
+### Phase 2 — Scope-aware durable store
 
-4. **Extend the workspace UI-state contract additively.**
-   - Code: `packages/contract/src/workspace.ts` and the inferred api-client surface; add bounded
-     `componentSettings` keys/values without narrowing unknown sibling fields.
-   - Test: old response fixtures parse; the map accepts valid contribution ids and rejects oversized or
-     non-JSON values; contract-parity and typed-body tests still cover both workspace UI-state routes.
-5. **Persist through the existing workspace UI-state family.**
-   - Code: `packages/web/src/component-registry/settings.ts`, `packages/web/src/api/client.ts` only
-     if an existing helper needs a typed merge, and server workspace-state merge tests.
-   - Test: GET hydrates the cache; set performs a read-modify-write; two ids survive one another; delete
-     removes only one id; network, 409/500 and malformed responses degrade reads and map writes to a
-     recoverable `settings-unavailable` error; no new unversioned route appears.
+4. **Extend both UI-state contracts additively.**
+   - Code: `packages/contract/src/workspace.ts` and inferred api-client surface; add bounded
+     `componentSettings` maps to workspace and project UI-state without narrowing unknown siblings.
+   - Test: old response fixtures parse; valid implementation ids and sparse JSON values pass; oversized
+     maps/values fail; contract-parity and typed-body tests cover both route families.
+5. **Persist global and project targets through existing UI-state routes.**
+   - Code: `packages/web/src/component-registry/settings.ts`, existing web client/query helpers only
+     where required, and server UI-state merge tests.
+   - Test: workspace and project GET hydrate their own caches; set performs a scoped read-modify-write;
+     two ids and both scopes survive one another; field/entry reset is selective; network, 409/500,
+     malformed responses and no-project project writes become recoverable `settings-unavailable`;
+     no new route appears.
 6. **Wire the default boot path.**
-   - Code: `packages/web/src/main.tsx` passes the persistent adapter into the shared component
-     registry; test factories keep the in-memory fallback.
-   - Test: the normal boot creates one lazy store before extensions activate, while a fresh store
-     instance reads values written by the previous instance; no settings request occurs when no
-     component declares a schema.
+   - Code: `packages/web/src/main.tsx` passes one lazy persistent adapter into the shared registry;
+     project resolution follows the URL and test factories keep the in-memory fallback.
+   - Test: a fresh store instance reads values written by the previous instance in both scope files;
+     no settings request occurs when no component declares a definition.
 
 ### Phase 3 — Component host integration
 
-7. **Inject settings into the selected implementation.**
+7. **Expose the implementation-specific reader.**
    - Code: `packages/web/src/component-registry/component-host.tsx` and provider/runtime revision
      wiring.
-   - Test: selected Jira and compact implementations receive their own parsed settings; a missing
-     value is `undefined`; settings updates rerender the selected component; contract props are not
-     mutated.
-8. **Cover switching, fallback and asynchronous failure paths.**
-   - Test: a stale Jira read cannot paint after switching to compact; extension failure renders core
-     with core settings; core failure keeps the existing inline retry; parser errors and store errors
-     never unmount the surrounding page.
-9. **Exercise the Definition of Done end to end at the package boundary.**
-   - Test: register two implementations of one fixture contract, write both values, recreate the
-     registry/host, select each implementation and assert each renders its own settings after reload.
+   - Test: selected Jira and compact implementations read their own typed values through
+     `useComponentSettings()`; missing values equal defaults; contract props are not mutated.
+8. **Cover switching, projects, fallback and asynchronous failures.**
+   - Test: a stale Jira/global read cannot paint after switching to compact/project; extension failure
+     renders core with core settings; core failure keeps the existing inline retry; parser/store
+     errors never unmount the surrounding page.
+9. **Exercise the Definition of Done end to end.**
+   - Test: register two implementations of one fixture contract, write one global and one project
+     value, recreate registry/host, select each implementation in its corresponding scope and assert
+     each renders its own settings after reload.
 
 ### Phase 4 — Documentation and compatibility
 
-10. **Document the durable contract.** Update `packages/extension-api/README.md`, the Extensions and
-    component-implementation routing row in `AGENTS.md`, `BACKWARD_COMPATIBILITY.md`, and the release
-    notes with the reserved prop, global namespace, missing-value default and non-secret warning.
-11. **Run the full configured validation gate.** Run the five commands above plus the focused
-    extension-api, component-registry, component-host and workspace UI-state suites. Confirm no UI
-    mockup or browser screenshot is required: this item adds no screen, route or visible layout.
+10. **Document the durable contract.** Update `packages/extension-api/README.md`, the extension and
+    component-implementation routing row in `AGENTS.md`, `BACKWARD_COMPATIBILITY.md` and release
+    notes with scope, defaults, host ownership, the reader boundary and the non-secret warning.
+11. **Run the full configured validation gate.** Run the five commands above plus focused
+    extension-api, component-registry, component-host and project/workspace UI-state suites. Confirm
+    no UI mockup or browser screenshot is required: this item adds no screen, route or visible layout.
