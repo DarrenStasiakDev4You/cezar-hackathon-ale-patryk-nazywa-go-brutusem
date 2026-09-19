@@ -342,6 +342,73 @@ describe('checkComponentCompatibility — hostile input', () => {
   })
 })
 
+// The definition-of-done proof: core's default and an extension's replacement implement the same
+// contract the same way, and the host checks both with one three-argument call.
+describe('core and extension on one contract', () => {
+  interface GreetingProps {
+    name: string
+  }
+  const greetingOptions = { version: 1, requiredCapabilities: ['greets-by-name'], optionalCapabilities: ['waves'] }
+  // Each side holds its own copy of the token, as separately bundled copies of the package do.
+  const hostGreeting = defineComponentContract<GreetingProps>('cezar.test.greeting', greetingOptions)
+  const coreGreeting = defineComponentContract<GreetingProps>('cezar.test.greeting', greetingOptions)
+  const extensionGreeting = defineComponentContract<GreetingProps>('cezar.test.greeting', greetingOptions)
+
+  const coreDefault: ComponentImplementation<GreetingProps> = {
+    id: 'cezar.test.greeting.default',
+    title: 'Cezar',
+    capabilities: ['greets-by-name', 'waves'],
+    component: ({ name }) => `Hello, ${name}`,
+  }
+  const loud: ComponentImplementation<GreetingProps> = {
+    id: 'acme.hello.loud',
+    title: 'Loud',
+    capabilities: ['greets-by-name'],
+    component: ({ name }) => `HELLO, ${name.toUpperCase()}!`,
+  }
+
+  it('passes both through the same call: host token, implementation, the token it was provided with', () => {
+    const provided = [
+      [coreDefault, coreGreeting],
+      [loud, extensionGreeting],
+    ] as const
+    const outcomes = provided.map(([implementation, token]) =>
+      checkComponentCompatibility(hostGreeting, implementation, token),
+    )
+    expect(outcomes).toEqual([
+      { compatible: true, issues: [], capabilities: ['greets-by-name', 'waves'] },
+      { compatible: true, issues: [], capabilities: ['greets-by-name'] },
+    ])
+  })
+
+  it('fails an implementation compiled against @1 on a host serving @2, with exactly one version issue', () => {
+    const hostGreetingV2 = defineComponentContract<GreetingProps>('cezar.test.greeting', {
+      version: 2,
+      requiredCapabilities: ['greets-by-name', 'greets-by-title'],
+    })
+    const outcome = checkComponentCompatibility(hostGreetingV2, loud, extensionGreeting)
+    expect(outcome.compatible).toBe(false)
+    expect(outcome.issues).toEqual([
+      {
+        code: 'contract-version-mismatch',
+        message: 'acme.hello.loud implements cezar.test.greeting@1, but this Cezar serves cezar.test.greeting@2',
+        expected: 2,
+        actual: 1,
+      },
+    ])
+  })
+
+  it('never reads the component', () => {
+    const unreadable = Object.defineProperty({ ...loud }, 'component', {
+      enumerable: true,
+      get() {
+        throw new Error('the check read the component')
+      },
+    })
+    expect(checkComponentCompatibility(hostGreeting, unreadable, extensionGreeting).compatible).toBe(true)
+  })
+})
+
 // Type tests: checked by `npm run typecheck`, never executed.
 describe('checkComponentCompatibility — types', () => {
   it('accepts a contract token, a structurally built one, and an implementation typed without capabilities', () => {
