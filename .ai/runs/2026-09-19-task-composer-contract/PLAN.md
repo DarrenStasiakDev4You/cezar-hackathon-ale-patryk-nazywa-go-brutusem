@@ -14,7 +14,7 @@ Base: `origin/main` at `15d8a723`
 | 1 | 1.1 | Add the Task Composer contract and public API documentation | group:A | done | d030efda |
 | 1 | 1.2 | Split the composer into a prop-driven view and local New Task state | group:A | done | pending |
 | 1 | 1.3 | Build the task composer controller and task-bound draft delivery | group:A | done | pending |
-| 1 | 1.4 | Add core's prop-only Task Composer implementation | group:A | todo | — |
+| 1 | 1.4 | Add core's prop-only Task Composer implementation | group:A | done | pending |
 | 1 | 1.5 | Mount the composer host slot and register core's default | group:A | todo | — |
 | 1 | 1.6 | Document the controller seam and verify the Phase 1 contract boundaries | dispatch:cheap | todo | — |
 | 2 | 2.1 | Make attachment and engine capabilities optional and render core fallbacks beside replacements | group:B | todo | — |

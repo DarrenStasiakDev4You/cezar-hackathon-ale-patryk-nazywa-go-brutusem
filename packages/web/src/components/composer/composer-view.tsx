@@ -21,7 +21,7 @@ import { isSubmitShortcut } from '@/lib/use-submit-shortcut'
 import { cn } from '@/lib/utils'
 
 import { applyCompletion, detectTrigger, type TriggerState } from './composer-text'
-import { type PendingAttachment } from './composer-attachments'
+import type { ComposerFileLike } from './composer-attachments'
 import { formatElapsed, useDictation } from './dictation'
 
 export interface ComposerViewSkill {
@@ -35,11 +35,19 @@ export interface ComposerViewHandle {
   insertAtCaret: (snippet: string) => void
 }
 
+export interface ComposerViewAttachment {
+  readonly key: string
+  readonly name: string
+  readonly mediaType: string
+  readonly isImage: boolean
+  readonly preview?: string
+}
+
 export interface ComposerViewProps {
   readonly value: string
   readonly onValueChange: (text: string) => void
-  readonly attachments: readonly PendingAttachment[]
-  readonly onFiles: (files: readonly File[], source: 'file' | 'clipboard') => void
+  readonly attachments: readonly ComposerViewAttachment[]
+  readonly onFiles: (files: readonly ComposerFileLike[], source: 'file' | 'clipboard') => void
   readonly onRemove: (key: string) => void
   readonly sendEnabled: boolean
   readonly onSend: () => void
@@ -69,7 +77,7 @@ interface MenuCandidate {
   readonly emphasized: boolean
 }
 
-const fileKey = (attachment: PendingAttachment, index: number) => attachment.key ?? attachment.id ?? `${attachment.name}-${index}`
+const fileKey = (attachment: ComposerViewAttachment, index: number) => attachment.key || `${attachment.name}-${index}`
 
 /**
  * The prop-only presentation of a composer. It owns only ephemeral view state (caret, open menu,
@@ -374,7 +382,7 @@ function fuzzyMatch(candidate: string, query: string): boolean {
   return true
 }
 
-function AttachButton({ disabled, accept, onFiles }: { disabled: boolean; accept: string; onFiles: (files: readonly File[], source: 'file' | 'clipboard') => void }) {
+function AttachButton({ disabled, accept, onFiles }: { disabled: boolean; accept: string; onFiles: (files: readonly ComposerFileLike[], source: 'file' | 'clipboard') => void }) {
   const inputRef = useRef<HTMLInputElement>(null)
   return <>
     <Button type="button" variant="ghost" size="icon-sm" aria-label="Attach files" title="Attach an image, PDF, TXT or MD file (or paste a screenshot)" disabled={disabled} className="size-8 text-muted-foreground" onClick={() => inputRef.current?.click()}><PaperclipIcon aria-hidden="true" className="size-[15px]" /></Button>
