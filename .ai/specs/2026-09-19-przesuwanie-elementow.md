@@ -2,17 +2,17 @@
 
 ## 📋 Skrót
 
-Dodajemy możliwość zmiany kolejności elementów zarejestrowanych w layoucie podczas aktywnego globalnego trybu edycji. Użytkownik rozpoczyna przeciąganie po przekroczeniu małego progu ruchu, widzi jednoznaczny symbol miejsca docelowego, a po puszczeniu element zostaje przeniesiony do nowej pozycji w obrębie tego samego rodzica. Zwykłe najechanie, fokus, kliknięcie i prawy przycisk myszy zachowują odrębne znaczenie i nie mogą przypadkowo uruchamiać przeciągania.
+Dodajemy wizualny edytor layoutu w faktycznym cockpitcie Cezara, uruchamiany przez globalny tryb edycji. Cały widok — poza aktywnie wskazanym elementem — jest wtedy wyszarzony, aby użytkownik widział, że edytuje strukturę, a nie uruchamia funkcje biznesowe. Hover przywraca pełny kolor wskazanego elementu.
 
-Faza nie dodaje zapisu layoutu, resize, usuwania, przenoszenia między kontenerami ani API. Zmiana jest lokalnym stanem klienta przygotowanym do późniejszej persystencji.
+Użytkownik może przeciągnąć grupę razem z poddrzewem, dowolny element niezależnie od jego pierwotnej grupy, element do dowolnej grupy oraz jeden element na drugi. W ostatnim przypadku upuszczony element staje się dzieckiem celu, a cel jego parentem. Podczas dragowania widoczny jest jednoznaczny placeholder, a po puszczeniu struktura i pozycja są aktualizowane lokalnie.
 
 ## 📋 Rozstrzygnięte założenia (domyślne decyzje autonomiczne)
 
 | # | Pytanie | Zastosowane założenie | Uzasadnienie | Potwierdzenie? |
 |---|---|---|---|---|
-| Q1 | Czy ta specyfikacja obejmuje także zmianę rodzica elementu, np. przeniesienie widgetu do innej grupy? | Nie; v1 pozwala zmieniać kolejność rodzeństwa w jednym kontenerze. | To najmniejszy model, który dostarcza realne reorderowanie i nie wymaga reguł kompatybilności typów grup ani geometrii wielokontenerowej. | ok |
+| Q1 | Czy można zmienić rodzica elementu i upuścić go na inny element? | Tak; drop na grupie dodaje dziecko, a drop na elemencie ustawia ten element jako parenta. | Jest to główny cel tej iteracji, a nie opcjonalne rozszerzenie reorderowania. | ⚠ NEEDS HUMAN CONFIRMATION |
 | Q2 | Czy zmiana ma być zapisywana po odświeżeniu lub przez API? | Nie; kolejność żyje w pamięci do czasu kolejnego przeładowania. | Discovery i globalny tryb edycji nie mają jeszcze kontraktu persystencji; dodanie storage/API byłoby osobną zdolnością o większym zakresie ryzyka. | tak |
-| Q3 | Czy grupa jest przeciągana razem z całym poddrzewem? | Tak, grupa jest jednym elementem sortowalnym, a dzieci pozostają wewnątrz niej. | Użytkownik nie powinien przypadkowo rozrywać hierarchii; model rejestru już rozróżnia grupę i poddrzewo. | ok |
+| Q3 | Czy grupa jest przeciągana razem z całym poddrzewem? | Tak; grupa jest jednym uchwytem, a całe poddrzewo porusza się razem. Pojedyncze dziecko można jednak wyrwać i przenieść osobno. | Łączy szybkie przenoszenie grup z pełną swobodą edycji pojedynczego elementu. | ⚠ NEEDS HUMAN CONFIRMATION |
 | Q4 | Czy v1 musi obsługiwać alternatywę klawiaturową? | Tak; uchwyt elementu ma standardową ścieżkę przeciągania klawiaturą z dnd-kit. | Przeciąganie nie może być jedynym sposobem realizacji operacji dostępnej dla użytkownika klawiatury. | tak |
 | Q5 | Czy mechanizm ma używać istniejącego dnd-kit, czy nowej implementacji zdarzeń wskaźnika? | Istniejący dnd-kit, skonfigurowany z małą odległością aktywacji i osobnym uchwytem. | Repozytorium już używa dnd-kit w kreatorze workflow; ponowne użycie redukuje różnice w obsłudze dotyku, kopii elementu i klawiatury. | tak |
 
@@ -30,21 +30,21 @@ Największym ryzykiem UX jest pomieszanie pięciu podobnych sygnałów:
 | right click | kontekst przeglądarki/edytora | nie rozpoczyna przeciągania; menu kontekstowe zachowuje dotychczasową politykę |
 | drag | jawne przenoszenie | po przekroczeniu progu pokazuje kopię elementu i miejsce docelowe; upuszczenie zatwierdza zmianę kolejności |
 
-Bez tej granicy pojedynczy pointerdown może jednocześnie wybrać widget, kliknięcie może wykonać jego akcję, a przypadkowe kilka pikseli ruchu może zmienić layout.
+Bez tej granicy pojedynczy pointerdown może jednocześnie wybrać widget, kliknięcie może wykonać jego akcję, a przypadkowe kilka pikseli ruchu może zmienić layout. Obecna makieta dodatkowo rozmija się z aplikacją: pokazuje fikcyjne karty dashboardu, podczas gdy ekran Cezara ma stały ciemny sidebar, żółty pasek edycji, Tasks/Active/Archived, wyszukiwarkę i pusty stan „No tasks yet”.
 
 ## 📋 Proponowane rozwiązanie
 
-W trybie edycji każdy zarejestrowany element sortowalny otrzymuje mały, jawny uchwyt przeciągania. `DndContext` i `SortableContext` obsługują tylko powierzchnię layoutu, a `useSortable` jest podłączony do uchwytu, nie do całego widgetu. Aktywacja wskaźnika następuje dopiero po przekroczeniu progu około 6 px; zwykłe kliknięcie pozostaje kliknięciem.
+W trybie edycji każdy zarejestrowany element otrzymuje jawny uchwyt i strefy drop. Cały aktywny widok dostaje warstwę dimmingu; element pod hoverem oraz element dragowany odzyskują pełny kolor. `DndContext` obejmuje również strefy grup i elementów, a `useSortable` pozostaje podłączony do uchwytu, nie do dowolnych kontrolek wewnątrz widgetu. Aktywacja wskaźnika następuje dopiero po przekroczeniu progu około 6 px.
 
 Podczas przeciągania:
 
 1. element źródłowy przechodzi w stan `dragging`, a jego wizualna kopia jest renderowana w `DragOverlay`;
 2. elementy rodzeństwa pozostają w układzie, ale między nimi pojawia się jedna linia lub strefa upuszczenia opisująca dokładne miejsce wstawienia;
 3. `over` aktualizuje wyłącznie kandydatkę pozycji, bez wywoływania akcji biznesowych i bez zapisu;
-4. `dragEnd` zamienia kolejność identyfikatorów rodzeństwa w rejestrze lub warstwie layoutu; upuszczenie na źródle lub poza dozwolonym kontenerem niczego nie zmienia;
+4. `dragEnd` rozstrzyga cel: drop w szczelinie zmienia kolejność, drop na grupie dodaje dziecko, a drop na elemencie ustawia go jako parenta; placeholder pokazuje wybrany wariant przed zatwierdzeniem;
 5. `dragCancel`, `pointercancel` lub utrata aktywnego celu przywraca poprzednią kolejność.
 
-W v1 element może zostać wstawiony przed lub za rodzeństwem w tym samym rodzicu. Grupa porusza się jako jeden wpis, a jej `children` i ich wewnętrzna kolejność nie zmieniają się. Nie pokazujemy fałszywego miejsca upuszczenia dla elementu z innego rodzica.
+Element może zostać wstawiony przed lub za rodzeństwem, do dowolnej grupy albo na dowolny element. Grupa porusza się jako jeden wpis z poddrzewem, ale dziecko można przeciągnąć poza grupę. Nie wolno przenieść elementu do własnego poddrzewa.
 
 ### Wnioski z analizy i odrzucone alternatywy
 
@@ -60,7 +60,7 @@ W v1 element może zostać wstawiony przed lub za rodzeństwem w tym samym rodzi
 - `packages/web/src/lib/layout-elements.ts` — dodać jawny, niemutujący model kolejności rodzeństwa oraz operację `moveBefore`/`moveAfter` z walidacją tego samego `parentId`.
 - `packages/web/src/components/layout-registry.tsx` — udostępnić kolejność i stabilne aktualizacje dla jednego layoutu; dostawca kontekstu pozostaje właścicielem instancji.
 - `packages/web/src/components/layout-element.tsx` — zachować deklaratywny wrapper i dodać semantyczny uchwyt lub strefę tylko wtedy, gdy aktywny jest tryb edycji.
-- nowy komponent, np. `packages/web/src/components/layout-sortable-surface.tsx` — jedna granica `DndContext`, sensory, `onDragStart/Over/End/Cancel`, kopia elementu i symbol miejsca docelowego.
+- nowy komponent, np. `packages/web/src/components/layout-sortable-surface.tsx` — jedna granica `DndContext`, sensory, dimming, hover reveal, `onDragStart/Over/End/Cancel`, kopia elementu i strefy drop dla reorderu oraz parentingu.
 - `packages/web/src/components/app-shell.tsx` — bez nowej polityki per-widget; istniejący guard nadal blokuje kliknięcie/wysłanie formularza i przepuszcza wyłącznie jawne akcje edytora.
 - `packages/web/src/styles/index.css` — stany `hover`, `focus-visible`, `dragging` i wskaźnika miejsca upuszczenia bez zmiany wymiarów elementu poza przeznaczoną przestrzenią symbolu miejsca docelowego.
 
@@ -94,8 +94,8 @@ type LayoutPlacement = {
 
 type LayoutMove = {
   id: string
-  targetId: string | null // null = koniec tego samego kontenera
-  position: 'before' | 'after'
+  targetId: string | null // null = koniec wybranego kontenera
+  position: 'before' | 'after' | 'inside'
 }
 ```
 
@@ -122,10 +122,11 @@ type LayoutRegistry = {
 ### Stany elementu
 
 - **Normalny:** element zachowuje dotychczasowy wygląd.
-- **Hover:** pojawia się subtelny obrys lub uchwyt, ale layout i akcje pozostają bez zmian.
+- **Edit idle:** cały widok jest wyszarzony; struktura jest czytelna, ale akcje biznesowe są wizualnie wyciszone.
+- **Hover:** wskazany element odzyskuje pełny kolor i dostaje subtelny obrys/uchwyt; hover nie zmienia struktury.
 - **Focus:** uchwyt ma widoczny `focus-visible`; fokus nie rozpoczyna przeciągania.
 - **Pressed/arming:** po pointerdown uchwyt może pokazać stan pressed, ale do przekroczenia progu nie ma placeholdera ani zmiany kolejności.
-- **Dragging:** źródło zachowuje miejsce w układzie jako półprzezroczysta strefa, kopia elementu podąża za wskaźnikiem, a aktywne miejsce upuszczenia ma kontrastowy obrys i oznaczenie.
+- **Dragging:** źródło zachowuje miejsce jako półprzezroczysta strefa, kopia podąża za wskaźnikiem, a aktywne miejsce upuszczenia mówi „przenieś tutaj”, „dodaj do grupy” albo „ustaw jako element nadrzędny”.
 - **Dropped:** symbol miejsca docelowego znika, element renderuje się w nowej kolejności, a krótki status dostępnościowy komunikuje „Przeniesiono: {label}”.
 - **Anulowane lub nieprawidłowe:** układ wraca do stanu początkowego bez komunikatu błędu.
 
@@ -140,13 +141,16 @@ type LayoutRegistry = {
 
 ### Responsywność i grupy
 
-Na komputerze symbol miejsca docelowego ma szerokość i kształt elementu, a kopia jest ograniczona do powierzchni layoutu. Na urządzeniu mobilnym uchwyt pozostaje minimum 44×44 px, a strefa jest widoczna również przy wąskiej kolumnie. Grupa jest przeciągana jako karta lub strefa grupy; jej dzieci nie stają się osobnymi celami dla bieżącego przeciągania.
+Makieta odtwarza rzeczywisty pusty ekran Cezara, a nie przykładowy dashboard: sidebar z Tasks/Git/GitHub/Automations/Skills/Workflows/Settings, dolny toolbar, nagłówek Tasks, Active/Archived, wyszukiwarkę i centralny empty state. Na komputerze strefa drop ma szerokość elementu; na urządzeniu mobilnym uchwyt ma minimum 44×44 px. Grupa jest przeciągana jako całość, lecz jej dzieci nadal są osobnymi celami, gdy użytkownik rozpocznie drag bezpośrednio na dziecku.
 
 Makieta: `assets/przesuwanie-elementow/mockup-01-dragging-widget.html` oraz wyrenderowany PNG obok niej.
 
 ## 📋 Przypadki brzegowe i scenariusze awarii
 
-- Upuszczenie poza kontenerem, na własny element lub na element z innym rodzicem: brak zmiany, bez wyjątku dla użytkownika.
+- Upuszczenie poza kontenerem, na własny element albo do własnego poddrzewa: brak zmiany, bez wyjątku dla użytkownika.
+- Upuszczenie elementu na grupę: element otrzymuje `parentId` grupy i zostaje dodany na jej końcu albo w pokazanej strefie.
+- Upuszczenie elementu na inny element: cel staje się parentem źródła, a źródło zostaje wyrenderowane jako podelement.
+- Drop dziecka poza dotychczasową grupę zachowuje jego tożsamość i przenosi tylko jego gałąź, nie całą grupę.
 - Upuszczenie na własny symbol miejsca docelowego: nic nie zmieniać; nie tworzyć duplikatu ani pustej strefy.
 - Szybkie kliknięcie bez przekroczenia progu: callback przeciągania nie jest wywołany.
 - Anulowanie wskaźnika, Escape, zamknięcie kopii lub odmontowanie źródła: przywrócić kolejność początkową i wyczyścić stan aktywnego przeciągania.
@@ -171,7 +175,7 @@ Nie ma zmian w danych serwerowych, trasach, auth, configu, rozszerzeniach ani ko
 
 Rozszerzyć rejestr o kolejność rodzeństwa i czyste operacje zmiany kolejności, wraz z walidacją tego samego rodzica i ochroną poddrzewa. Faza kończy się działającym modelem bez interfejsu użytkownika.
 
-### Faza 2 — Powierzchnia przeciągania wskaźnikiem i dotykiem
+### Faza 2 — Powierzchnia przeciągania, dimming i parentowanie
 
 Dodać `DndContext`, sensory, uchwyt, kopię elementu, symbol miejsca docelowego i zatwierdzenie upuszczenia na powierzchni layoutu. Faza kończy się działającym przesuwaniem widgetów i grup w trybie edycji.
 
@@ -192,21 +196,25 @@ Dodać przeciąganie klawiaturą, komunikaty regionu live oraz pełną macierz n
 
 5. Dodać jedną powierzchnię sortowalną z istniejącym dnd-kit; test potwierdza, że widget poza trybem edycji nie ma uchwytu ani aktywnego sensora.
 6. Podłączyć uchwyt z odległością aktywacji około 6 px i `data-edit-mode-action="allow"`; test rozróżnia kliknięcie bez ruchu od przeciągania po przekroczeniu progu.
-7. Dodać `DragOverlay`, symbol miejsca docelowego i wskaźnik upuszczenia przed lub za rodzeństwem; test renderuje aktywny stan i prawidłowy cel.
-8. Zatwierdzić zmianę kolejności wyłącznie w `onDragEnd`; test potwierdza, że `onDragOver` nie zmienia rejestru, a anulowanie lub nieprawidłowe upuszczenie przywraca stan.
-9. Obsłużyć grupę jako pojedynczy wpis sortowalny; test potwierdza niezmienność kolejności i parentId dzieci.
+7. Dodać `DragOverlay`, placeholder i trzy typy stref: przed/za rodzeństwem, wewnątrz grupy i na element.
+8. Zatwierdzić reorder lub parentowanie wyłącznie w `onDragEnd`; test potwierdza poprawne `parentId`, brak częściowego stanu i anulowanie.
+9. Dodać dimming całego widoku oraz hover reveal pełnego koloru; test sprawdza, że hover nieprzeciąganego elementu przywraca jego kontrast.
+10. Obsłużyć grupę jako pojedynczy wpis z poddrzewem, ale pozwolić wyrwać pojedyncze dziecko; test potwierdza oba warianty.
 
 ### Faza 3 — Klawiatura, guard i regresje UX
 
-10. Dodać współrzędne klawiatury, Spację/strzałki/Escape i `aria-live`; testy sprawdzają podniesienie, przesunięcie, zatwierdzenie i anulowanie bez aktywacji biznesowej akcji.
-11. Dodać macierz zdarzeń: najechanie i fokus niczego nie zmieniają, kliknięcie poniżej progu niczego nie zmienia, prawy przycisk nie uzbraja przeciągania, a przeciąganie po uchwycie zmienia kolejność dopiero po upuszczeniu.
+11. Dodać współrzędne klawiatury, Spację/strzałki/Escape i `aria-live`; testy obejmują reorder i zmianę parenta bez aktywacji biznesowej akcji.
+12. Dodać macierz zdarzeń: dimming, hover reveal, fokus, kliknięcie poniżej progu, prawy przycisk, reorder, drop do grupy i drop na elemencie.
 12. Zweryfikować urządzenie mobilne, przewijanie dotykiem, jasny/ciemny motyw, `focus-visible`, uchwyt minimum 44 px i brak poziomego przepełnienia w testach komponentowych i przeglądarkowych.
 13. Uruchomić gate repozytorium: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build`, `npm run test:package`; opisać ewentualne niezwiązane awarie.
 
 ## 📋 Kryteria akceptacji
 
 - [ ] W trybie edycji użytkownik może przeciągnąć widget na inną pozycję wśród elementów tego samego rodzica.
-- [ ] Grupa jest przenoszona jako całość; dzieci nie zmieniają rodzica ani wewnętrznej kolejności.
+- [ ] Cały widok jest wyszarzony w trybie edycji, a hover przywraca pełny kolor wskazanego elementu.
+- [ ] Grupa jest przenoszona jako całość, ale pojedyncze dziecko można wyrwać i przenieść osobno.
+- [ ] Element niezależny można przenieść do dowolnej grupy.
+- [ ] Drop elementu na drugi element ustawia drugi element jako parenta pierwszego i pokazuje placeholder przed zatwierdzeniem.
 - [ ] Symbol miejsca docelowego lub wskaźnik upuszczenia pokazuje dokładny cel podczas przeciągania.
 - [ ] Kliknięcie bez przekroczenia progu nie rozpoczyna przeciągania i nie zmienia kolejności.
 - [ ] Najechanie i fokus pokazują informację o elemencie, ale nie zmieniają layoutu.
@@ -215,4 +223,4 @@ Dodać przeciąganie klawiaturą, komunikaty regionu live oraz pełną macierz n
 - [ ] Przeciąganie klawiaturą jest możliwe z uchwytu i ma komunikat w regionie live.
 - [ ] Istniejący guard interakcji nadal blokuje biznesowe kliknięcia, wysłanie formularza i dropdowny; uchwyt edytora jest jawnie dozwolony.
 - [ ] Tryb normalny nie ma uchwytów, placeholderów ani zmiany zachowania istniejących widgetów.
-- [ ] Nie dodano API, persystencji, resize, usuwania, przenoszenia między rodzicami ani nowej zależności.
+- [ ] Nie dodano API, persystencji, resize, usuwania ani nowej zależności.
