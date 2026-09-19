@@ -152,8 +152,11 @@ export interface TaskHeaderMainProps {
  * - `shows-title` (required): shows `task.title`.
  * - `shows-status` (required): shows the status, from `attention`.
  * - `shows-meta` (optional): shows `meta` and `engine`. The picker says which implementations do.
- * - Continue, Stop and Archive: core renders them beside this part from `actions`, and calls the
- *   same intents, so an implementation should not render them too.
+ * - `offers-continue`, `offers-stop`, `offers-archive` (optional): renders that action from
+ *   `actions` and calls its intent (`onContinue`, `onStop`, `onArchive`). Core then leaves that
+ *   action out of its action bar, and while any of the three is offered it keeps its Run actions
+ *   menu, which lists them too, visible at every width. For an action it does not declare, core
+ *   renders the action beside this part, and the implementation should not.
  * - Intents: before acting on `onContinue`, `onStop`, `onArchive`, `onResolveConflicts` or
  *   `onChooseEngine`, core checks the action's current state. A call does nothing unless the
  *   action is `available` and `enabled`, which also rules out a repeat while one is `pending`.
@@ -164,6 +167,6 @@ export interface TaskHeaderMainProps {
 export const TaskHeaderMain = defineComponentContract<TaskHeaderMainProps>('cezar.task.header.main', {
   version: 1,
   requiredCapabilities: ['shows-title', 'shows-status'],
-  optionalCapabilities: ['shows-meta'],
+  optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
   layout: { minBlockSize: 30 },
 })
