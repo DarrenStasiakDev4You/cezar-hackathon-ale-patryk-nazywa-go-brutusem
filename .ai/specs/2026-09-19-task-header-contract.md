@@ -26,28 +26,29 @@ now, and why not. Actions are **intents**: `onContinue()`, `onStop()`, `onArchiv
 answers each one with the same command, confirmation and toast as today. No query client,
 mutation, router or private hook crosses the boundary. **Core's default then renders from its
 props alone**, and a new example extension, which imports nothing from `packages/web`, renders a
-working header on the task page. An implementation may take over the three actions through the
-optional capability `task-actions`. Core's own header does not, so the default page keeps
-today's layout.
+working header on the task page. An implementation may take over any of the three actions,
+one by one, through the optional capabilities `offers-continue`, `offers-stop` and
+`offers-archive`. Core's own header declares none of them, so the default page keeps today's
+layout.
 
 ## Resolved assumptions (autonomous defaults)
 
 The brief left these open. Each answer is the most reversible choice that meets the brief's
-Definition of Done. Three rows are marked ⚠ NEEDS HUMAN CONFIRMATION. They change an owner
-decision, a visible behavior on the default path, or what happens to item 10's unlanded slot. The
-spec PR stays a draft until the owner confirms or overrides them. Q8 was rewritten after #32 merged
-without the slot. Before that, it asked whether to amend a `@1` that #33 would already have shipped.
+Definition of Done. The owner decided Q3, Q7 and Q8 on 2026-09-19, and those rows record the
+decisions. The other rows are still autonomous defaults, each reversible before implementation
+starts. Q8 was rewritten after #32 merged without the slot. Before that, it asked whether to amend
+a `@1` that #33 would already have shipped.
 
 | # | Question | Answer | Why | Status |
 |---|---|---|---|---|
-| Q1 | The brief bundles the contract, core's header moving onto it, and a proof in a separate package. Split into several specs? | **One spec, two phases, two stacked PRs.** Phase 1 ships the slot: the contract with the complete model, the `RunHeader` split, core's default on props only, its registration and the provider in the app. Phase 2 adds the `task-actions` takeover and the example extension that proves the Definition of Done. Phase 1 waits on Q7 and Q8, and phase 2 on Q3. If the owner rejects Q3, phase 2 shrinks to the proof: the example shows title, status and engine, and the actions stay core's. | None of them works alone. A contract that core's header does not use proves nothing, and the proof needs the complete model. The takeover could be its own spec (item 10 named a deferred `.actions` part), but the brief puts the actions in this contract. Keeping it as a phase with a fallback shape gives the owner the same choice without a second spec. | default, reversible |
+| Q1 | The brief bundles the contract, core's header moving onto it, and a proof in a separate package. Split into several specs? | **One spec, two phases, two stacked PRs.** Phase 1 ships the slot: the contract with the complete model, the `RunHeader` split, core's default on props only, its registration and the provider in the app. Phase 2 adds the per-action takeover (Q3) and the example extension that proves the Definition of Done. | None of them works alone. A contract that core's header does not use proves nothing, and the proof needs the complete model. The takeover could be its own spec (item 10 named a deferred `.actions` part), but the brief puts the actions in this contract. | default, reversible |
 | Q2 | The brief names `task.header@1`. Item 10's spec designed `cezar.task.header.main@1` for the same box. Its owner decisions (Q4a–Q4c) stand, but the contract is not on `main`. Which id and which split? | **Item 10's: `cezar.task.header.main@1`, and item 10's split of `RunHeader` (§ The split).** No second header contract. The brief's `task.header@1` is the illustrative name for this one, mapped to the repository's ids the way the owner's `task.title` became `shows-title` in item 10. The contract is born with the complete model. | The owner already decided what is replaceable (Q4b: the title and meta rows, not the whole header). Item 10 named the header's parts `cezar.task.header.<part>` on purpose, so that later parts can join them. | default, reversible |
-| Q3 | Item 10's Q4b kept the task actions in core's shell, "so no replacement can take away control of a task". The brief puts Continue, Stop and Archive in the contract. May a replacement own them? | **Yes, opt-in, with the optional capability `task-actions`.** An implementation that declares it renders the three actions from its props. Core then leaves them out of its action bar and keeps its **Run actions** menu visible at every width, where they stay available. If the implementation throws, core's default returns and the bar shows them again. Core's default does not declare it, so today's page is unchanged. Finish, Open in, Notes, Mark unread, Pin and Delete never leave the shell. The capability joins the token in phase 2, in the same PR as the shell code that honours it (AGENTS.md: core tokens land "in the same PR as the host code that honours them"). Adding an optional capability needs no bump. The `actions` state and the three intents belong to `@1` whatever the answer: the brief puts them in the model, and core's own bar renders from them. Q3 decides only whether an implementation may render them instead of core's bar. | This is what optional capabilities are for: "the host relies on one only for an implementation that declares it" (`ComponentContractOptions`). A separate `cezar.task.header.actions` contract would need a second host inside the action bar, which reorders the bar and cannot reach into the phone menu. The Run actions menu gives Q4b's guarantee at every width. | ⚠ NEEDS HUMAN CONFIRMATION: refines the owner's Q4b decision of 2026-09-19 |
+| Q3 | Item 10's Q4b kept the task actions in core's shell, "so no replacement can take away control of a task". The brief puts Continue, Stop and Archive in the contract. May a replacement own them? | **Yes, per action, when it declares so explicitly.** There are three optional capabilities, `offers-continue`, `offers-stop` and `offers-archive`. An implementation that declares one renders that action from its props and calls its intent, and core leaves that action out of its action bar. While it offers any of the three, core's **Run actions** menu stays visible at every width, and it still lists every task action. If the implementation throws, core's default returns and the bar shows the actions again. Core's default declares none, so today's page is unchanged. Finish, Open in, Notes, Mark unread, Pin and Delete never leave the shell. The capabilities join the token in phase 2, in the same PR as the shell code that honours them (AGENTS.md: core tokens land "in the same PR as the host code that honours them"). Adding an optional capability needs no bump. The `actions` state and the three intents belong to `@1` from phase 1: core's own bar renders from them. | The owner chose the explicit opt-in and suggested the granular form (`task.continue`, `task.stop`, `task.archive`). Per action, one extension can show Continue inline and leave Stop and Archive to core. The names follow item 10's Q4c rule: capability names are local to their contract, so there is no `task.` prefix, and they use a verb like `shows-title` (`task.continue` → `offers-continue`). A separate `cezar.task.header.actions` contract would need a second host inside the action bar. That reorders the bar and cannot reach into the phone menu. | ✅ owner, 2026-09-19 (granular) |
 | Q4 | How do the actions cross the boundary? | **As state plus intents.** Each action has `{ available, enabled, pending, reason? }`. `onContinue()`, `onStop()` and `onArchive()` return nothing. Core binds them to `useCommand(TaskContinue \| TaskStop \| TaskArchive)`, asks for confirmation before Stop, shows the server's words on failure, and checks the state again on every call. | If props carried command tokens, an implementation would call `context.commands.execute(TaskStop)` itself. That skips Stop's confirmation and the provider check that Continue makes today (`useContinuationProvider`). Intents keep one behavior for every header, and the brief rules out exposing mutations. | default, reversible |
 | Q5 | How strict is "core header uses only contract props"? | **Strict for task facts and actions.** `CoreTaskHeaderMain` reads no run record, query, query client, router, command or core-only context. Item 10's design gave core's default a core-only context, `{ run, continuationEngine }`; this item never builds one. It may use core's presentational UI kit: buttons, the pill, menus, the reference chip in its explicit-status form, `toast` and the clipboard. A render test proves it: the component renders with no `QueryClientProvider`, router, `CommandsProvider` or `ComponentsProvider` above it. An import boundary test backs this up. | A test can check that rule. A looser reading ("its top-level inputs are props") would let the core-only context back in under another name. | default, reversible |
 | Q6 | Core's header shows more than the brief lists: rename, reference chips with live state and **Resolve conflicts**, the automation link, tokens and cost, the account. What must the props carry so that core's default renders them from props? | **The facts, plus three more intents. The rename editor stays core's.** Added to the props: `task.prompt` (the title's hover text), `task.archived`, `attention` (the pill's words, tone, pulse and queue position), `engine` (runner, model, account, identity), `meta.diff.files` and `.repointed` (the diff chip's file count and #751 caveat), `meta.references` (with the forge's `status`, the look-up's `lookup` and `lookupReason`, and `conflicting`), `meta.automation`, `meta.usage`, and the `resolveConflicts` action state. The three intents are `onRename()`, `onResolveConflicts(prNumber)` and `onNavigate(href)`. `onRename()` asks core to open its own title editor over the part, with its saved draft, so the draft store stays private. | Without these fields, core's default could not render today's header (Q5), or the page would lose behaviors (Definition of Done 3). Each field is JSON that core already computes for the same row, and each intent maps to an existing core behavior. A metric hidden by `CEZ_HIDE_TOKEN_METRICS` is left out of the props, so it never reaches an implementation. | default, reversible |
-| Q7 | The agent badge's menu holds the Session tab's **Next continuation** picker, a core `ReactNode`. The contract may not carry one (contract-api spec: "must not contain `ReactNode` slots"). What happens to it? | **It leaves the header.** The composer dock keeps the same picker, driven by the same hook (`useContinueAction`), so choosing the next engine still works and happens in one place. The badge keeps runner, account, model and identity. | Modelling the picker (runners, discovered models, accounts, a change callback) would add about six public fields for a second copy of a control that is already on screen. A `ReactNode` prop would bring back the side channel that Q5 removes. Alternative, if the owner prefers it: an `onChooseEngine()` intent that moves focus to the dock's picker. | ⚠ NEEDS HUMAN CONFIRMATION: removes a deliberate shortcut (the `task-thread.tsx` comment on `continuationEngine`) from the default page |
-| Q8 | Item 10's phase 2 (#33: the thin contract, the `RunHeader` split, core's default reading a core-only context) merged into `feat/component-host` 16 seconds after #32 was squash-merged into `main`, so none of it is on `main`. Build on it, or stand alone? | **Stand alone, on `main` as #32 left it.** This item declares `cezar.task.header.main@1` complete from the start, splits `RunHeader` as item 10's spec designed it, registers core's default, and mounts `ComponentsProvider` in the app. #33 is not re-landed, and nothing here depends on it or on the open PR #35 ("Revert 33", which touches only the host's files). | Re-landing #33 first would ship a thin `@1` and a core-only context, and phase 1 would then remove both. That means doing the split twice, facing a version question (amend `@1` or bump to `@2`), and shipping a side channel the Definition of Done forbids. Starting from `main` builds the split once, with core's default on props from the start, so `@1` never has a thin version. The cost: phase 1 also carries the provider wiring, the core registration and the test churn #33 carried. Alternative: re-land #33 unchanged and build on it. Its parent tree equals #32's squash (`b27fdd80`), so it applies cleanly. | ⚠ NEEDS HUMAN CONFIRMATION: decides what happens to #33's reviewed code and to #35 |
+| Q7 | The agent badge's menu holds the Session tab's **Next continuation** picker, a core `ReactNode`. The contract may not carry one (contract-api spec: "must not contain `ReactNode` slots"). What happens to it? | **The badge keeps a way in, through an intent.** Its menu offers **Choose engine for the next continuation…**, which calls `onChooseEngine()`. Core then moves focus to the dock's picker (`[data-slot="follow-up-engine"]`, its first pill), scrolled into view, where the user picks as today. The state `actions.chooseEngine` says when that is possible: on the Session tab, for a task that can be continued. The picker itself, driven by `useContinueAction`, stays in the dock only. | A `ReactNode` prop would bring back the side channel that Q5 removes. Modelling the picker (runners, discovered models, accounts, a change callback) would add about six public fields for a second copy of a control. One intent keeps the shortcut at the cost of one callback and one action state. | ✅ owner, 2026-09-19 |
+| Q8 | Item 10's phase 2 (#33: the thin contract, the `RunHeader` split, core's default reading a core-only context) merged into `feat/component-host` 16 seconds after #32 was squash-merged into `main`, so none of it is on `main`. Build on it, or stand alone? | **Stand alone, on `main` as #32 left it, and #33 is abandoned.** This item declares `cezar.task.header.main@1` complete from the start, splits `RunHeader` as item 10's spec designed it, registers core's default, and mounts `ComponentsProvider` in the app. Nothing here depends on #33. #35 ("Revert 33") is closed. | Re-landing #33 first would ship a thin `@1` and a core-only context, and phase 1 would then remove both. That means doing the split twice and facing a version question (amend `@1` or bump to `@2`). Starting from `main` builds the split once, with core's default on props from the start. The cost: phase 1 also carries the provider wiring, the core registration and the test churn #33 carried. | ✅ owner, 2026-09-19 |
 | Q9 | How is "a header can be written in a separate package" proven? | **A second worked example: `packages/extension-api/examples/compact-task-header/`.** It imports only the extension API and `react`. A cockpit test activates it through the real extension registry and uses it on the task page. No new workspace. | `examples/hello-extension/` set this precedent, and `test/boundary.test.ts` already keeps examples away from `packages/web`. A sixth workspace would add a root workspace entry, a package manifest and an AGENTS.md layout row just to hold a fixture. The one widening is that examples may now import `react` as a value. `src/` stays type-only, and the README and AGENTS.md say so. `react` becomes an extension-api devDependency pinned to `packages/web`'s range, so the cockpit test loads one React. | default, reversible |
 
 ## 📝 Problem Statement
@@ -82,18 +83,18 @@ The brief's Definition of Done, and where this item proves each point:
 
 | Definition of Done | How this item meets it | Proven by |
 |---|---|---|
-| A header can be written in a separate package without imports from `packages/web`. | `TaskHeaderMainProps` carries the task, its status as the list shows it, the runner and model, the three actions' state and their intents. `examples/compact-task-header/` implements the contract importing only `@open-mercato/cezar-extension-api` and `react`. On the task page it shows the title, status and engine and runs Continue, Stop (after core's confirmation) and Archive. Without Q3, it shows the title, status and engine only. | `extension-api/test/boundary.test.ts`, `test/compact-task-header.test.ts`, `web/src/routes/task-thread/external-task-header.test.tsx` |
+| A header can be written in a separate package without imports from `packages/web`. | `TaskHeaderMainProps` carries the task, its status as the list shows it, the runner and model, the three actions' state and their intents. `examples/compact-task-header/` implements the contract importing only `@open-mercato/cezar-extension-api` and `react`. On the task page it shows the title, status and engine and runs Continue, Stop (after core's confirmation) and Archive. | `extension-api/test/boundary.test.ts`, `test/compact-task-header.test.ts`, `web/src/routes/task-thread/external-task-header.test.tsx` |
 | Core's header uses only the contract's props. | `CoreTaskHeaderMain` takes every task fact and every action from its props. No core-only context exists. The shell's own Continue, Stop and Archive buttons also render from `props.actions` and call the same intents, so one model drives every copy of those three controls. | `core-task-header-main.test.tsx` (renders with no query client, router or command provider), `core-task-header-boundary.test.ts` |
 | Every required behavior still exists. | § UI/UX maps each of today's header behaviors to where it lives afterwards, and lists the five visible differences. The one removal is the badge's copy of the Next continuation picker, which stays in the dock (Q7). | `run-header.test.tsx`, `task-thread.test.tsx`, `follow-up-engine.test.tsx` |
-| The contract exposes no query client, mutation, router internals or private hook. | Data props are JSON (`IsJson`). The only functions are six intents that return `void`. `onNavigate` takes only an `href` that core itself put in the props. | the type test in `packages/extension-api/test`, `task-header-main.test.ts` |
+| The contract exposes no query client, mutation, router internals or private hook. | Data props are JSON (`IsJson`). The only functions are seven intents that return `void`. `onNavigate` takes only an `href` that core itself put in the props. | the type test in `packages/extension-api/test`, `task-header-main.test.ts` |
 
 ## 📝 Proposed Solution
 
 1. **Declare the contract** (`packages/extension-api/src/core-components.ts`, new, re-exported
    from `src/index.ts`). `TaskHeaderMain` is `cezar.task.header.main@1`, with the id, required
    capabilities and layout that item 10 designed and the complete model (§ API Contracts, Q6).
-   Phase 2 adds the optional capability `task-actions` (Q3), together with the shell code that
-   honours it.
+   Phase 2 adds the optional capabilities `offers-continue`, `offers-stop` and `offers-archive`
+   (Q3), together with the shell code that honours them.
 2. **One adapter reads the run for the part and the three actions.** `useTaskHeaderModel` (new,
    `routes/task-thread/task-header-main.ts`) is the only code that reads the `ApiRun`, the queries,
    the commands and the router to build the part's props and to run Continue, Stop and Archive. The
@@ -106,7 +107,8 @@ The brief's Definition of Done, and where this item proves each point:
 3. **Core's default renders from its props** (`core-task-header-main.tsx`, new). Today's title
    row and meta row move out of `run-header.tsx` and read props instead of the run. The reference
    chips get their forge status, look-up state and conflict flag as props, and the agent badge
-   reads `engine`.
+   reads `engine`. While `actions.chooseEngine` is available, the badge's menu offers **Choose
+   engine for the next continuation…**, which calls `onChooseEngine()` (Q7).
 4. **`RunHeader` becomes core's shell**, as item 10's spec designed it (§ The split). Where the two
    rows were, it renders `<ComponentHost contract={TaskHeaderMain} subject={run.id}
    props={model.props} />`, with the Run actions menu beside it. The actions, tabs, monitoring and
@@ -114,6 +116,9 @@ The brief's Definition of Done, and where this item proves each point:
    Run actions menu draw Continue, Cancel and Archive from `props.actions` and call
    `props.onContinue`, `onStop` and `onArchive`. **Cancel** is the visible label of the Stop intent,
    as today. `onStop` opens core's existing confirmation dialog, and confirming runs the stop.
+   `RunHeader` loses its `continuationEngine` node. On the Session tab, the page passes
+   `onChooseEngine` instead: `useContinueAction`'s new `focusPicker()`, which moves focus to the
+   dock's first engine pill.
 5. **Core's default is registered, and the app provides the registry**, as item 10's spec planned.
    `registerCoreComponents` (`component-registry/core-components.ts`, new) registers
    `CoreTaskHeaderMain` as `cezar.task.header.main.default`, and `CORE_COMPONENT_CONTRACTS` becomes
@@ -125,10 +130,12 @@ The brief's Definition of Done, and where this item proves each point:
    contract's `minBlockSize`, which every implementation is built around), keeping the part
    mounted but hidden and `inert`, so the header keeps its height. Enter saves through `usePatchRun`
    and Escape cancels. The saved draft reopens the editor when the user comes back, as today.
-7. **`task-actions` (phase 2).** `useHostedComponent(contract, subject)` tells the shell which
-   implementation its host renders now. When that implementation's checked capabilities include
-   `task-actions`, the bar leaves out Continue, Cancel and Archive, and the Run actions menu loses
-   its `md:hidden`. The menu lists every task action, including those three and Terminal. Only the
+7. **Taking over an action (phase 2).** `useHostedComponent(contract, subject)` tells the shell
+   which implementation its host renders now. For each action whose capability that
+   implementation's checked capabilities include, the bar leaves that action out:
+   `offers-continue` removes Continue, `offers-stop` removes Cancel, and `offers-archive` removes
+   Archive. While the implementation offers any of them, the Run actions menu loses its
+   `md:hidden`. The menu lists every task action, including those three and Terminal. Only the
    Open in targets stay in the bar alone, as today.
 8. **The proof (phase 2).** `packages/extension-api/examples/compact-task-header/` is a one-row
    header written against the package alone. A cockpit test activates it, prefers it and uses it.
@@ -149,9 +156,12 @@ The brief's Definition of Done, and where this item proves each point:
 
 ### Alternatives considered
 
-- **Re-land #33 first, then complete its contract** (Q8). Rejected. The split would be done twice.
+- **Re-land #33 first, then complete its contract** (Q8). Rejected by the owner: #33 is abandoned. The split would be done twice.
   A thin `@1` and a core-only context would ship only to be removed, and `@1` would need an
   in-place amendment or a bump to `@2`.
+- **One capability for all three actions (`task-actions`)** (Q3). Not chosen: the owner preferred
+  the granular form, and per-action capabilities let an implementation take over one action while
+  core keeps the others.
 - **A separate `cezar.task.header.actions@1` contract** (Q3). Rejected for now. Its host would sit
   inside the desktop action bar, which forces Continue, Archive and Cancel into one group and
   reorders the bar. It also cannot put items into the phone menu, a Radix menu that only core's
@@ -164,7 +174,8 @@ The brief's Definition of Done, and where this item proves each point:
   save, cancel). Rejected. It adds four public fields, and a saved draft would disappear under any
   implementation that ignores them. Core's editor works under every implementation.
 - **Model the Next continuation picker as props** (Q7). Rejected, for its size and because the
-  dock already shows the picker.
+  dock already shows the picker. **Drop the badge's way in entirely** was the first default. The
+  owner kept it as the `onChooseEngine()` intent instead.
 - **Keep both copies of the three actions** (an implementation shows them, and core's bar shows
   them too). Rejected: two Continue buttons on one header.
 - **A new workspace for the proof** (Q9). Rejected. An example in `extension-api/examples/` gives
@@ -174,7 +185,7 @@ The brief's Definition of Done, and where this item proves each point:
 
 ```mermaid
 flowchart LR
-  page["task pages (4 routes)<br/>(changed: no continuationEngine prop)"] --> shell
+  page["task pages (4 routes)<br/>(changed: onChooseEngine instead of continuationEngine)"] --> shell
   shell["RunHeader → core's shell<br/>(changed: split)"] -->|"run"| model
   model["useTaskHeaderModel<br/>(new: the only reader behind the props)"] -->|"useCommand"| cmds["core commands<br/>(existing: continue, stop, archive)"]
   model -->|"queries, navigate, usePatchRun, useAskAnswer"| core["cockpit stores + router<br/>(existing)"]
@@ -202,7 +213,9 @@ flowchart LR
 - **New in `packages/web/src/lib/`:** `import-scan.ts`. It holds the import parser from
   `commands/boundary.ts`, so the commands scan and both new scans share one parser.
 - **Changed in `packages/web`:** `run-header.tsx` (becomes the shell; actions from the model; the
-  title editor; `task-actions` in phase 2), `task-thread.tsx` (no `continuationEngine`),
+  title editor; the per-action takeover in phase 2), `task-thread.tsx` (passes `onChooseEngine`
+  instead of `continuationEngine`), `follow-up-engine.tsx` (`useContinueAction` returns
+  `focusPicker()`),
   `core-contracts.ts` (`[TaskHeaderMain]`), `main.tsx` and `app.tsx` (register core's default and
   provide the registry), `provider.tsx` (a `ComponentsProvider` without a `registry` builds one with
   core's defaults registered; #32's builds it empty), `component-host.tsx` (`useHostedComponent`,
@@ -343,6 +356,8 @@ export interface TaskHeaderActions {
   readonly archive: TaskHeaderActionState
   /** Ask the task's agent to resolve a pull request's merge conflicts. Offer it on a numbered, `conflicting` reference. */
   readonly resolveConflicts: TaskHeaderActionState
+  /** Choose the runner and model the next continuation uses. Available on the Session tab, for a task that can be continued. */
+  readonly chooseEngine: TaskHeaderActionState
 }
 
 export interface TaskHeaderMainProps {
@@ -365,6 +380,8 @@ export interface TaskHeaderMainProps {
   readonly onResolveConflicts: (prNumber: number) => void
   /** The user followed an in-app link from these props (`meta.automation.href`). */
   readonly onNavigate: (href: string) => void
+  /** The user asked to choose the engine for the next continuation. Core moves focus to its engine picker. */
+  readonly onChooseEngine: () => void
 }
 
 /**
@@ -375,12 +392,13 @@ export interface TaskHeaderMainProps {
  * - `shows-title` (required): shows `task.title`.
  * - `shows-status` (required): shows the status, from `attention`.
  * - `shows-meta` (optional): shows `meta` and `engine`. The picker says which implementations do.
- * - `task-actions` (optional, phase 2): renders Continue, Stop and Archive from `actions`, and
- *   calls `onContinue`, `onStop` and `onArchive`. Core then leaves them out of its action bar and
- *   keeps its Run actions menu, which lists them too, visible at every width. Without it, core
- *   renders them beside this part, and the implementation should not.
- * - Intents: before acting on `onContinue`, `onStop`, `onArchive` or `onResolveConflicts`, core
- *   checks the action's current state. A call does nothing unless the action is `available` and
+ * - `offers-continue`, `offers-stop`, `offers-archive` (optional, phase 2): renders that action
+ *   from `actions` and calls its intent (`onContinue`, `onStop`, `onArchive`). Core then leaves
+ *   that action out of its action bar, and while any of the three is offered it keeps its Run
+ *   actions menu, which lists them too, visible at every width. For an action it does not declare,
+ *   core renders the action beside this part, and the implementation should not.
+ * - Intents: before acting on `onContinue`, `onStop`, `onArchive`, `onResolveConflicts` or
+ *   `onChooseEngine`, core checks the action's current state. A call does nothing unless the action is `available` and
  *   `enabled`, which also rules out a repeat while one is `pending`.
  * - Layout: 30 CSS pixels (one title row) are reserved while an implementation loads, fails or
  *   is swapped. Core's title editor covers this band while the user renames. The shell around it
@@ -389,15 +407,16 @@ export interface TaskHeaderMainProps {
 export const TaskHeaderMain = defineComponentContract<TaskHeaderMainProps>('cezar.task.header.main', {
   version: 1,
   requiredCapabilities: ['shows-title', 'shows-status'],
-  // Phase 1: ['shows-meta'], as item 10 designed it. Phase 2 adds 'task-actions' with the shell code
-  // that honours it.
-  optionalCapabilities: ['shows-meta', 'task-actions'],
+  // Phase 1: ['shows-meta'], as item 10 designed it. Phase 2 adds the three 'offers-*' with the
+  // shell code that honours them.
+  optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
   layout: { minBlockSize: 30 },
 })
 ```
 
-What core does for each intent, and so what the words promise to an implementation. The first
-four act only while their action is `available` and `enabled`. Otherwise the call does nothing.
+What core does for each intent, and so what the words promise to an implementation. The five
+tied to an action state act only while it is `available` and `enabled`. Otherwise the call does
+nothing.
 
 | Intent | Core's answer |
 |---|---|
@@ -407,6 +426,7 @@ four act only while their action is `available` and `enabled`. Otherwise the cal
 | `onResolveConflicts(n)` | When `n` is the number of a reference with `conflicting: true`, sends `resolveConflictsPrompt(n)` through the task's delivery seam (`useAskAnswer`), with today's toasts. A reference known only by URL is never conflicting (the look-up needs a number), so it never qualifies, as in core's own chip today. |
 | `onRename()` | Opens core's title editor over the part, holding the saved draft if there is one. |
 | `onNavigate(href)` | Navigates within the cockpit when `href` is one that core put into these props. Any other value does nothing, and one `[cezar:extensions]` warning is logged per value per page load. |
+| `onChooseEngine()` | Moves focus to the dock's engine picker (`[data-slot="follow-up-engine"]`, its first pill: the runner pill when there is a choice of runner or login, otherwise the model pill) and scrolls it into view. |
 
 ### `packages/web/src/routes/task-thread/task-header-main.ts` (new)
 
@@ -428,7 +448,12 @@ export interface TaskHeaderModel {
 /** The only reader of the run behind the part's props and the three actions. `requestStopConfirmation` is the shell's dialog opener. */
 export function useTaskHeaderModel(
   run: ApiRun,
-  options: { readonly planTally?: { done: number; total: number }; readonly requestStopConfirmation: () => void },
+  options: {
+    readonly planTally?: { done: number; total: number }
+    readonly requestStopConfirmation: () => void
+    /** The Session tab's dock picker focus (`useContinueAction().focusPicker`); absent on the Git tabs. */
+    readonly chooseEngine?: () => void
+  },
 ): TaskHeaderModel
 ```
 
@@ -439,7 +464,9 @@ a bare test render at an unscoped path. The rest: `runTitle`, `deriveAttention`,
 `taskReferences`/`taskPrUrl`/`taskIssueUrl` with `useProjectRepoBase`, the reference states
 through the look-up `ReferenceStatusProvider` uses, `usageMetricVisibility(useHealth())`, the
 `AgentBadge` resolution (`useConfig().defaultRunner`, the last step's `profileId`,
-`useAgentProfiles`, `modelIdentity`), `runActionFlags` and `useContinuationProvider`. The
+`useAgentProfiles`, `modelIdentity`), `runActionFlags` and `useContinuationProvider`.
+`actions.chooseEngine` is available when the page passed `chooseEngine` and the task can be
+continued (`runActionFlags(run).continueRun`, the same gate the dock uses to show the picker). The
 automation's `href` is `scopeTo(useActiveProjectId(), '/automations/<id>/log')`
 (`@/lib/project-router`), which is exactly the path the scope-aware `Link` produces today. At an
 unscoped path, `scopeTo(null, …)` leaves it `/automations/<id>/log`, as the existing header test
@@ -461,7 +488,9 @@ Today `ComponentHost` subscribes, resolves and chooses inline (#32: steps 1, 2 a
 § Hosting, precisely). Those steps move into this hook. `ComponentHost` calls it too, so the host
 and the shell make one choice from one `hasFailed` record and cannot disagree.
 
-The shell reads `useHostedComponent(TaskHeaderMain, run.id)?.capabilities.includes('task-actions')`.
+For each action, the shell reads
+`useHostedComponent(TaskHeaderMain, run.id)?.capabilities.includes('offers-continue')` (and the
+same for `offers-stop` and `offers-archive`).
 `capabilities` is the checked list, not the declared one, as everywhere in the registry.
 
 ### `packages/extension-api/examples/compact-task-header/index.ts` (new)
@@ -479,7 +508,7 @@ export default defineExtension({
     context.components.provide(TaskHeaderMain, {
       id: 'example.compact-header.row',
       title: 'Compact row',
-      capabilities: ['shows-title', 'shows-status', 'task-actions'],
+      capabilities: ['shows-title', 'shows-status', 'offers-continue', 'offers-stop', 'offers-archive'],
       component: CompactTaskHeader,
     })
   },
@@ -509,17 +538,18 @@ Where each of today's header behaviors lives after this item:
 | Automation chip (a link while automations are on) | Core's default, from `meta.automation`, calling `onNavigate` on a plain click. Ctrl- or middle-click still opens a new tab through the `href` |
 | Tokens and cost (hidden per `CEZ_HIDE_TOKEN_METRICS`) | Core's default, from `meta.usage` |
 | Agent badge: runner · account · model, identity in its menu | Core's default, from `engine` |
-| Next continuation picker in the badge menu (Session tab) | **Removed from the header.** The dock keeps it (Q7, ⚠) |
-| Continue (disabled, with the reason, without a provider) | Shell, from `actions.continue`, calling `onContinue`. Or the implementation, with `task-actions` |
-| Cancel with its confirmation | Shell, from `actions.stop`, calling `onStop`. Or the implementation, with `task-actions`. The confirmation is always core's |
-| Archive / Unarchive | Shell, from `actions.archive`, calling `onArchive`. Or the implementation, with `task-actions` |
+| Next continuation picker in the badge menu (Session tab) | Badge menu item **Choose engine for the next continuation…** calls `onChooseEngine()`, and core moves focus to the dock's picker. The picker itself stays in the dock only (Q7) |
+| Continue (disabled, with the reason, without a provider) | Shell, from `actions.continue`, calling `onContinue`. Or the implementation, with `offers-continue` |
+| Cancel with its confirmation | Shell, from `actions.stop`, calling `onStop`. Or the implementation, with `offers-stop`. The confirmation is always core's |
+| Archive / Unarchive | Shell, from `actions.archive`, calling `onArchive`. Or the implementation, with `offers-archive` |
 | Finish, Open in / Terminal, Notes, Mark unread, Pin, Delete | Shell, unchanged |
 | Run actions menu (⋮, phones) | Shell, beside the part's box rather than inside the title row (item 10 § The split) |
 
 The five visible differences on the default page:
 
-1. **The badge menu loses its Next continuation section** (Q7, ⚠). Runner, account, model and
-   identity stay. The dock below the thread keeps the picker.
+1. **The badge menu's inline picker becomes a jump to the dock** (Q7). **Choose engine for the
+   next continuation…** closes the menu and moves focus to the dock's first engine pill, where the
+   user picks as before. Runner, account, model and identity stay in the badge.
 2. **While renaming**, core's editor fills the top 30 px of the part's box (its `minBlockSize`),
    and the rest of the part is hidden until the user saves or cancels. That includes the live
    status pill and the meta row. Today only the title turns into the input. The header keeps its
@@ -533,11 +563,12 @@ The five visible differences on the default page:
    is item 10's split, and its one intended difference: the expanded meta row is narrower by one
    30 px button.
 
-With an implementation that declares `task-actions` (tests and the example only, until the picker
-item stores a choice), the desktop bar shows Finish, Open in, Notes, Mark unread, Pin and Delete,
-and the implementation shows Continue, Cancel/Stop and Archive in its own box. Core's **Run
-actions** menu (⋮) appears beside the box at every width and still lists every task action (the
-Open in targets stay in the bar, as today).
+With an implementation that declares all three `offers-*` capabilities (tests and the example
+only, until the picker item stores a choice), the desktop bar shows Finish, Open in, Notes, Mark
+unread, Pin and Delete, and the implementation shows Continue, Cancel/Stop and Archive in its own
+box. With only `offers-continue`, the bar keeps Cancel and Archive and drops only Continue. While
+any of the three is offered, core's **Run actions** menu (⋮) appears beside the box at every
+width and still lists every task action (the Open in targets stay in the bar, as today).
 
 Accessibility: an implementation's controls are its own. Core's controls keep their labels
 (`aria-label="Run actions"`, `aria-pressed` on Pin). The title editor keeps today's input and
@@ -560,13 +591,17 @@ The `.html` sources sit beside them. The dashed outline marks the host's box.
 - **`onNavigate` with a foreign or crafted value** (`javascript:…`, `//evil`, another task's URL).
   It is ignored, because only an `href` that core put into these props navigates, and one
   `[cezar:extensions]` line is written per value.
-- **A `task-actions` implementation hides Stop, or renders it badly.** The capability is a
-  declaration, like every capability. The Run actions menu stays visible at every width while that
-  implementation renders, and it lists Cancel, so the task stays controllable.
-- **A `task-actions` implementation throws.** The host renders core's default (#32), and the
+- **An implementation declares `offers-stop` but hides Stop, or renders it badly.** A capability
+  is a declaration, like every capability. The Run actions menu stays visible at every width while
+  that implementation renders, and it lists Cancel, so the task stays controllable.
+- **An implementation that offers actions throws.** The host renders core's default (#32), and the
   shell sees the failure through `useHostedComponent`. For one commit, between the fallback's
-  render and the failure being recorded, neither the part nor the bar shows the three actions. The
-  Run actions menu is visible during that commit. After it, the bar shows them again.
+  render and the failure being recorded, neither the part nor the bar shows the offered actions.
+  The Run actions menu is visible during that commit. After it, the bar shows them again.
+- **`onChooseEngine()` where there is no picker** (a Git tab, or a task that cannot be continued).
+  `actions.chooseEngine` is not available there, so core's badge shows no item and a call does
+  nothing. With one runner and one login, the dock shows no runner pill, and focus goes to the
+  model pill.
 - **The implementation changes while the stop confirmation is open** (an extension deactivates).
   The dialog belongs to the shell, so it stays open, and confirming still runs the stop.
 - **A metric hidden by the server.** `meta.usage` leaves it out, so no implementation can show it,
@@ -600,7 +635,7 @@ The `.html` sources sit beside them. The dashed outline marks the host's box.
 ## 📝 Risks & Impact Review
 
 - **The first public component contract.** `cezar.task.header.main@1` ships with seven data
-  interfaces and six intents. Once an extension outside the repository implements it, removing or
+  interfaces and seven intents. Once an extension outside the repository implements it, removing or
   narrowing any of them means `@2`. They are the brief's model plus the facts core's own header
   already shows (Q6). Nothing was added that core's default does not render. The package is
   private and `BUILTIN_EXTENSIONS` is empty, so nobody implements it yet.
@@ -608,26 +643,23 @@ The `.html` sources sit beside them. The dashed outline marks the host's box.
   identity and usage join the title that item 10 (Q4a, owner) already allowed. Extensions are
   compiled in and trusted (item 10 § Prior art), hidden usage metrics stay hidden, and no credential
   or file content is in the props.
-- **An owner decision is refined (Q3, ⚠).** With `task-actions`, a replacement can take the three
-  main actions out of the desktop bar. The Run actions menu is how control stays available. If the
-  owner rejects it, phase 2 keeps only the proof (Q1), and the capability never joins the token.
-- **A visible shortcut goes away (Q7, ⚠).** The badge's picker copy was a deliberate addition. If
-  the owner keeps it, the fallback is an `onChooseEngine()` intent that moves focus to the dock's
-  picker: one more public callback and a focus handle in `follow-up-engine.tsx`. Either answer
-  fits into phase 1 without changing the rest of it.
+- **Item 10's Q4b is refined (Q3, owner).** With an `offers-*` capability, a replacement can take
+  that action out of the desktop bar. The Run actions menu is how control stays available.
+- **The badge's inline picker becomes a jump (Q7, owner).** The picker is still one click from the
+  badge, in the dock rather than in the menu. This costs one public intent, one action state and a
+  focus handle in `follow-up-engine.tsx`.
 - **Splitting a working 1,270-line component.** The title and meta rows move out of
   `run-header.tsx` and onto props. The actions leave `useRunActions`, rename leaves
   `EditableTitle`, and the badge and chips stop reading queries. AGENTS.md § Changing a mechanism
   that already works applies. `run-header.test.tsx` (about 1,600 lines) must pass with exactly the
-  rewrites step 5 lists: the wrapper, the dropped `continuationEngine` argument, the badge picker
-  assertions, and the source check that moves to `task-header-main.ts`. In `task-thread.test.tsx`,
-  only the picker test moves to the dock. `commands/boundary.test.ts` must still pass.
+  rewrites step 5 lists: the wrapper, the `continuationEngine` argument replaced by
+  `onChooseEngine`, the badge picker assertions, and the source check that moves to
+  `task-header-main.ts`. In `task-thread.test.tsx`, only the picker test moves to the dock. `commands/boundary.test.ts` must still pass.
   The adapter's per-field tests pin each derivation to the helper it used before. A QA pass
   compares the task page at phone and desktop widths with `current-01-task-header.png`.
-- **#33 stays unlanded (Q8, ⚠).** Its reviewed and QA'd split is not reused as a commit. This item
-  rebuilds the split from item 10's design, with core's default on props from the start. If the
-  owner prefers re-landing #33 first, phase 1 shrinks by the wiring, the registration and the split.
-  It then adds removing #33's core-only context and a version decision for `@1`.
+- **#33 is abandoned (Q8, owner).** Its reviewed and QA'd split is not reused as a commit. This
+  item rebuilds the split from item 10's design, with core's default on props from the start, so
+  phase 1 carries the wiring, the registration and the test churn that #33 carried.
 - **The entry bundle.** `registerCoreComponents` imports `CoreTaskHeaderMain` eagerly into the first
   paint. A build check (`vite.config.ts`) fails when core's default's own static imports reach
   `run-header.tsx` or the markdown stack (`streamdown`). It checks the default's own graph, because
@@ -645,14 +677,11 @@ The `.html` sources sit beside them. The dashed outline marks the host's box.
 1. **Phase 1: The slot, with the complete model** (its own PR, from `main` after #32). Declare the
    contract, add the adapter, build core's default on props only, split `RunHeader` into the
    shell, register core's default, and mount `ComponentsProvider` in the app. The shell's three
-   actions draw from the model. Rename moves to core's editor, and the badge's picker copy goes
-   (Q7). The token's capabilities are item 10's. Waits on Q7 and Q8. It ships `actions` and the
-   three intents whatever Q3 answers, because core's bar renders from them (Q3).
-2. **Phase 2: Taking over the actions, and the proof** (stacked on phase 1). `task-actions` joins
-   the token together with `useHostedComponent` and the shell code that honours it. Then come the
-   compact example and the cockpit test that uses it. Waits on Q3 only. If Q3 is rejected, steps 7
-   and 8 are dropped, and the example (steps 9 and 10) shows title, status and engine without
-   actions.
+   actions draw from the model. Rename moves to core's editor, and the badge's inline picker
+   becomes the `onChooseEngine()` jump (Q7). The token's capabilities are item 10's.
+2. **Phase 2: Taking over the actions, and the proof** (stacked on phase 1). `offers-continue`,
+   `offers-stop` and `offers-archive` join the token, together with `useHostedComponent` and the
+   shell code that honours them. Then come the compact example and the cockpit test that uses it.
 
 ## 📋 Implementation Plan
 
@@ -662,14 +691,15 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
 ### Phase 1: The slot, with the complete model
 
 1. **The contract** (`packages/extension-api/src/core-components.ts`, re-exported from
-   `src/index.ts`), per § API Contracts, without `task-actions` (step 8 adds it). The README's
+   `src/index.ts`), per § API Contracts, without the three `offers-*` capabilities (step 8 adds
+   them). The README's
    "Replacing a component" section describes the host, the notice, what a boundary cannot catch,
    the header's props, the intents and what core does for each, and what stays core's.
    *Tests:*
    - the token equals `{ kind: 'component', id: 'cezar.task.header.main', version: 1, requiredCapabilities: ['shows-title', 'shows-status'], optionalCapabilities: ['shows-meta'], layout: { minBlockSize: 30 } }`
      and is frozen;
-   - `IsJson<Omit<TaskHeaderMainProps, 'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveConflicts' | 'onNavigate'>>`;
-   - a type test showing that the six intents are the only function-typed props and all return `void`;
+   - `IsJson<Omit<TaskHeaderMainProps, 'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveConflicts' | 'onNavigate' | 'onChooseEngine'>>`;
+   - a type test showing that the seven intents are the only function-typed props and all return `void`;
    - `test/surface.test.ts` lists `TaskHeaderMain`.
 
 2. **The adapter** (`task-header-main.ts`: `useTaskHeaderModel`; `reference-status.tsx`: the
@@ -697,19 +727,22 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - `onArchive` executes `cezar.task.archive` with `archived: !task.archived`;
    - `onResolveConflicts(n)` sends `resolveConflictsPrompt(n)` once, and ignores a number that is
      not a `conflicting` reference;
-   - for each of those four: a call does nothing while the action is not available, while it is
-     not enabled, and while it is pending (a repeat);
+   - for each of those four and `onChooseEngine`: a call does nothing while the action is not
+     available, while it is not enabled, and while it is pending (a repeat);
    - `onNavigate` navigates for the automation `href` and ignores any other value, with one warning
      per value;
+   - `actions.chooseEngine` is available only when `chooseEngine` was passed and the task can be
+     continued, and `onChooseEngine` calls it then and does nothing otherwise;
    - the data is frozen and referentially stable while its inputs are unchanged, and a new queue
      position or reference look-up produces new data for the same run;
-   - the six callbacks keep their identity across renders. After a re-render with a second run
+   - the seven callbacks keep their identity across renders. After a re-render with a second run
      (no remount), `onContinue`, `onStop`, `onArchive` and `stopTask` act on the second run's id.
 
 3. **Core's default on props only** (`core-task-header-main.tsx`; `reference-chip.tsx` takes an
    explicit look-up entry). Today's title row and meta row are copied here from `run-header.tsx`
    and read props. The originals stay in `run-header.tsx` until step 5 deletes them, so the page
-   keeps working in between. The badge reads `engine` and has no picker section. The chips take `status`, `lookup`,
+   keeps working in between. The badge reads `engine`. Its menu has no picker section, and it
+   offers **Choose engine for the next continuation…** while `actions.chooseEngine` is available. The chips take `status`, `lookup`,
    `lookupReason` and `conflicting` from the props, and the explicit entry always wins over the
    chip's own `useReferenceStatus` look-up. Their conflict action is a button that calls
    `onResolveConflicts(n)` and closes the card when `actions.resolveConflicts` stops being pending.
@@ -727,6 +760,8 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
      can override the props;
    - the pencil calls `onRename`, **Resolve conflicts** calls `onResolveConflicts(n)`, a plain
      click on the automation link calls `onNavigate(href)`, and a modified click does not;
+   - the badge menu item calls `onChooseEngine()`, and it is absent while `actions.chooseEngine`
+     is not available;
    - `core-task-header-boundary.test.ts`, using the import parser that moves from
      `commands/boundary.ts` into `lib/import-scan.ts` (the commands scan's tests keep passing):
      `core-task-header-main.tsx` imports nothing from `@/api/`, `@tanstack/react-query`,
@@ -765,19 +800,27 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    actions menu beside it. The desktop bar and the Run actions menu render Continue, Cancel and
    Archive from `props.actions` and call the intents. The confirmation's **Cancel the run** calls
    `model.stopTask()`. The title editor covers the part while `titleEditor.editing`. `RunHeader`
-   loses `continuationEngine`, and `task-thread.tsx` stops passing it. Every test that renders
-   `RunHeader` or a task route adds `ComponentsProvider`.
+   loses `continuationEngine` and takes `onChooseEngine`. `task-thread.tsx` passes
+   `continueAction.focusPicker` there while the task can be continued, and `useContinueAction`
+   (`follow-up-engine.tsx`) gains `focusPicker()`: it focuses the first pill in its
+   `[data-slot="follow-up-engine"]` and scrolls it into view. Every test that renders `RunHeader`
+   or a task route adds `ComponentsProvider`.
    *Tests:*
    - `run-header.test.tsx` passes with three deliberate rewrites and no others. The wrapper adds
-     `ComponentsProvider`, and `renderHeader` drops its `continuationEngine` argument. The badge
-     picker assertions become "the badge menu has no Next continuation section". The source check
+     `ComponentsProvider`, and `renderHeader` takes `onChooseEngine` in place of its
+     `continuationEngine` argument. The badge picker assertions become "the badge menu offers
+     Choose engine for the next continuation…, which calls `onChooseEngine`". The source check
      "Continue, Cancel and Archive no longer reach for the API client" now reads
      `task-header-main.ts`, where `useCommand` lives after the split, and still asserts that
      neither file imports the continue, cancel or archive client functions;
    - `task-thread.test.tsx`: `ThreadView` renders the part through the host
      (`data-component="cezar.task.header.main.default"`), and the existing header assertions pass.
      The "closed but resumable" test that drives the model pill inside
-     `[data-slot="agent-badge-engine-picker"]` drives the dock's pill instead (Q7).
+     `[data-slot="agent-badge-engine-picker"]` drives the dock's pill instead (Q7). A new test:
+     the badge's **Choose engine for the next continuation…** moves focus to the dock's first engine
+     pill, and on a task that cannot be continued the item is absent;
+   - `follow-up-engine.test.tsx`: `focusPicker()` focuses the runner pill when there is a choice of
+     runner or login, and the model pill otherwise;
      With a preference for a fixture implementation that throws, core's rows show, and the actions,
      the tabs, the thread and the composer keep working;
    - the dock still offers the picker (`follow-up-engine.test.tsx`, `task-thread.test.tsx`);
@@ -801,8 +844,8 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
      `CommandsProvider`;
    - the host isolates render and effect errors only;
    - the registry notifies through `subscribe` and `revision`, and stays pure;
-   - core keeps the task's controls outside every replaceable part (step 11 amends this for
-     `task-actions`);
+   - core keeps the task's controls outside every replaceable part (step 11 amends this for the
+     `offers-*` capabilities);
    - core's default of a contract renders from its props alone, and `useTaskHeaderModel` is the
      only reader of the run behind the part's props and the three actions;
    - a task action crosses a component contract as state plus a `void` intent, never as a command
@@ -821,16 +864,19 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - it is `null` while unresolved;
    - in every case it names the same `componentId` as the box's `data-component`.
 
-8. **`task-actions` joins the token, and the shell honours it** (`core-components.ts`,
-   `run-header.tsx`, the README). Both land in the same PR.
+8. **The `offers-*` capabilities join the token, and the shell honours them**
+   (`core-components.ts`, `run-header.tsx`, the README). Both land in the same PR.
    *Tests* (`run-header.test.tsx`, fixture implementations under `ComponentsProvider` with a
    preference; the token test in `packages/extension-api`):
-   - the token's `optionalCapabilities` is `['shows-meta', 'task-actions']`, and core's default
-     still does not declare `task-actions`;
-   - one declaring `task-actions`: the bar has no Continue, Cancel or Archive, and the Run actions
-     menu has no `md:hidden` and lists all three;
-   - one without it: the bar is unchanged;
-   - one declaring it that throws: after the failure, the bar shows the three again.
+   - the token's `optionalCapabilities` is
+     `['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive']`, and core's default still
+     declares none of the three;
+   - one declaring all three: the bar has no Continue, Cancel or Archive, and the Run actions menu
+     has no `md:hidden` and lists all three;
+   - one declaring only `offers-continue`: the bar drops Continue and keeps Cancel and Archive, and
+     the Run actions menu has no `md:hidden`;
+   - one declaring none: the bar is unchanged, and the menu keeps `md:hidden`;
+   - one declaring all three that throws: after the failure, the bar shows the three again.
 
 9. **The example** (`examples/compact-task-header/index.ts`; `react` as an extension-api
    devDependency pinned to `packages/web`'s range, so the cockpit test loads a single React; the
@@ -839,7 +885,7 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - `test/compact-task-header.test.ts` activates it with `createFakeContext`, checks that it
      provides `example.compact-header.row` against `cezar.task.header.main@1`, and that
      `checkComponentCompatibility(TaskHeaderMain, impl).capabilities` is
-     `['shows-title', 'shows-status', 'task-actions']`;
+     `['shows-title', 'shows-status', 'offers-continue', 'offers-stop', 'offers-archive']`;
    - `test/boundary.test.ts`: examples import only the package and `react`, and a value import of
      `react` in `src/` still fails.
 
@@ -856,11 +902,11 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
      executes `cezar.task.stop`;
    - the shell's bar has no Continue, Cancel or Archive, and the Run actions menu is visible.
 
-11. **The README and AGENTS.md** cover `task-actions`, the Run actions menu guarantee and the second
-    example as the worked example for a core contract. The AGENTS.md rule "core keeps the task's
-    controls outside every replaceable part" (step 6) gains its exception: an implementation that
-    declares `task-actions` renders Continue, Stop and Archive, and the Run actions menu stays
-    visible. They also record the one widening of the
+11. **The README and AGENTS.md** cover the `offers-*` capabilities, the Run actions menu guarantee
+    and the second example as the worked example for a core contract. The AGENTS.md rule "core
+    keeps the task's controls outside every replaceable part" (step 6) gains its exception: an
+    implementation that declares `offers-continue`, `offers-stop` or `offers-archive` renders that
+    action, and the Run actions menu stays visible. They also record the one widening of the
     boundary. The README's "imports only this package" (and its note that the boundary test
     enforces this for `src/` and `examples/`) becomes "examples import only this package and
     `react`". The AGENTS.md extension-api row's "React through `import type` only" is scoped to
