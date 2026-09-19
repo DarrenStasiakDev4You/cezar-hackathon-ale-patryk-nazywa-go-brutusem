@@ -166,11 +166,10 @@ export class LayoutRegistry {
       ? next.length
       : targetIndex + (move.position === 'after' ? 1 : 0)
     const currentIndex = siblings.indexOf(move.id)
-    if (currentIndex < 0 || insertionIndex === currentIndex || insertionIndex === currentIndex + 1) {
-      return false
-    }
+    if (currentIndex < 0) return false
 
     next.splice(insertionIndex, 0, move.id)
+    if (next.every((id, index) => id === siblings[index])) return false
     this.siblingOrder.set(source.parentId, next)
     this.rebuildSnapshot()
     return true
@@ -206,7 +205,12 @@ export class LayoutRegistry {
     for (const [parentId, ids] of this.siblingOrder) {
       childrenByParent.set(parentId, [...ids])
     }
-    this.snapshotCache = [...this.elements.values()].map((descriptor) => ({
+    const descriptors = [...this.elements.values()].sort((left, right) => {
+      if (left.parentId !== right.parentId) return 0
+      const siblings = this.siblingOrder.get(left.parentId) ?? []
+      return siblings.indexOf(left.id) - siblings.indexOf(right.id)
+    })
+    this.snapshotCache = descriptors.map((descriptor) => ({
       ...descriptor,
       children: [...(childrenByParent.get(descriptor.id) ?? [])],
       order: this.siblingOrder.get(descriptor.parentId)?.indexOf(descriptor.id) ?? -1,
