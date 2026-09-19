@@ -9,8 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
+import { createCoreComponentRegistry } from '@/component-registry/core-components'
 import { ComponentsProvider } from '@/component-registry/provider'
+import { fakeScope } from '@/extensions/registry.fixtures'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
+import { TaskHeaderMain, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
 import { RunHeader } from './run-header'
@@ -1708,5 +1711,107 @@ describe('the shell around the task header part', () => {
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel the run' }))
     await waitFor(() => expect(cancel.disabled).toBe(true))
     expect(sent.filter((r) => r.path === '/api/v1/runs/r1/cancel')).toHaveLength(1)
+  })
+})
+
+/** Spec 2026-09-19-task-header-contract, Q3: an implementation takes over an action per `offers-*`. */
+describe('an implementation that offers task actions', () => {
+  const ROW_ID = 'acme.compact.row'
+  const behaviour = { throws: false }
+
+  function OfferingRow({ task }: TaskHeaderMainProps) {
+    if (behaviour.throws) throw new Error('row bug')
+    return <h1 data-slot="acme-row">{task.title}</h1>
+  }
+
+  /** The header, with an extension's row preferred for the task header part. */
+  function renderWithRow(record: ApiRun, offers: readonly string[]) {
+    const registry = createCoreComponentRegistry({ onDiagnostic: () => {} })
+    registry.forExtension(fakeScope('acme.compact').scope).provide(TaskHeaderMain, {
+      id: ROW_ID,
+      title: 'Compact row',
+      capabilities: ['shows-title', 'shows-status', ...offers],
+      component: OfferingRow,
+    })
+    return render(
+      <QueryClientProvider client={createQueryClient()}>
+        <CommandsProvider>
+          <ComponentsProvider
+            registry={registry}
+            preferenceOf={(contractId) => (contractId === TaskHeaderMain.id ? ROW_ID : null)}
+            onImplementationError={() => {}}
+          >
+            <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
+              <Routes>
+                <Route path="/tasks/:id" element={<RunHeader run={record} />} />
+              </Routes>
+              <Toaster />
+            </MemoryRouter>
+          </ComponentsProvider>
+        </CommandsProvider>
+      </QueryClientProvider>,
+    )
+  }
+
+  const barButtons = () => [...actionBar().queryAllByRole('button')].map((button) => button.textContent?.trim())
+  const kebab = () => screen.getByRole('button', { name: 'Run actions' })
+  async function menuItems(): Promise<string[]> {
+    fireEvent.pointerDown(kebab())
+    const menu = await screen.findByRole('menu')
+    return within(menu).getAllByRole('menuitem').map((item) => item.textContent?.trim() ?? '')
+  }
+
+  beforeEach(() => {
+    behaviour.throws = false
+  })
+
+  it('declaring all three: the bar has no Continue, Cancel or Archive, and the Run actions menu shows at every width and lists them', async () => {
+    stubFetch()
+    renderWithRow(run('done'), ['offers-continue', 'offers-stop', 'offers-archive'])
+    await waitFor(() => expect(document.querySelector('[data-slot="acme-row"]')).not.toBeNull())
+
+    expect(barButtons()).not.toContain('Continue')
+    expect(barButtons()).not.toContain('Archive')
+    expect(kebab().className).not.toContain('md:hidden')
+    expect(await menuItems()).toEqual(expect.arrayContaining(['Continue', 'Archive', 'Terminal']))
+
+    cleanup()
+    stubFetch()
+    renderWithRow(run('running'), ['offers-continue', 'offers-stop', 'offers-archive'])
+    expect(barButtons()).not.toContain('Cancel')
+    expect(await menuItems()).toContain('Cancel')
+  })
+
+  it('declaring only offers-continue: the bar drops Continue and keeps Cancel and Archive', async () => {
+    stubFetch()
+    renderWithRow(run('done'), ['offers-continue'])
+
+    expect(barButtons()).not.toContain('Continue')
+    expect(barButtons()).toContain('Archive')
+    expect(kebab().className).not.toContain('md:hidden')
+
+    cleanup()
+    stubFetch()
+    renderWithRow(run('running'), ['offers-continue'])
+    expect(barButtons()).toContain('Cancel')
+  })
+
+  it('declaring none: the bar is unchanged, and the menu stays phone-only', () => {
+    stubFetch()
+    renderWithRow(run('done'), [])
+
+    expect(barButtons()).toEqual(expect.arrayContaining(['Continue', 'Archive']))
+    expect(kebab().className).toContain('md:hidden')
+  })
+
+  it('declaring all three and throwing: after the failure, core’s default renders and the bar shows the actions again', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    behaviour.throws = true
+    stubFetch()
+    renderWithRow(run('done'), ['offers-continue', 'offers-stop', 'offers-archive'])
+
+    await waitFor(() => expect(document.querySelector('[data-slot="component-host"]')?.getAttribute('data-state')).toBe('fallback'))
+    expect(barButtons()).toEqual(expect.arrayContaining(['Continue', 'Archive']))
+    expect(kebab().className).toContain('md:hidden')
   })
 })
