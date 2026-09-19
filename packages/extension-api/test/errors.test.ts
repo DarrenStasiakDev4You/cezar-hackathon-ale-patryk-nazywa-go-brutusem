@@ -33,6 +33,7 @@ describe('isExtensionError', () => {
     'invalid-input',
     'command-failed',
     'command-timeout',
+    'permission-denied',
   ])('knows the %s code', (code) => {
     expect(isExtensionError(Object.assign(new Error(code), { code }), code)).toBe(true)
   })

@@ -52,6 +52,7 @@ export function defineExtension<E extends Extension>(extension: E): E {
   }
 
   Object.freeze(extension.manifest.engines)
+  if (extension.manifest.permissions !== undefined) Object.freeze(extension.manifest.permissions)
   Object.freeze(extension.manifest)
   return extension
 }

@@ -13,7 +13,13 @@ const Greeted = defineEvent<{ name: string; count: number }>('example.hello.gree
 const LoudGreeting = ({ name }: ComponentProps<typeof Greeting>) => `HELLO, ${name.toUpperCase()}!`
 
 export default defineExtension({
-  manifest: { id: 'example.hello', name: 'Hello', version: '1.0.0', engines: { cezar: '>=0.11.1' } },
+  manifest: {
+    id: 'example.hello',
+    name: 'Hello',
+    version: '1.0.0',
+    engines: { cezar: '>=0.11.1' },
+    permissions: ['storage', 'events', 'ui.components'],
+  },
   activate(context) {
     context.commands.register(SayHello, async (name) => {
       const stored = await context.storage.get('count')
