@@ -123,7 +123,7 @@ execute them with compile-time checking. Each takes one input object; unknown ke
 
 | Token | Id | Input | Result |
 | --- | --- | --- | --- |
-| `TaskContinue` | `cezar.task.continue` | `{ taskId, projectId?, runner? }` | `{ taskId, continued: true }` |
+| `TaskContinue` | `cezar.task.continue` | `{ taskId, projectId?, runner?, model?, agentProfile?, text?, attachments? }` | `{ taskId, continued: true }` |
 | `TaskStop` | `cezar.task.stop` | `{ taskId, projectId? }` | `{ taskId, stopped }` |
 | `TaskArchive` | `cezar.task.archive` | `{ taskId, projectId?, archived? }` (default `true`) | `{ taskId, archived }` |
 
@@ -136,6 +136,14 @@ try {
   if (isExtensionError(error, 'command-failed')) console.warn(error.message) // the service's own words
 }
 ```
+
+`TaskContinue` is the continue the follow-up composer runs. Every field but the task is optional
+and an omitted one keeps what the task has: `runner` and `model` (`''` is "auto") pick the engine,
+`agentProfile` the login (a different one starts a fresh session), `text` the prompt the session
+reopens on, and `attachments` up to four `TaskAttachment` files. Switching the runner or the model
+is a continue with that argument, not a command of its own: the service applies both only when it
+reopens a session. A value the service refuses — a model while models are locked, an unknown
+account — rejects `command-failed` with its words.
 
 Continuing a task starts an agent session. That is no new power — extension code runs in the
 cockpit's origin — but it is the reason the loader must decide who may run third-party code before
