@@ -42,9 +42,9 @@ A component contract declares its required and optional capabilities and optiona
 
 ### Phase 2: Implementations and the check
 
-- [ ] 2.1 capabilities on ComponentImplementation
-- [ ] 2.2 checkComponentCompatibility and its result types
-- [ ] 2.3 Core and extension on one contract
+- [x] 2.1 capabilities on ComponentImplementation — 734d688b
+- [x] 2.2 checkComponentCompatibility and its result types — 6df36b6f
+- [x] 2.3 Core and extension on one contract — 787bf3fe
 
 ### Phase 3: Public surface and documentation
 
