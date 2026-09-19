@@ -19,6 +19,20 @@ export {
 } from './components.ts'
 export type { ExtensionContext } from './context.ts'
 export {
+  TaskComposer,
+  type TaskActionState,
+  type TaskComposerActions,
+  type TaskComposerAttachment,
+  type TaskComposerAvailability,
+  type TaskComposerCompletionList,
+  type TaskComposerCompletions,
+  type TaskComposerDraft,
+  type TaskComposerEngine,
+  type TaskComposerFile,
+  type TaskComposerProps,
+  type TaskComposerRunnerChoice,
+  type TaskComposerSkill,
+  type TaskComposerStatus,
   TaskHeaderMain,
   type TaskHeaderActions,
   type TaskHeaderActionState,

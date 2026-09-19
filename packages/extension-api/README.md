@@ -291,6 +291,23 @@ of a task. `shows-title` and `shows-status` are required, `shows-meta` (you show
 fails or is swapped. Provide it like any contract, with an id under your prefix and at least the two
 required capabilities.
 
+**The task composer.** `TaskComposer` (`cezar.task.composer@1`) is the task thread's reply box.
+It is a controlled view: core owns the draft, delivery, continuation engine, completion lists and
+quick replies, while an implementation receives `TaskComposerProps` and reports the user's actions
+through nine `void` intents. Every data prop is JSON; `onAttachFiles` accepts a structural file
+(`name`, `type`, `size`, `arrayBuffer()`), so an extension does not import a DOM type.
+
+The model includes `draft`, `status`, `availability`, `actions`, `completions`, attachment
+`limits`, and an optional `engine` with runner and model choices. Its intents are
+`onTextChange`, `onSubmit`, attachment and engine selection, completion loading and usage, and
+navigation. Phase 1 requires `edits-draft`, `sends`, `shows-availability`, `attaches-files` and
+`chooses-engine`; phase 2 makes the last two optional and lets core render those fallbacks beside
+an implementation that does not provide them. Core reserves 88 px while the box loads or swaps.
+
+The contract intentionally does not expose a query client, draft store, router, command token or
+React node. A minimal implementation can render `draft.text` and call `onSubmit()` without
+knowing how a task is delivered or persisted.
+
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a
 malformed implementation id, `namespace-violation` for an id outside `${extension.id}.`,

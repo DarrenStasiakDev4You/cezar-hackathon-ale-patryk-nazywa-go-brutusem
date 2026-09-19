@@ -107,6 +107,9 @@ export interface TaskHeaderActionState {
   readonly reason?: string
 }
 
+/** Whether an action is offered, and whether it can run now. JSON. */
+export type TaskActionState = TaskHeaderActionState
+
 export interface TaskHeaderActions {
   /** Reopen the task's last agent session. */
   readonly continue: TaskHeaderActionState
@@ -166,4 +169,133 @@ export const TaskHeaderMain = defineComponentContract<TaskHeaderMainProps>('ceza
   requiredCapabilities: ['shows-title', 'shows-status'],
   optionalCapabilities: ['shows-meta'],
   layout: { minBlockSize: 30 },
+})
+
+/** A file the user picked, pasted or dropped. A browser `File` fits structurally. */
+export interface TaskComposerFile {
+  readonly name: string
+  readonly type: string
+  readonly size: number
+  arrayBuffer(): Promise<ArrayBuffer>
+}
+
+/** An attachment held by the draft. JSON. */
+export interface TaskComposerAttachment {
+  readonly key: string
+  readonly name: string
+  readonly mediaType: string
+  readonly isImage: boolean
+  readonly preview?: string
+}
+
+/** What the user has written and not sent yet. JSON. */
+export interface TaskComposerDraft {
+  readonly text: string
+  readonly attachments: readonly TaskComposerAttachment[]
+}
+
+/** What a send does now, and the words shown by core. JSON. */
+export interface TaskComposerStatus {
+  /** `reply`, `queued`, `continue` or `closed` today; unknown modes are read as `closed`. */
+  readonly mode: string
+  readonly placeholder: string
+  readonly submitLabel: string
+}
+
+/** Whether the box takes input at all. JSON. */
+export interface TaskComposerAvailability {
+  readonly enabled: boolean
+  readonly reason?: string
+  readonly fix?: { readonly label: string; readonly href: string }
+}
+
+/** What the user may do in the box now. */
+export interface TaskComposerActions {
+  readonly submit: TaskActionState
+  readonly attach: TaskActionState
+  readonly chooseRunner: TaskActionState
+  readonly chooseModel: TaskActionState
+}
+
+/** One runner, or one login of a runner that has several. JSON. */
+export interface TaskComposerRunnerChoice {
+  readonly runner: string
+  readonly account?: string
+  readonly label: string
+  readonly description?: string
+}
+
+/** The engine a continuation uses and the choices available to the user. JSON. */
+export interface TaskComposerEngine {
+  readonly runner: string
+  readonly account?: string
+  readonly model: string
+  readonly modelLabel: string
+  readonly runnerChoices: readonly TaskComposerRunnerChoice[]
+  readonly modelChoices: readonly {
+    readonly id: string
+    readonly label: string
+    readonly description?: string
+  }[]
+  readonly modelNote?: string
+}
+
+/** A skill offered by the `/` menu. JSON. */
+export interface TaskComposerSkill {
+  readonly key: string
+  readonly name: string
+  readonly description?: string
+  readonly project: boolean
+  readonly uses: number
+}
+
+/** A completion list loaded on request. JSON. */
+export interface TaskComposerCompletionList<T> {
+  readonly status: string
+  readonly items: readonly T[]
+}
+
+export interface TaskComposerCompletions {
+  readonly skills: TaskComposerCompletionList<TaskComposerSkill>
+  readonly files: TaskComposerCompletionList<string>
+}
+
+export interface TaskComposerProps {
+  readonly task: { readonly taskId: string; readonly projectId: string }
+  readonly draft: TaskComposerDraft
+  readonly status: TaskComposerStatus
+  readonly availability: TaskComposerAvailability
+  readonly actions: TaskComposerActions
+  readonly engine?: TaskComposerEngine
+  readonly completions: TaskComposerCompletions
+  readonly limits: {
+    readonly maxAttachments: number
+    readonly maxAttachmentBytes: number
+    readonly accept: string
+  }
+  readonly onTextChange: (text: string) => void
+  readonly onSubmit: () => void
+  readonly onAttachFiles: (files: readonly TaskComposerFile[], source: 'file' | 'clipboard') => void
+  readonly onRemoveAttachment: (key: string) => void
+  readonly onSelectRunner: (runner: string, account?: string) => void
+  readonly onSelectModel: (model: string) => void
+  readonly onRequestCompletions: (kind: 'skills' | 'files') => void
+  readonly onUseSkill: (name: string) => void
+  readonly onNavigate: (href: string) => void
+}
+
+/**
+ * The task's reply box. Core owns the draft, delivery, engine choice and completion lists;
+ * implementations render the model and report user actions through the nine intents below.
+ * Data props are JSON. `onAttachFiles` is the one intent with a structural browser-file argument.
+ *
+ * - `edits-draft`, `sends` and `shows-availability` are always required.
+ * - `attaches-files` and `chooses-engine` are required in phase 1 and become optional in phase 2.
+ * - The host reserves 88 CSS pixels while an implementation loads, fails or is swapped.
+ */
+export const TaskComposer = defineComponentContract<TaskComposerProps>('cezar.task.composer', {
+  version: 1,
+  requiredCapabilities: ['edits-draft', 'sends', 'shows-availability', 'attaches-files', 'chooses-engine'],
+  optionalCapabilities: [],
+  layout: { minBlockSize: 88 },
 })
