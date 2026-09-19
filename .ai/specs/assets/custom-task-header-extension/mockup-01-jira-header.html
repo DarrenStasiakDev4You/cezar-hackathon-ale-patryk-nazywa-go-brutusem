@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Mockup: the Jira example header on the task page</title><style>*{box-sizing:border-box;margin:0;padding:0}
+<!doctype html><html><head><meta charset="utf-8"><title>Mockup: the Jira example header owning the task's actions</title><style>*{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#0f0f10;color:#ececec;display:flex;overflow:hidden}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -41,33 +41,33 @@ main{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px;padding:14px
 .rail .bar.g{background:#22c55e}
 .note{color:#8b8b8f;font-size:12px}</style></head><body><aside><div class="brand"><span class="logo"></span>cezar <small class="mono">my-project</small></div><div class="newtask">+ New task</div><nav class="nav"><a class="on">Tasks</a><a>Git</a><a>GitHub</a><a>Automations</a><a>Skills</a><a>Workflows</a><a>Settings</a></nav><div class="sect">NEEDS YOU</div><div class="row on"><span class="dot y"></span>Fix the flaky login test</div><div class="sect">DONE</div><div class="row"><span class="dot"></span>Tidy the changelog</div></aside><main>
 
-<div class="caption mono">A · a task that needs you: the example offers Stop (not Continue: actions.continue is not available)</div>
+<div class="caption mono">A · a task that needs you: the example owns Stop and Archive (Continue is not available in this state)</div>
 <div class="header"><div class="measure">
  <div class="top">
   <div class="hostbox">
    <div class="ext"><strong>Fix the flaky login test in auth.spec.ts</strong><span class="st"><span class="dot y"></span>needs you</span><span class="pen" aria-label="Rename task">✎</span>
-    <span class="xbtns"><span class="xb">Stop</span><span class="xb jira">Draft Jira issue</span></span></div>
-   <span class="tag mono">host box · example.jira-header.row · shows-title, shows-status, offers-continue, offers-stop</span>
+    <span class="xbtns"><span class="xb">Stop</span><span class="xb">Archive</span><span class="xb">Choose engine</span><span class="xb jira">Draft Jira issue</span></span></div>
+   <span class="tag mono">host box · example.jira-header.row · shows-title, shows-status, offers-continue, offers-stop, offers-archive</span>
   </div>
   <div class="kebab">⋮</div>
  </div>
- <div class="coretag mono">core shell ↓ Cancel left the bar (offers-stop) · ⋮ Run actions visible at every width and still lists Continue, Cancel, Archive</div>
- <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="btn">✓ Finish</span><span>Notes</span><span>Pin</span><span class="gone">Cancel</span></div></div>
+ <div class="coretag mono">core shell ↓ Cancel and Archive left the bar (offers-stop, offers-archive) · ⋮ Run actions visible at every width and still lists every task action</div>
+ <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="btn">✓ Finish</span><span>Notes</span><span>Pin</span><span class="gone">Cancel</span><span class="gone">Archive</span></div></div>
  <div class="rail"><span class="dot y"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar"></span></div>
 </div></div>
 
-<div class="caption mono">B · a finished task: the example offers Continue (→ core's cezar.task.continue); Archive stays in core's bar (no offers-archive)</div>
+<div class="caption mono">B · a finished task: Continue and Archive are the example's, and each still runs core's command (cezar.task.continue, cezar.task.archive)</div>
 <div class="header"><div class="measure">
  <div class="top">
   <div class="hostbox">
    <div class="ext"><strong>Tidy the changelog</strong><span class="st"><span class="dot"></span>done</span><span class="pen" aria-label="Rename task">✎</span>
-    <span class="xbtns"><span class="xb">Continue</span><span class="xb jira">Draft Jira issue</span></span></div>
+    <span class="xbtns"><span class="xb">Continue</span><span class="xb">Archive</span><span class="xb">Choose engine</span><span class="xb jira">Draft Jira issue</span></span></div>
    <span class="tag mono">host box · example.jira-header.row</span>
   </div>
   <div class="kebab">⋮</div>
  </div>
- <div class="coretag mono">core shell ↓ Continue left the bar (offers-continue) · Archive stays core's</div>
- <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="gone">Continue</span><span>Archive</span><span>Open in ▾</span><span>Notes</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
+ <div class="coretag mono">core shell ↓ the bar keeps only what the example does not offer · after a crash, core's default returns and these come back</div>
+ <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="gone">Continue</span><span class="gone">Archive</span><span>Open in ▾</span><span>Notes</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
  <div class="rail"><span class="dot"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar g"></span></div>
 </div></div>
 

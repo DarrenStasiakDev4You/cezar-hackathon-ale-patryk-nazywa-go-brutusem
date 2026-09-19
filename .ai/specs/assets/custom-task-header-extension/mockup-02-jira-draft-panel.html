@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Mockup: the Jira example's composer, open</title><style>*{box-sizing:border-box;margin:0;padding:0}
+<!doctype html><html><head><meta charset="utf-8"><title>Mockup: the Jira example's draft panel, open</title><style>*{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#0f0f10;color:#ececec;display:flex;overflow:hidden}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -53,7 +53,7 @@ main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
  <div class="top">
   <div class="hostbox">
    <div class="ext"><strong>Fix the flaky login test in auth.spec.ts</strong><span class="st"><span class="dot"></span>done</span><span class="pen">✎</span>
-    <span class="xbtns"><span class="xb">Continue</span><span class="xb jira" aria-expanded="true">Draft Jira issue ▴</span>
+    <span class="xbtns"><span class="xb">Continue</span><span class="xb">Archive</span><span class="xb">Choose engine</span><span class="xb jira" aria-expanded="true">Draft Jira issue ▴</span>
      <div class="panel" role="dialog" aria-label="Jira issue draft">
       <h2>Jira issue draft</h2>
       <span class="lbl">Summary</span>
@@ -71,15 +71,15 @@ Pull request #123 (checks-pending): https://github.com/…/pull/123
 Original request:
 Fix the flaky login test in auth.spec.ts — it times out on CI …</div><span class="pb">Copy description</span></div>
       <div class="foot"><span>Copies to the clipboard. Nothing is sent to Jira.</span><span class="pb">Close</span></div>
-      <div class="callout mono">example's own React state: open · summary · description · copied — keyed by task.taskId</div>
+      <div class="callout mono">example's own React state: open · summary · description · copied — keyed by task.taskId · the draft itself is computed in render</div>
      </div>
     </span></div>
   </div>
   <div class="kebab">⋮</div>
  </div>
- <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span>Archive</span><span>Open in ▾</span><span>Notes</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
+ <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span>Open in ▾</span><span>Notes</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
  <div class="rail"><span class="dot"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar"></span></div>
 </div></div>
 <div class="thread"><div class="measure"><p class="note">· run started — workflow "quick-task" (runner: claude)</p><p>Okay — looking into: Fix the flaky login test in auth.spec.ts</p><div class="tool"><b>Ran</b> <span class="mono">npm test -- auth.spec.ts</span></div><p>Done — the wait now polls for the session cookie instead of sleeping; a draft PR is open.</p><p>&nbsp;</p><p>&nbsp;</p><p>&nbsp;</p></div></div>
-<div class="cap">Illustrative mockup — the panel overlays the page below; the header keeps its height. Summary was just copied ("Copied" for 2 s, announced politely).</div>
+<div class="cap">Illustrative mockup — the example's own panel (never the task composer, which stays core's). It overlays the page below, so the header keeps its height. Summary was just copied.</div>
 </main></body></html>
