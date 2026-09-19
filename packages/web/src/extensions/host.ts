@@ -1,5 +1,6 @@
 import { ExtensionActivated, type Extension } from '@open-mercato/cezar-extension-api'
 
+import { toast } from '../components/ui/toaster'
 import type { CommandRegistry } from '../commands/registry'
 import type { CockpitComponentRegistry } from '../component-registry/registry'
 import type { EventBus } from '../events/bus'
@@ -10,10 +11,13 @@ import {
   type ExtensionRegistry,
   type ExtensionRegistryOptions,
 } from './registry'
+import { createNotificationService, type NotificationTone } from './notifications'
+import { builtinGrant } from './permissions'
 
 /**
  * Placeholder services until each service's item lands and replaces its placeholder behind the
- * same `services(scope)` seam (commands, events and components have; storage has not).
+ * same `services(scope)` seam (commands, events and components have; storage remains a
+ * placeholder).
  *
  * Every method first calls `scope.assertLive()` (so a call after deactivation fails with
  * `disposed`, as the contract says), then fails with
@@ -39,6 +43,11 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
       keys: rejects('storage'),
     },
     components: { provide: fails('components') },
+    notifications: {
+      info: fails('notifications'),
+      warning: fails('notifications'),
+      error: fails('notifications'),
+    },
   }
 }
 
@@ -46,19 +55,23 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
  * The services the cockpit gives each activation: the real `commands` — the command registry's
  * extension view (spec `2026-09-19-command-api`) — the real `events` — the event bus's extension
  * view (spec `2026-09-19-extension-event-api`) — and the real `components` — the component
- * registry's extension view (spec `2026-09-19-component-registry`), with storage still the
- * {@link unavailableServices} placeholder until its item lands.
+ * registry's extension view (spec `2026-09-19-component-registry`), notifications backed by the
+ * cockpit toaster, and storage still the {@link unavailableServices} placeholder until its item
+ * lands.
  */
 export function cockpitServices(deps: {
   readonly commands: CommandRegistry
   readonly events: EventBus
   readonly components: CockpitComponentRegistry
+  readonly notify?: (message: string, options: { readonly tone: NotificationTone }) => void
 }): ExtensionRegistryOptions['services'] {
+  const notifications = createNotificationService({ notify: deps.notify ?? toast })
   return (scope) => ({
     ...unavailableServices(scope),
     commands: deps.commands.forExtension(scope),
     events: deps.events.forExtension(scope),
     components: deps.components.forExtension(scope),
+    notifications: notifications.forExtension(scope),
   })
 }
 
@@ -96,7 +109,7 @@ export function startExtensionHost(options: {
 
   for (const extension of options.extensions) {
     try {
-      registry.register(extension)
+      registry.register(extension, { grantedPermissions: builtinGrant(extension.manifest) })
     } catch (error) {
       try {
         onError({ id: describeId(extension), phase: 'register', error })

@@ -200,3 +200,21 @@ network), reuses an already-healthy instance instead of double-booting, and writ
 - `CODE_REVIEW.md` — what reviewers check and how severities are assigned.
 - `BACKWARD_COMPATIBILITY.md` — the public surfaces you must not break silently.
 - `.ai/agentic.config.json` — machine-readable pipeline config every om-* skill reads (base branch, validation commands, labels).
+
+## Extension Permission Model
+
+The extension API's `manifest.permissions` is the requested set; a grant is a separate, immutable
+input to `registry.register(extension, { grantedPermissions })`. The registry never derives a grant
+from a manifest except `startExtensionHost`'s explicit `builtinGrant` policy for compiled-in
+extensions. A missing grant is empty. Activation checks supported names and approval before calling
+extension code, records `unsupported-permission` or `permission-not-granted`, and continues booting
+the other extensions.
+
+`registry.ts` imports the pure `./permissions` module. `createContext` always applies
+`guardServices` to the result of `services(scope)` and exposes the frozen effective permissions.
+Every context service remains present: its guard owns permission checks, while the service itself
+continues to own validation, registration tracking and lifecycle behavior. Denial stubs assert
+liveness before raising `permission-denied`; `disposed` therefore wins after deactivation. A new
+`ExtensionContext` member must be added to `ExtensionServices`, `unavailableServices`,
+`guardServices` and the host sweep under the permission that protects it. `network` is reserved and
+not enforceable, not a security boundary.

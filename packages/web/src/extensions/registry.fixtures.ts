@@ -3,24 +3,29 @@ import {
   defineExtension,
   type Disposable,
   type Extension,
+  type ExtensionPermission,
   type ExtensionManifest,
 } from '@open-mercato/cezar-extension-api'
 
 import type { ExtensionScope, ExtensionServices } from './registry'
+import { STANDARD_PERMISSIONS } from './permissions'
 
 /**
  * Test fixtures for the extension registry and host. Extensions are written with
  * `defineExtension` imported by PACKAGE NAME, as a real extension would.
  */
 
-export function fixtureManifest(id: string): ExtensionManifest {
-  return { id, name: `Fixture ${id}`, version: '1.0.0', engines: { cezar: '^0.11.0' } }
+export function fixtureManifest(id: string, permissions: readonly ExtensionPermission[] = Object.keys(STANDARD_PERMISSIONS) as ExtensionPermission[]): ExtensionManifest {
+  return { id, name: `Fixture ${id}`, version: '1.0.0', engines: { cezar: '^0.11.0' }, permissions }
 }
 
 /** A valid extension whose `activate` does nothing unless `hooks` says otherwise. */
-export function fixture(id: string, hooks: Partial<Pick<Extension, 'activate' | 'deactivate'>> = {}): Extension {
+export function fixture(
+  id: string,
+  hooks: Partial<Pick<Extension, 'activate' | 'deactivate'>> & { readonly permissions?: readonly ExtensionPermission[] } = {},
+): Extension {
   return defineExtension({
-    manifest: fixtureManifest(id),
+    manifest: fixtureManifest(id, hooks.permissions),
     activate: hooks.activate ?? (() => {}),
     ...(hooks.deactivate === undefined ? {} : { deactivate: hooks.deactivate }),
   })
@@ -74,6 +79,11 @@ export function recordingServices(log: string[] = []): RecordingServices {
       },
       storage: { get: live, set: live, delete: live, keys: live },
       components: { provide: (_contract, implementation) => register(`component ${implementation.id}`) },
+      notifications: {
+        info: () => scope.assertLive(),
+        warning: () => scope.assertLive(),
+        error: () => scope.assertLive(),
+      },
     }
   }
   return { services, scopes }
