@@ -82,6 +82,18 @@ function namesForbiddenTarget(specifier: string): boolean {
   )
 }
 
+/** `src/` may import its own files, and React only as types: no runtime dependency. */
+function breaksSrcRule(site: ImportSite): boolean {
+  return isRelative(site.specifier) ? !staysInside(site, 'src') : !(site.specifier === 'react' && site.typeOnly)
+}
+
+/** `examples/` may import themselves, the package by name, and `react` (a real extension renders with it). */
+function breaksExampleRule(site: ImportSite): boolean {
+  return isRelative(site.specifier)
+    ? !staysInside(site, 'examples')
+    : site.specifier !== PACKAGE_NAME && site.specifier !== 'react'
+}
+
 function describeSite(site: ImportSite): string {
   return `${site.file}: ${site.typeOnly ? 'import type' : 'import'} '${site.specifier}'`
 }
@@ -108,19 +120,26 @@ describe('package boundary', () => {
   it('src/ imports only its own files and React types', () => {
     const sites = importsUnder('src')
     expect(sites.length).toBeGreaterThan(0)
-    const violations = sites.filter((site) =>
-      isRelative(site.specifier)
-        ? !staysInside(site, 'src')
-        : !(site.specifier === 'react' && site.typeOnly),
-    )
-    expect(violations.map(describeSite)).toEqual([])
+    expect(sites.filter(breaksSrcRule).map(describeSite)).toEqual([])
   })
 
-  it('examples/ import only themselves and the package by name', () => {
-    const violations = importsUnder('examples').filter((site) =>
-      isRelative(site.specifier) ? !staysInside(site, 'examples') : site.specifier !== PACKAGE_NAME,
-    )
-    expect(violations.map(describeSite)).toEqual([])
+  it('examples/ import only themselves, the package by name and react', () => {
+    const sites = importsUnder('examples')
+    // The compact task header renders with React, as a real extension does (spec
+    // 2026-09-19-task-header-contract, Q9); `src/` stays type-only.
+    expect(sites.some((site) => site.specifier === 'react' && !site.typeOnly)).toBe(true)
+    expect(sites.filter(breaksExampleRule).map(describeSite)).toEqual([])
+  })
+
+  it('tells the two rules apart: a value import of react is an example’s, never src/’s', () => {
+    const reactValue: ImportSite = { file: 'src/x.ts', specifier: 'react', typeOnly: false }
+    const reactType: ImportSite = { file: 'src/x.ts', specifier: 'react', typeOnly: true }
+    const reactDom: ImportSite = { file: 'examples/x/index.ts', specifier: 'react-dom', typeOnly: false }
+
+    expect(breaksSrcRule(reactValue)).toBe(true)
+    expect(breaksSrcRule(reactType)).toBe(false)
+    expect(breaksExampleRule({ ...reactValue, file: 'examples/x/index.ts' })).toBe(false)
+    expect(breaksExampleRule(reactDom)).toBe(true)
   })
 
   it('nothing in src/ or examples/ names the cockpit, the service or their contract', () => {
