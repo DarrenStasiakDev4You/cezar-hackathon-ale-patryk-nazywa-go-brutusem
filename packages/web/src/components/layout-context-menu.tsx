@@ -56,6 +56,8 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
   const menuRef = React.useRef<HTMLDivElement>(null)
   const deletingRef = React.useRef(false)
   const enabledRef = React.useRef(enabled)
+  const invokerRef = React.useRef<HTMLElement | null>(null)
+  const descriptionId = React.useId()
 
   React.useLayoutEffect(() => {
     enabledRef.current = enabled
@@ -90,7 +92,10 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
+        const invoker = invokerRef.current
         close()
+        // A keyboard user dismissing the menu lands back where they opened it, not on <body>.
+        if (invoker?.isConnected) invoker.focus()
       }
     }
     document.addEventListener('pointerdown', onPointerDown)
@@ -116,6 +121,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
     if (!nextTarget) return
     event.preventDefault()
     event.stopPropagation()
+    invokerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setTarget(nextTarget)
     setPosition({ x: event.clientX, y: event.clientY })
   }
@@ -171,14 +177,14 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
         // the menu only ever opens in edit mode.
         data-edit-mode-action="allow"
         aria-label="Delete layout element"
-        aria-describedby="layout-context-menu-delete-description"
+        aria-describedby={descriptionId}
         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive outline-hidden focus:bg-destructive/10"
         onClick={() => void handleDelete()}
       >
         <Trash2Icon aria-hidden="true" className="size-4" />
         <span>Delete</span>
       </button>
-      <span id="layout-context-menu-delete-description" className="sr-only">
+      <span id={descriptionId} className="sr-only">
         Deletes this layout element and all registered descendants.
       </span>
     </div>

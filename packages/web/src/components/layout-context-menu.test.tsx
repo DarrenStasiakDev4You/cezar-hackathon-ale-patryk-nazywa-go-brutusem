@@ -92,6 +92,31 @@ describe('LayoutElementContextMenu', () => {
     expect(confirmDelete).not.toHaveBeenCalled()
   })
 
+  it('returns focus to the invoking element on Escape and describes Delete by a per-menu id', async () => {
+    render(
+      <LayoutRegistryProvider>
+        <LayoutElementContextMenu enabled onDelete={vi.fn()}>
+          <LayoutElement id="card" kind="widget" tabIndex={0}>
+            Revenue
+          </LayoutElement>
+        </LayoutElementContextMenu>
+      </LayoutRegistryProvider>,
+    )
+    const card = await waitFor(() => screen.getByText('Revenue'))
+    card.focus()
+
+    fireEvent.contextMenu(card)
+    const deleteItem = screen.getByRole('menuitem', { name: 'Delete layout element' })
+    await waitFor(() => expect(document.activeElement).toBe(deleteItem))
+    const describedBy = deleteItem.getAttribute('aria-describedby') ?? ''
+    expect(describedBy).not.toBe('layout-context-menu-delete-description')
+    expect(document.getElementById(describedBy)?.textContent).toContain('registered descendants')
+
+    fireEvent.keyDown(deleteItem, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(document.activeElement).toBe(card)
+  })
+
   it('drops a confirmed delete whose target unmounted, or whose edit mode ended, while confirming', async () => {
     const onDelete = vi.fn()
     let confirm: (value: boolean) => void = () => {}
