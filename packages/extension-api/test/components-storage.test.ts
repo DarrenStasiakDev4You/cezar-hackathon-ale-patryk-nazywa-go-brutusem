@@ -29,11 +29,141 @@ function thrown(run: () => unknown): unknown {
 }
 
 describe('defineComponentContract', () => {
-  it('returns a frozen { kind, id, version } with no phantom key at runtime', () => {
+  it('returns a frozen token with empty capability lists and no phantom key at runtime', () => {
     const contract = defineComponentContract<GreetingProps>('acme.hello.greeting', { version: 2 })
-    expect(contract).toEqual({ kind: 'component', id: 'acme.hello.greeting', version: 2 })
+    expect(contract).toEqual({
+      kind: 'component',
+      id: 'acme.hello.greeting',
+      version: 2,
+      requiredCapabilities: [],
+      optionalCapabilities: [],
+    })
     expect('__props' in contract).toBe(false)
+    expect('layout' in contract).toBe(false)
     expect(Object.isFrozen(contract)).toBe(true)
+    expect(Object.isFrozen(contract.requiredCapabilities)).toBe(true)
+    expect(Object.isFrozen(contract.optionalCapabilities)).toBe(true)
+  })
+
+  it('records capabilities and layout as deeply frozen copies', () => {
+    const required = ['greets-by-name', 'task.continue']
+    const optional = ['waves']
+    const layout = { sizing: 'fill', sticky: 'bottom', minBlockSize: 96 } as const
+    const contract = defineComponentContract<GreetingProps>('acme.hello.greeting', {
+      version: 1,
+      requiredCapabilities: required,
+      optionalCapabilities: optional,
+      layout,
+    })
+    expect(contract).toEqual({
+      kind: 'component',
+      id: 'acme.hello.greeting',
+      version: 1,
+      requiredCapabilities: ['greets-by-name', 'task.continue'],
+      optionalCapabilities: ['waves'],
+      layout: { sizing: 'fill', sticky: 'bottom', minBlockSize: 96 },
+    })
+    expect(contract.requiredCapabilities).not.toBe(required)
+    expect(contract.layout).not.toBe(layout)
+    expect(Object.isFrozen(contract.requiredCapabilities)).toBe(true)
+    expect(Object.isFrozen(contract.optionalCapabilities)).toBe(true)
+    expect(Object.isFrozen(contract.layout)).toBe(true)
+    required.push('late')
+    expect(contract.requiredCapabilities).toEqual(['greets-by-name', 'task.continue'])
+  })
+
+  it('accepts the layout bounds and a partial layout', () => {
+    expect(defineComponentContract('acme.hello.a', { version: 1, layout: { minBlockSize: 0 } }).layout).toEqual({
+      minBlockSize: 0,
+    })
+    expect(defineComponentContract('acme.hello.b', { version: 1, layout: { minBlockSize: 2048 } }).layout).toEqual({
+      minBlockSize: 2048,
+    })
+    expect(defineComponentContract('acme.hello.c', { version: 1, layout: {} }).layout).toEqual({})
+  })
+
+  it('accepts 32 capabilities across the two lists', () => {
+    const names = Array.from({ length: 32 }, (_, index) => `c${index}`)
+    const contract = defineComponentContract('acme.hello.greeting', {
+      version: 1,
+      requiredCapabilities: names.slice(0, 20),
+      optionalCapabilities: names.slice(20),
+    })
+    expect(contract.requiredCapabilities).toHaveLength(20)
+    expect(contract.optionalCapabilities).toHaveLength(12)
+  })
+
+  it.each<[string, Record<string, unknown>, string[]]>([
+    ['requiredCapabilities is not an array', { requiredCapabilities: 'greets' }, ['requiredCapabilities']],
+    ['optionalCapabilities is not an array', { optionalCapabilities: { 0: 'waves' } }, ['optionalCapabilities']],
+    ['a capability is not a string', { requiredCapabilities: ['ok', 7] }, ['requiredCapabilities[1]']],
+    ['a capability has an upper-case letter', { requiredCapabilities: ['Greets'] }, ['requiredCapabilities[0]']],
+    ['a capability has an empty segment', { optionalCapabilities: ['task..continue'] }, ['optionalCapabilities[0]']],
+    ['a capability starts with a dash', { requiredCapabilities: ['-greets'] }, ['requiredCapabilities[0]']],
+    ['a capability is empty', { requiredCapabilities: [''] }, ['requiredCapabilities[0]']],
+    ['a capability is over 64 characters', { requiredCapabilities: ['a'.repeat(65)] }, ['requiredCapabilities[0]']],
+    ['a required capability repeats', { requiredCapabilities: ['a', 'b', 'a'] }, ['requiredCapabilities[2]']],
+    ['an optional capability repeats', { optionalCapabilities: ['a', 'a'] }, ['optionalCapabilities[1]']],
+    [
+      'an optional capability is also required',
+      { requiredCapabilities: ['a', 'b'], optionalCapabilities: ['b'] },
+      ['optionalCapabilities[0]'],
+    ],
+    [
+      'the lists hold more than 32 names together',
+      {
+        requiredCapabilities: Array.from({ length: 16 }, (_, index) => `r${index}`),
+        optionalCapabilities: Array.from({ length: 17 }, (_, index) => `o${index}`),
+      },
+      [''],
+    ],
+    ['layout is not an object', { layout: 'sticky' }, ['layout']],
+    ['layout is null', { layout: null }, ['layout']],
+    ['layout is an array', { layout: [] }, ['layout']],
+    ['layout has an unknown key', { layout: { sticky: 'top', align: 'start' } }, ['layout.align']],
+    ['sizing is outside its union', { layout: { sizing: 'grow' } }, ['layout.sizing']],
+    ['sticky is outside its union', { layout: { sticky: 'left' } }, ['layout.sticky']],
+    ['minBlockSize is negative', { layout: { minBlockSize: -1 } }, ['layout.minBlockSize']],
+    ['minBlockSize is over 2048', { layout: { minBlockSize: 2049 } }, ['layout.minBlockSize']],
+    ['minBlockSize is not an integer', { layout: { minBlockSize: 56.5 } }, ['layout.minBlockSize']],
+    ['minBlockSize is a string', { layout: { minBlockSize: '56' } }, ['layout.minBlockSize']],
+  ])('throws invalid-id when %s', (_, options, paths) => {
+    const error = thrown(() =>
+      defineComponentContract('acme.hello.greeting', { version: 1, ...options } as unknown as { version: number }),
+    )
+    expect(error).toBeInstanceOf(ExtensionDefinitionError)
+    expect(isExtensionError(error, 'invalid-id')).toBe(true)
+    expect((error as ExtensionDefinitionError).issues.map((issue) => issue.path)).toEqual(paths)
+  })
+
+  it('names the rule each capability and layout issue broke', () => {
+    const error = thrown(() =>
+      defineComponentContract('acme.hello.greeting', {
+        version: 1,
+        requiredCapabilities: ['a', 'a'],
+        optionalCapabilities: ['a'],
+        layout: { align: 'start' } as never,
+      }),
+    )
+    expect((error as Error).message).toBe(
+      'Invalid component "acme.hello.greeting": requiredCapabilities[1] must be unique — it repeats ' +
+        'requiredCapabilities[0]; optionalCapabilities[0] must not also be required — it is requiredCapabilities[0]; ' +
+        'layout.align is not a layout field (sizing, sticky, minBlockSize)',
+    )
+  })
+
+  it('reports a bad id, a bad version and a bad capability together', () => {
+    const error = thrown(() => defineComponentContract('greeting', { version: 0, requiredCapabilities: ['Bad'] }))
+    expect((error as ExtensionDefinitionError).issues.map((issue) => issue.path)).toEqual([
+      'id',
+      'version',
+      'requiredCapabilities[0]',
+    ])
+    expect((error as Error).message).toBe(
+      'Invalid component "greeting": id must be two or more dot-separated segments of [a-z0-9][a-z0-9-]*, ' +
+        'at most 128 characters; version must be a positive integer — the major version of the contract; ' +
+        'requiredCapabilities[0] must be one or more dot-separated segments of [a-z0-9][a-z0-9-]*, at most 64 characters',
+    )
   })
 
   it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '1', undefined])(
