@@ -1,9 +1,12 @@
 import {
+  checkComponentCompatibility,
   isValidContributionId,
   type ComponentCapability,
   type ComponentCompatibilityIssue,
   type ComponentContract,
+  type ComponentImplementation,
   type ContributionId,
+  type Disposable,
   type ExtensionErrorCode,
   type ExtensionId,
 } from '@open-mercato/cezar-extension-api'
@@ -81,8 +84,23 @@ export interface ComponentRegistryOptions {
   readonly onDiagnostic?: (registration: ComponentRegistration) => void
 }
 
-/** The cockpit's view of the registry. Members arrive with the steps that build them. */
-export interface CockpitComponentRegistry {}
+export interface CockpitComponentRegistry {
+  /** Core registration: `cezar.*` implementation ids, for a contract in `options.contracts`, and
+   *  it must be compatible. Throws `ComponentError`: `invalid-id`, `namespace-violation`,
+   *  `duplicate-registration`, `contract-version-mismatch`, `invalid-input`. */
+  register<P>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>>): Disposable
+  /** Every registration of this contract id, compatible or not, any major, in registration order:
+   *  the brief's list, and the picker's. A new frozen array per call. Never throws; a malformed
+   *  argument returns `[]`. */
+  list(contractId: ContributionId): readonly ComponentRegistration[]
+  /** The compatible registrations of `contract.id`, in registration order, typed with its props.
+   *  `[]` unless `contract` is the token the host serves: its id is in `options.contracts` at the
+   *  same `version`. That compares the reader's token with the host's, never an implementation
+   *  with a contract, which stays `checkComponentCompatibility`'s job. Never throws. */
+  listUsable<P>(contract: ComponentContract<P>): readonly UsableComponent<P>[]
+  /** The registration with this component id. Never throws. */
+  get(componentId: ContributionId): ComponentRegistration | undefined
+}
 
 /** Recognised by `isExtensionError` (duck-typed on `code`), like `CommandError` and `EventError`. */
 export class ComponentError extends Error {
@@ -108,6 +126,10 @@ export function logComponentDiagnostic(registration: ComponentRegistration): voi
 const CORE_PREFIX = 'cezar.'
 const INVALID_CONTRACT =
   'Invalid component contract: expected { kind: "component", id, version } with a valid contribution id and a positive integer version'
+const INVALID_COMPONENT_ID =
+  'Invalid component: id must be two or more dot-separated segments of [a-z0-9][a-z0-9-]*, at most 128 characters'
+/** The most declared capabilities step 3 copies: the check's own reading limit. */
+const MAX_DECLARED_CAPABILITIES = 256
 
 /** The host's catalog entry for one contract id. */
 interface ServedContract {
@@ -118,8 +140,238 @@ interface ServedContract {
 }
 
 export function createComponentRegistry(options: ComponentRegistryOptions = {}): CockpitComponentRegistry {
-  catalogOf(options.contracts ?? [])
-  return {}
+  const served = catalogOf(options.contracts ?? [])
+  /** Every registration by component id. The Map keeps registration order. */
+  const registrations = new Map<ContributionId, ComponentRegistration>()
+
+  /** § Providing, precisely, step 6: a component id names one registration across the registry. */
+  const assertFree = (componentId: ContributionId): void => {
+    const taken = registrations.get(componentId)
+    if (taken === undefined) return
+    throw new ComponentError(
+      'duplicate-registration',
+      `Component "${componentId}" is already provided by ${taken.extensionId ?? 'core'}`,
+      { componentId },
+    )
+  }
+
+  /** Adds `registration`; the Disposable removes exactly it, once, and never a newer one. */
+  const add = (registration: ComponentRegistration): Disposable => {
+    registrations.set(registration.componentId, registration)
+    let disposed = false
+    return {
+      dispose() {
+        if (disposed) return
+        disposed = true
+        if (registrations.get(registration.componentId) === registration) {
+          registrations.delete(registration.componentId)
+        }
+      },
+    }
+  }
+
+  /** Every registration that `keep` accepts, in registration order, as a new frozen array. */
+  const select = (keep: (registration: ComponentRegistration) => boolean): readonly ComponentRegistration[] => {
+    const found: ComponentRegistration[] = []
+    for (const registration of registrations.values()) {
+      if (keep(registration)) found.push(registration)
+    }
+    return Object.freeze(found)
+  }
+
+  return {
+    register(contract, implementation) {
+      const input = prepare(contract, implementation, CORE_PREFIX, (id) => `Core component "${id}" must be under "${CORE_PREFIX}"`)
+      const { componentId, contractId, contractVersion } = input
+      assertFree(componentId)
+
+      // A core mistake is a bug for the tests to catch, not drift between versions: it throws.
+      const host = served.get(contractId)
+      if (host === undefined) {
+        throw new ComponentError(
+          'invalid-input',
+          `Core component "${componentId}" implements ${contractId}@${contractVersion}, which is not in options.contracts`,
+          { componentId },
+        )
+      }
+      const fit = checkComponentCompatibility(
+        host.token,
+        { id: componentId, capabilities: input.declaredCapabilities },
+        { id: contractId, version: contractVersion },
+      )
+      if (!fit.compatible) {
+        const mismatch = fit.issues.find((issue) => issue.code === 'contract-version-mismatch')
+        if (mismatch !== undefined) {
+          throw new ComponentError('contract-version-mismatch', mismatch.message, { componentId })
+        }
+        throw new ComponentError('invalid-input', fit.issues.map((issue) => issue.message).join('; '), { componentId })
+      }
+      return add(registrationOf(input, null, fit))
+    },
+
+    list(contractId) {
+      return select((registration) => registration.contractId === contractId)
+    },
+
+    listUsable<P>(contract: ComponentContract<P>) {
+      const token = tokenOf(contract)
+      if (token === undefined || served.get(token.id)?.version !== token.version) return Object.freeze([])
+      // Compatible means checked against the host's token, so the major is the served one.
+      const usable = select((registration) => registration.contractId === token.id && registration.compatible)
+      return usable as readonly ComponentRegistration[] as readonly UsableComponent<P>[]
+    },
+
+    get(componentId) {
+      return typeof componentId === 'string' ? registrations.get(componentId) : undefined
+    },
+  }
+}
+
+/** What steps 2–5 of § Providing, precisely, read and checked: copies only, never the caller's objects. */
+interface PreparedImplementation {
+  readonly componentId: ContributionId
+  readonly contractId: ContributionId
+  readonly contractVersion: number
+  readonly component: ComponentType<never>
+  readonly declaredCapabilities: readonly ComponentCapability[]
+  readonly metadata: ComponentMetadata
+}
+
+/** A fit: the check's outcome, or the host's own `unknown-contract`. Frozen. */
+interface Fit {
+  readonly capabilities: readonly ComponentCapability[]
+  readonly issues: readonly ComponentRegistrationIssue[]
+}
+
+/**
+ * § Providing, precisely, steps 2–5, shared by core and extensions: the token, the implementation's
+ * fields (each read once), the id and its namespace, and each field's rule. The first failure
+ * throws; the caller's own error never escapes unwrapped.
+ */
+function prepare(
+  contract: unknown,
+  implementation: unknown,
+  prefix: string,
+  outsidePrefix: (componentId: ContributionId) => string,
+): PreparedImplementation {
+  const token = tokenOf(contract)
+  if (token === undefined) throw new ComponentError('invalid-id', INVALID_CONTRACT)
+
+  const { id, title, description, capabilities, component } = implementationFields(implementation)
+
+  if (typeof id !== 'string' || !isValidContributionId(id)) throw new ComponentError('invalid-id', INVALID_COMPONENT_ID)
+  if (!id.startsWith(prefix)) throw new ComponentError('namespace-violation', outsidePrefix(id), { componentId: id })
+
+  // Named by the field and the rule, never by the value.
+  const invalid = (rule: string) =>
+    new ComponentError('invalid-input', `Invalid component "${id}": ${rule}`, { componentId: id })
+  if (typeof title !== 'string' || title === '') throw invalid('title must be a non-empty string')
+  if (description !== undefined && typeof description !== 'string') {
+    throw invalid('description must be a string when given')
+  }
+  if (typeof component !== 'function' && (typeof component !== 'object' || component === null)) {
+    throw invalid('component must be a React component: a function, or an object such as memo, forwardRef or lazy return')
+  }
+  if (!capabilities.ok) throw invalid(`capabilities ${capabilities.rule}`)
+  const names = capabilities.names ?? []
+  for (let index = 0; index < names.length; index += 1) {
+    if (typeof names[index] !== 'string') throw invalid(`capabilities[${index}] must be a string`)
+  }
+
+  return {
+    componentId: id,
+    contractId: token.id,
+    contractVersion: token.version,
+    component: component as ComponentType<never>,
+    declaredCapabilities: Object.freeze([...new Set(names as readonly ComponentCapability[])]),
+    metadata: Object.freeze(description === undefined ? { title } : { title, description }),
+  }
+}
+
+/** The frozen registration of a prepared implementation. */
+function registrationOf(input: PreparedImplementation, extensionId: ExtensionId | null, fit: Fit): ComponentRegistration {
+  return Object.freeze({
+    componentId: input.componentId,
+    extensionId,
+    contractId: input.contractId,
+    contractVersion: input.contractVersion,
+    component: input.component,
+    declaredCapabilities: input.declaredCapabilities,
+    capabilities: fit.capabilities,
+    metadata: input.metadata,
+    compatible: fit.issues.length === 0,
+    issues: fit.issues,
+  })
+}
+
+/** `capabilities` as step 3 copies it: absent, the copied elements, or the rule the list broke. */
+type CapabilityCopy =
+  | { readonly ok: true; readonly names: readonly unknown[] | undefined }
+  | { readonly ok: false; readonly rule: string }
+
+interface ImplementationFields {
+  readonly id: unknown
+  readonly title: unknown
+  readonly description: unknown
+  readonly capabilities: CapabilityCopy
+  readonly component: unknown
+}
+
+/**
+ * § Providing, precisely, step 3: each field is read once, inside its own `try`, and a read that
+ * throws is `invalid-input` naming the field. `capabilities` is copied in the same `try` as its
+ * read: `Array.isArray` (which throws on a revoked proxy), its `length`, then each element.
+ */
+function implementationFields(implementation: unknown): ImplementationFields {
+  if (typeof implementation !== 'object' || implementation === null) {
+    throw new ComponentError('invalid-input', 'Invalid component: the implementation must be an object')
+  }
+  const source = implementation as Record<string, unknown>
+  let named: ContributionId | undefined
+  const unreadable = (key: string) =>
+    new ComponentError(
+      'invalid-input',
+      `Invalid component${named === undefined ? '' : ` "${named}"`}: ${key} could not be read`,
+      named === undefined ? {} : { componentId: named },
+    )
+  const read = (key: string): unknown => {
+    try {
+      return source[key]
+    } catch {
+      throw unreadable(key)
+    }
+  }
+
+  const id = read('id')
+  if (typeof id === 'string' && isValidContributionId(id)) named = id
+  const title = read('title')
+  const description = read('description')
+
+  let capabilities: CapabilityCopy
+  try {
+    const list = source.capabilities
+    capabilities = list === undefined ? { ok: true, names: undefined } : copyList(list)
+  } catch {
+    throw unreadable('capabilities')
+  }
+
+  const component = read('component')
+  return { id, title, description, capabilities, component }
+}
+
+/** A copy of an untrusted list of at most {@link MAX_DECLARED_CAPABILITIES} elements. May throw: the caller wraps it. */
+function copyList(list: unknown): CapabilityCopy {
+  if (!Array.isArray(list)) return { ok: false, rule: 'must be an array of strings' }
+  const length: unknown = list.length
+  if (typeof length !== 'number' || !Number.isInteger(length) || length < 0) {
+    return { ok: false, rule: 'must be an array of strings' }
+  }
+  if (length > MAX_DECLARED_CAPABILITIES) {
+    return { ok: false, rule: `must hold at most ${MAX_DECLARED_CAPABILITIES} names` }
+  }
+  const names: unknown[] = []
+  for (let index = 0; index < length; index += 1) names.push(list[index])
+  return { ok: true, names }
 }
 
 /** The catalog by contract id. Throws `ComponentError` for host misuse. */
