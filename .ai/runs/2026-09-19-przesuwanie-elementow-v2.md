@@ -41,6 +41,17 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - `npm run test:package`: one inline-contract test passed; four existing package CLI/release tests failed under the same process/platform constraints.
 - Browser QA: not exercised. The shared descriptor points to a stopped Windows-only app/browser from this Linux environment, and `http://127.0.0.1:59974/api/v1/health` is unreachable.
 
+### Continuation attempt — 2026-09-19
+
+- `npm run typecheck`: passed.
+- Focused layout tests: passed — 2 files, 5 tests.
+- `npm test`: rerun; repeated unrelated server/workspace failures and timeouts persisted, so the run was stopped after the failure pattern was established.
+- `npm run test:unit`: failed in the existing `skills-remote.test.ts` and `test-env-launcher.test.ts` cases.
+- `npm run build`: server/web builds passed; `check:pack` remained blocked by child Node `spawnSync ... EPERM`.
+- `npm run test:package`: 1 passed, 4 existing CLI/release tests failed.
+- Browser QA: partial evidence captured from the PR build. Edit mode rendered accessible drag handles and normal mode rendered none; a seeded populated layout was unavailable, so pointer/keyboard reorder, cancellation, cross-parent rejection, and mobile behavior remain unexercised. Evidence is posted on PR #27.
+- Authoritative review: changes requested because the configured full validation gate is not green; no additional code finding was identified.
+
 ## Risks
 
 - The handle must retain a minimum 44px target and not steal ordinary widget clicks or touch scrolling.
