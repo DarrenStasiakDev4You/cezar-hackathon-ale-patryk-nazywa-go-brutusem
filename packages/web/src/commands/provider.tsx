@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient, type UseMutationOptions, type UseMutationResult } from '@tanstack/react-query'
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react'
 
-import type { CommandToken } from '@open-mercato/cezar-extension-api'
+import type { CommandToken, TaskRef } from '@open-mercato/cezar-extension-api'
 
-import { registerCoreCommands } from './core-commands'
+import { invalidateTaskKeys, registerCoreCommands } from './core-commands'
 import { createCommandRegistry, type CommandRegistry } from './registry'
 
 /**
@@ -56,4 +56,19 @@ export function useCommand<I, R>(
 ): UseMutationResult<R, Error, I> {
   const commands = useCommands()
   return useMutation<R, Error, I>({ ...options, mutationFn: (input) => commands.execute(command, input) })
+}
+
+/**
+ * Waits until one task's caches are fresh, joining a refetch already in flight instead of
+ * cancelling it. For a site that must resolve on fresh data (spec
+ * `2026-09-19-migrate-task-actions-to-command-api`, Q10): call it with the command's input from
+ * `useCommand`'s `onSuccess`, which TanStack awaits. The handler has already started that refetch,
+ * so the site waits for it rather than asking twice — and never names a cache key.
+ */
+export function useTaskRefetch(): (task: TaskRef) => Promise<void> {
+  const queryClient = useQueryClient()
+  return useCallback(
+    (task: TaskRef) => invalidateTaskKeys(queryClient, task.projectId, { cancelRefetch: false }),
+    [queryClient],
+  )
 }
