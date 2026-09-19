@@ -30,6 +30,10 @@ import type { ExtensionScope } from '../extensions/registry'
  * `forExtension(scope)`, the `ComponentRegistry` it sees as `context.components`: its ids stay under
  * `${extension.id}.`, its registrations go through `scope.track()`, and an implementation that does
  * not fit is recorded with its issues and reported, never thrown (spec Q3).
+ *
+ * Every change is announced through `subscribe`, with `revision()` as its snapshot, so a
+ * `ComponentHost` follows extensions that activate or deactivate (spec
+ * `.ai/specs/2026-09-19-component-host.md`).
  */
 
 /** Shown to the user when they choose an implementation. */
@@ -110,6 +114,13 @@ export interface CockpitComponentRegistry {
   get(componentId: ContributionId): ComponentRegistration | undefined
   /** The `ComponentRegistry` one extension activation sees as `context.components`. */
   forExtension(scope: ExtensionScope): ComponentRegistry
+  /** Calls `listener` synchronously after every change: a `register`, a `provide`, and a dispose
+   *  that removed a registration. Returns the unsubscribe, which is idempotent. A throwing listener
+   *  is swallowed and does not stop the others. */
+  subscribe(listener: () => void): () => void
+  /** A number that grows with every change `subscribe` reports: the snapshot for
+   *  `useSyncExternalStore`. */
+  revision(): number
 }
 
 /** Recognised by `isExtensionError` (duck-typed on `code`), like `CommandError` and `EventError`. */
@@ -153,6 +164,21 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
   const onDiagnostic = options.onDiagnostic ?? logComponentDiagnostic
   /** Every registration by component id. The Map keeps registration order. */
   const registrations = new Map<ContributionId, ComponentRegistration>()
+  /** One entry per `subscribe` call, so the same function subscribed twice is two subscriptions. */
+  const listeners = new Set<{ readonly listener: () => void }>()
+  let revision = 0
+
+  /** Bumps the revision, then tells every listener subscribed at that moment. */
+  const changed = (): void => {
+    revision += 1
+    for (const entry of [...listeners]) {
+      try {
+        entry.listener()
+      } catch {
+        // A throwing listener must not stop the others, nor fail the change that notified it.
+      }
+    }
+  }
 
   /** § Providing, precisely, step 6: a component id names one registration across the registry. */
   const assertFree = (componentId: ContributionId): void => {
@@ -168,6 +194,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
   /** Adds `registration`; the Disposable removes exactly it, once, and never a newer one. */
   const add = (registration: ComponentRegistration): Disposable => {
     registrations.set(registration.componentId, registration)
+    changed()
     let disposed = false
     return {
       dispose() {
@@ -175,6 +202,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
         disposed = true
         if (registrations.get(registration.componentId) === registration) {
           registrations.delete(registration.componentId)
+          changed()
         }
       },
     }
@@ -277,6 +305,18 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
           return handle
         },
       })
+    },
+
+    subscribe(listener) {
+      const entry = { listener }
+      listeners.add(entry)
+      return () => {
+        listeners.delete(entry)
+      }
+    },
+
+    revision() {
+      return revision
     },
   }
 }
