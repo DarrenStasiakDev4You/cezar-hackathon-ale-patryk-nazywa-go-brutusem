@@ -7,6 +7,7 @@ import {
   type CommandToken,
   type TaskArchiveInput,
   type TaskArchiveResult,
+  type TaskAttachment,
   type TaskContinueInput,
   type TaskContinueResult,
   type TaskRef,
@@ -31,5 +32,23 @@ describe('core task command tokens', () => {
     // @ts-expect-error — a task is addressed by its id
     const missing: TaskRef = { projectId: 'web' }
     expect([input, missing]).toHaveLength(2)
+  })
+
+  it('let a continue carry the engine, the account and a prompt with attachments', () => {
+    const attachment: TaskAttachment = { mediaType: 'image/png', data: 'iVBORw0KGgo=', name: 'shot.png' }
+    const full: TaskContinueInput = {
+      taskId: 'r1',
+      projectId: 'web',
+      runner: 'codex',
+      model: '',
+      agentProfile: 'work',
+      text: 'Fix the failing test.',
+      attachments: [attachment],
+    }
+    // @ts-expect-error — attachments are a list of files, not a string
+    const notAList: TaskContinueInput = { taskId: 'r1', attachments: 'x' }
+    // @ts-expect-error — a model is named by its id
+    const numericModel: TaskContinueInput = { taskId: 'r1', model: 1 }
+    expect([full, notAList, numericModel]).toHaveLength(3)
   })
 })

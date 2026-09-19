@@ -16,9 +16,46 @@ export interface TaskRef {
   readonly projectId?: string
 }
 
+/**
+ * One file sent with a continue prompt. The host refuses media types it cannot pass on.
+ *
+ * A hand-written mirror of the service's attachment shape — this package never imports the
+ * contract — kept in step with it by a type test in the cockpit.
+ */
+export interface TaskAttachment {
+  /** `image/*`, `text/plain`, `text/markdown`, `text/x-markdown` or `application/pdf`. */
+  readonly mediaType: string
+  /** Base64 payload, 1 to 7,000,000 characters. */
+  readonly data: string
+  /** At most 255 characters. */
+  readonly name?: string
+}
+
+/**
+ * Continue a task. Every field but the task is optional, and an omitted one keeps what the task
+ * already has, so `{ taskId }` alone reopens the session exactly as it was. Switching the runner
+ * or the model is a continue with that field: the service applies both only when it reopens a
+ * session.
+ */
 export interface TaskContinueInput extends TaskRef {
   /** A backend this Cezar knows (`claude`, `codex`, …); omitted → the task's own. */
   readonly runner?: string
+  /**
+   * A model id of that runner; `''` is "auto" (the runner decides). Omitted → the task keeps its
+   * model, except that a runner switch drops a pinned model that belongs to another runner.
+   * Where models are locked, a non-blank model is refused.
+   */
+  readonly model?: string
+  /**
+   * A login of that runner. Omitted → the task keeps its account; an unknown account is refused.
+   * A different account starts a fresh session: a session id lives inside one account's config
+   * directory.
+   */
+  readonly agentProfile?: string
+  /** The prompt the reopened session starts on. Omitted or blank → the engine's own "Continue.". */
+  readonly text?: string
+  /** Up to 4 files sent with `text`. */
+  readonly attachments?: readonly TaskAttachment[]
 }
 
 export interface TaskArchiveInput extends TaskRef {
