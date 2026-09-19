@@ -55,8 +55,8 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
     [registry, revision, contract, preference],
   )
   const [retry, setRetry] = useState(0)
-  // The key of the boundary whose fallback threw, so the box can say `failed`.
-  const [brokenKey, setBrokenKey] = useState<string | null>(null)
+  // The boundary whose core default threw (its key and subject), so the box can say `failed`.
+  const [broken, setBroken] = useState<string | null>(null)
 
   const unresolved = resolution.status === 'unresolved'
   useEffect(() => {
@@ -75,21 +75,27 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
   const current = hasFailed(registrationOf(resolution.component), subject) ? fallback : resolution.component
   const isFallback = current === fallback
   const key = `${current.componentId}:${retry}`
+  const identity = `${key}|${subject}`
+  // Another boundary or another subject is on screen: the `failed` mark belonged to the one before,
+  // so it goes (React's "adjust state while rendering" pattern, for this component's own state).
+  if (broken !== null && broken !== identity) setBroken(null)
 
   const tryAgain = () => setRetry((count) => count + 1)
   const coreFailed = (error: unknown) => {
     reportCoreFailure(registrationOf(fallback), error)
-    setBrokenKey(key)
+    setBroken(identity)
   }
   const failedNotice = <FailedNotice onRetry={tryAgain} />
 
   // 6. When an extension's implementation throws, its boundary renders core's default at once,
   //    inside a boundary of its own, and tells the provider, which sets it aside for this subject.
+  //    That boundary reports nothing: the provider's record re-keys the host to core's default
+  //    straight away, and that boundary reports if core's default throws too (one line, step 7).
   // 7. When core's default throws, the box shows the inline notice.
   const onFailed = isFallback
     ? failedNotice
     : (
-        <ImplementationBoundary onCatch={coreFailed} failed={failedNotice}>
+        <ImplementationBoundary onCatch={IGNORE} failed={failedNotice} resetKey={subject}>
           <Suspense fallback={null}>{createElement(fallback.component, props)}</Suspense>
         </ImplementationBoundary>
       )
@@ -98,12 +104,14 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
     : (error: unknown) =>
         recordFailure({ registration: registrationOf(current), fallback: registrationOf(fallback), error }, subject)
 
-  const state: HostState = brokenKey === key ? 'failed' : current !== resolution.component ? 'fallback' : 'resolved'
+  const state: HostState = broken === identity ? 'failed' : current !== resolution.component ? 'fallback' : 'resolved'
 
-  // 5. Render. A new component id or a retry changes the key, which resets the boundary (step 8).
+  // 5. Render. A new component id or a retry changes the key, which remounts the boundary (step 8).
+  //    A new subject resets a failed boundary without remounting a healthy one, so the next task
+  //    tries core's default again.
   return (
     <HostBox contractId={contract.id} componentId={current.componentId} state={state} box={box}>
-      <ImplementationBoundary key={key} onCatch={onCatch} failed={onFailed}>
+      <ImplementationBoundary key={key} onCatch={onCatch} failed={onFailed} resetKey={subject}>
         <Suspense fallback={null}>{createElement(current.component, props)}</Suspense>
       </ImplementationBoundary>
     </HostBox>
@@ -157,12 +165,17 @@ interface BoundaryProps {
   readonly onCatch: (error: unknown) => void
   /** What renders once a child threw. */
   readonly failed: ReactNode
+  /** A new value clears a failure without remounting (react-error-boundary's `resetKeys` rule). */
+  readonly resetKey: string
   readonly children: ReactNode
 }
 
+const IGNORE = (): void => {}
+
 /**
  * One implementation's error boundary. `getDerivedStateFromError` only flips it to failed, because
- * React may call it during render; the report runs in `componentDidCatch`. A new `key` resets it.
+ * React may call it during render; the report runs in `componentDidCatch`. A new `key` remounts
+ * it, and a new `resetKey` clears its failure.
  */
 class ImplementationBoundary extends Component<BoundaryProps, { readonly failed: boolean }> {
   override state = { failed: false }
@@ -173,6 +186,10 @@ class ImplementationBoundary extends Component<BoundaryProps, { readonly failed:
 
   override componentDidCatch(error: unknown): void {
     this.props.onCatch(error)
+  }
+
+  override componentDidUpdate(previous: BoundaryProps): void {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false })
   }
 
   override render(): ReactNode {
