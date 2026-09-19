@@ -35,9 +35,9 @@ Every Task UI path that continues or archives a task goes through the command re
 
 ### Phase 1: The continue input and the helpers
 
-- [ ] 1.1 Extension API fields: TaskAttachment and the optional TaskContinueInput fields
-- [ ] 1.2 Core validator and handler forward the new continue fields
-- [ ] 1.3 apiErrorOf and useTaskRefetch
+- [x] 1.1 Extension API fields: TaskAttachment and the optional TaskContinueInput fields — 54648d5c
+- [x] 1.2 Core validator and handler forward the new continue fields — 9443b637
+- [x] 1.3 apiErrorOf and useTaskRefetch — 61597cf5
 
 ### Phase 2: The task thread and the Ask delivery
 
