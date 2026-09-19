@@ -26,6 +26,14 @@ Date: 2026-09-19 UTC
   project groups and unrelated screens. The focused composer run reproduces only the timestamp
   assertion; the other full-suite failure is a socket close during shared-environment execution.
 
+## Final gate follow-up
+
+- PASS — isolated changed-area regression slice: 4 files, 104 tests.
+- PASS — `npm run test:unit`: 36/36 after cleaning the test environment left by the first attempt.
+- PASS — `npm run build` and `npm run test:package`: 16/16 package tests.
+- FAIL — `npm test`: 8,108/8,157 tests passed; 49 failures/timeouts in 28 files under the full
+  suite. The changed-area slice is green; the failure pattern is broad and dominated by timeouts.
+
 ## UI evidence
 
 The live browser run captured:

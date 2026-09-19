@@ -22,3 +22,12 @@
 - Typecheck and focused tests pass; browser evidence is in `checkpoint-2-artifacts/`.
 - Full E2E remains red on 32 broad-suite failures plus one stale timestamp assertion; the final
   configured gate is still pending after Step 2.4.
+
+## 2026-09-19T21:40:00Z — final validation
+
+- Typecheck, unit tests (36/36), build, package tests (16/16), and the isolated changed-area slice
+  (104 tests) passed.
+- Full `npm test` remains red under suite load (49 failures/timeouts; 8108/8157 passed), and full
+  E2E remains red as documented in `checkpoint-2-checks.md`.
+- No implementation blocker remains; PR #48 is ready for review with the broad-suite baseline
+  failures called out explicitly.
