@@ -1,4 +1,5 @@
 import { ComposerView, type ComposerViewSkill } from '@/components/composer/composer-view'
+import { toast } from '@/components/ui/toaster'
 import { ContinuationEnginePicker } from './continuation-engine-picker'
 import type { TaskComposerProps } from '@open-mercato/cezar-extension-api'
 
@@ -29,6 +30,7 @@ export function CoreTaskComposer(props: TaskComposerProps) {
       mentions={props.completions.files.items}
       onRequest={props.onRequestCompletions}
       onSkillPicked={props.onUseSkill}
+      onDictationError={(message) => toast(message, { tone: 'danger' })}
       footerEnd={
         props.availability.fix ? (
           <a

@@ -92,6 +92,11 @@ export function fallbackAttachmentName(mediaType: string, isImage: boolean): str
 /** File → base64 (chunked — `String.fromCharCode(...5MB)` would blow the arg limit). */
 export async function fileToPendingAttachment(file: ComposerFileLike, source: 'file' | 'clipboard' = 'file'): Promise<PendingAttachment> {
   const bytes = new Uint8Array(await file.arrayBuffer())
+  // `File.size` is browser-provided metadata. Validate the bytes we are actually about to
+  // encode as well: structural extension implementations and test doubles can under-report it.
+  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
+    throw new Error(`${file.name || 'attachment'} is too large (max 5 MB)`)
+  }
   let binary = ''
   for (let i = 0; i < bytes.length; i += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))

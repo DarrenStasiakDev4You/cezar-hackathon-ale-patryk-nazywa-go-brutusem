@@ -66,6 +66,7 @@ export interface ComposerViewProps {
   readonly onSkillPicked?: (name: string) => void
   readonly footerStart?: ReactNode
   readonly footerEnd?: ReactNode
+  readonly onDictationError?: (message: string) => void
   readonly ref?: Ref<ComposerViewHandle>
 }
 
@@ -107,6 +108,7 @@ export function ComposerView({
   onSkillPicked,
   footerStart,
   footerEnd,
+  onDictationError,
   ref,
 }: ComposerViewProps) {
   const [trigger, setTrigger] = useState<TriggerState | null>(null)
@@ -116,7 +118,7 @@ export function ComposerView({
   const rootRef = useRef<HTMLDivElement>(null)
   const pendingCaretRef = useRef<number | null>(null)
   const menuItemRefs = useRef<Map<string, HTMLElement>>(new Map())
-  const dictation = useDictation(() => {})
+  const dictation = useDictation(onDictationError ?? (() => {}))
 
   useEffect(() => {
     if (autoFocus) textareaRef.current?.focus()

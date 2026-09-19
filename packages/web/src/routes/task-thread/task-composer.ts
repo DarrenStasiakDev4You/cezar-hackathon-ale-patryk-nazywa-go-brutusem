@@ -142,7 +142,7 @@ export function useTaskComposerModel(
         const current = draftRef.current
         if (current.images.length >= MAX_ATTACHMENTS) return
         current.setImages([...current.images, attachment])
-      })
+      }).catch((error) => toast(error instanceof Error ? error.message : String(error), { tone: 'danger' }))
     }
   }, [enabled])
 
@@ -164,8 +164,27 @@ export function useTaskComposerModel(
   }, [uiState.data])
 
   const onNavigate = useCallback((href: string) => {
-    if (href === '/settings/agents#providers') navigate(scopeTo(projectId, href))
+    if (href === '/settings/agents#providers') {
+      navigate(scopeTo(projectId, href))
+      return
+    }
+    console.warn(`[TaskComposer] ignored unsupported navigation target: ${href}`)
   }, [navigate, projectId])
+
+  const onSelectRunner = useCallback((runner: string, account?: string) => {
+    if (!continuable || hosted?.choosesEngine === false || !continueAction.hasRunnerChoice) return
+    const valid = continueAction.engine.runnerChoices.some((choice) =>
+      choice.runner === runner && choice.account === account,
+    )
+    if (valid) continueAction.selectRunner(runner, account)
+  }, [continueAction.engine.runnerChoices, continueAction.hasRunnerChoice, continueAction.selectRunner, continuable, hosted?.choosesEngine])
+
+  const onSelectModel = useCallback((model: string) => {
+    if (!continuable || hosted?.choosesEngine === false || continueAction.modelsLocked) return
+    if (continueAction.engine.modelChoices.some((choice) => choice.id === model)) {
+      continueAction.selectModel(model)
+    }
+  }, [continueAction.engine.modelChoices, continueAction.modelsLocked, continueAction.selectModel, continuable, hosted?.choosesEngine])
 
   const skillItems: readonly TaskComposerSkill[] = useMemo(() => (skills.data ?? []).map((skill) => ({
     key: `${skill.name}:${skill.path}`,
@@ -177,12 +196,7 @@ export function useTaskComposerModel(
 
   const fileItems = useMemo(() => threadFilePaths(thread), [thread])
   const statusMode = sessionOpen ? 'reply' : queued ? 'queued' : continuable ? 'continue' : 'closed'
-  const availability = {
-    enabled,
-    ...(providerBlocked ? { reason: providerReason ?? 'Connect an agent provider to continue.' } : !enabled ? { reason: 'Session closed — no session to resume.' } : {}),
-    ...(providerBlocked && !continueAction.providerPending ? { fix: { label: 'Configure providers', href: '/settings/agents#providers' } } : {}),
-  }
-  const props: TaskComposerProps = {
+  const props = useMemo<TaskComposerProps>(() => Object.freeze({
     task: { taskId: run.id, projectId },
     draft: {
       text: draft.text,
@@ -193,7 +207,11 @@ export function useTaskComposerModel(
       placeholder: queued ? 'Add to the prompt — sent when the run starts…' : continuable ? 'Continue — add a prompt, or send to just reopen the session…' : run.status === 'waiting' ? 'Reply — / for skills, @ for files…' : 'Message the agent — / for skills, @ for files…',
       submitLabel: continuable ? 'Continue' : 'Send',
     },
-    availability,
+    availability: {
+      enabled,
+      ...(providerBlocked ? { reason: providerReason ?? 'Connect an agent provider to continue.' } : !enabled ? { reason: 'Session closed — no session to resume.' } : {}),
+      ...(providerBlocked && !continueAction.providerPending ? { fix: { label: 'Configure providers', href: '/settings/agents#providers' } } : {}),
+    },
     actions: {
       submit: { available: enabled, enabled: enabled && !pending && (continuable || draft.text.trim() !== '' || draft.images.length > 0), pending },
       attach: { available: enabled && hosted?.attachesFiles !== false, enabled: enabled && hosted?.attachesFiles !== false, pending: false },
@@ -210,11 +228,11 @@ export function useTaskComposerModel(
     onSubmit,
     onAttachFiles,
     onRemoveAttachment,
-    onSelectRunner: continueAction.selectRunner,
-    onSelectModel: continueAction.selectModel,
+    onSelectRunner,
+    onSelectModel,
     onRequestCompletions,
     onUseSkill,
     onNavigate,
-  }
+  }), [continueAction.engine, continueAction.hasRunnerChoice, continueAction.modelsLocked, continueAction.providerPending, draft.images, draft.text, enabled, fileItems, hosted?.attachesFiles, hosted?.choosesEngine, onAttachFiles, onNavigate, onRemoveAttachment, onRequestCompletions, onSelectModel, onSelectRunner, onSubmit, onTextChange, onUseSkill, pending, projectId, providerBlocked, providerReason, queued, run.id, run.status, skillItems, skills.isError, skills.isPending, skillsWanted, statusMode, continuable, filesWanted])
   return { props }
 }
