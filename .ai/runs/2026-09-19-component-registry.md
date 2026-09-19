@@ -65,8 +65,8 @@ and fit. The spec's Q1–Q4 decisions are owner-confirmed and followed as writte
 
 ### Phase 1: The registry, core side
 
-- [ ] 1.1 Types, catalog and error
-- [ ] 1.2 Core register, list, listUsable, get, disposal
+- [x] 1.1 Types, catalog and error — 51341f8a
+- [x] 1.2 Core register, list, listUsable, get, disposal — 1f3c4441
 
 ### Phase 2: The extension view and its wiring
 
