@@ -32,6 +32,8 @@ export type LayoutSortableSurfaceProps = {
   children: React.ReactNode
   enabled?: boolean
   className?: string
+  /** Limit this surface to one layout container; useful when a page and the shell share a registry. */
+  ids?: string[]
   renderOverlay?: (element: RegisteredLayoutElement) => React.ReactNode
 }
 
@@ -70,11 +72,12 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   }
 }
 
-export function LayoutSortableSurface({ children, enabled, className, renderOverlay }: LayoutSortableSurfaceProps) {
+export function LayoutSortableSurface({ children, enabled, className, ids, renderOverlay }: LayoutSortableSurfaceProps) {
   const registry = useLayoutRegistry()
   const snapshot = useLayoutSnapshot()
   const detectedEditMode = useDetectedEditMode()
   const isEnabled = enabled ?? detectedEditMode
+  const sortableSnapshot = ids ? snapshot.filter((element) => ids.includes(element.id)) : snapshot
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -126,6 +129,16 @@ export function LayoutSortableSurface({ children, enabled, className, renderOver
     ? renderOverlay?.(activeElement) ?? <div className="layout-drag-overlay-label">{elementLabel(activeElement)}</div>
     : null
 
+  if (!isEnabled) {
+    return (
+      <LayoutSortableContext.Provider value={{ enabled: false, activeId: null }}>
+        <div className={className} data-slot="layout-sortable-surface" data-edit-mode="false">
+          {children}
+        </div>
+      </LayoutSortableContext.Provider>
+    )
+  }
+
   return (
     <LayoutSortableContext.Provider value={{ enabled: isEnabled, activeId }}>
       <DndContext
@@ -136,7 +149,7 @@ export function LayoutSortableSurface({ children, enabled, className, renderOver
         onDragEnd={isEnabled ? finishDrag : undefined}
         onDragCancel={isEnabled ? handleDragCancel : undefined}
       >
-        <SortableContext items={snapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
+        <SortableContext items={sortableSnapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
           <div
             className={className}
             data-slot="layout-sortable-surface"

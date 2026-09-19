@@ -22,7 +22,9 @@ import {
   shouldBlockEditModeKeyActivation,
 } from '@/components/edit-mode-interaction-guard'
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from '@/components/layout-context-menu'
+import { LayoutElement } from '@/components/layout-element'
 import { LayoutRegistryProvider } from '@/components/layout-registry'
+import { LayoutSortableSurface } from '@/components/layout-sortable-surface'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -318,8 +320,30 @@ export const AppShell = React.memo(function AppShell({
         data-edit-mode={editMode ? 'true' : 'false'}
         className={cn('flex min-w-0 flex-1', editMode && 'pt-12')}
       >
-        <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
-        <div className="relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0">
+        <LayoutSortableSurface
+          className="contents"
+          ids={['shell-sidebar', 'shell-main']}
+          renderOverlay={(element) => (
+            <div className="rounded-lg border border-primary bg-card px-4 py-3 shadow-lg">
+              {element.id === 'shell-sidebar' ? 'Navigation' : 'Main content'}
+            </div>
+          )}
+        >
+          <LayoutElement
+            id="shell-sidebar"
+            kind="widget"
+            as="section"
+            className="relative hidden shrink-0 md:flex"
+            style={{ width: sidebarWidth }}
+          >
+            <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
+          </LayoutElement>
+          <LayoutElement
+            id="shell-main"
+            kind="widget"
+            as="section"
+            className="relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0"
+          >
         {/* The Sheet root renders no DOM of its own. Keep only the mobile controls inside its
             context so a sidebar update cannot propagate through the routed view. */}
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -343,7 +367,8 @@ export const AppShell = React.memo(function AppShell({
             data-slot="composer"
             className="row-start-4 pb-[env(safe-area-inset-bottom)]"
           />
-        </div>
+          </LayoutElement>
+        </LayoutSortableSurface>
       </div>
       <EditModeControl enabled={editMode} onEnabledChange={setEditMode} />
         </div>
