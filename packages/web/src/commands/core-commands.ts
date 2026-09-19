@@ -73,7 +73,9 @@ export function registerCoreCommands(
    * caller acted on is not the task the server has — refetch it so the UI redraws to the truth —
    * and still rejects. Any other failure changed nothing, so it leaves the caches alone (unlike
    * the global Tasks page's `onSettled`, which must undo its own optimistic patch: a caller that
-   * patches optimistically keeps that rollback and invalidation itself).
+   * patches optimistically keeps that rollback and invalidation itself). The 409 refetch joins
+   * one already in flight: the Ask delivery retries a continue through the idle-teardown window
+   * (up to ten 409s in a few seconds), and each must not cancel and restart the last one's.
    */
   const settled = async <T>(
     projectId: string | undefined,
@@ -84,7 +86,9 @@ export function registerCoreCommands(
     try {
       result = await request()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) void invalidateTaskKeys(queryClient, projectId)
+      if (error instanceof ApiError && error.status === 409) {
+        void invalidateTaskKeys(queryClient, projectId, { cancelRefetch: false })
+      }
       throw error
     }
     const refetch = invalidateTaskKeys(queryClient, projectId)
@@ -205,7 +209,7 @@ function validateAttachments(value: unknown): TaskAttachment[] {
     const parsed = attachmentInputSchema.safeParse(item)
     if (!parsed.success) {
       throw new Error(
-        `attachments[${index}] must be an image, text, markdown or PDF attachment of at most 7,000,000 characters`,
+        `attachments[${index}] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters`,
       )
     }
     const { mediaType, data, name } = parsed.data

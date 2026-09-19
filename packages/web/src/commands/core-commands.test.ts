@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, QueryObserver } from '@tanstack/react-query'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import type { AttachmentInput } from '@open-mercato/cezar-api-client'
@@ -249,17 +249,17 @@ describe('input validation', () => {
     [
       'an unsupported media type',
       { attachments: [file({}), file({ mediaType: `application/${secret}` })] },
-      'attachments[1] must be an image, text, markdown or PDF attachment of at most 7,000,000 characters',
+      'attachments[1] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters',
     ],
     [
       'an empty payload',
       { attachments: [file({ data: '' })] },
-      'attachments[0] must be an image, text, markdown or PDF attachment of at most 7,000,000 characters',
+      'attachments[0] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters',
     ],
     [
       'an over-long file name',
       { attachments: [file({ name: `${secret}${'n'.repeat(255)}` })] },
-      'attachments[0] must be an image, text, markdown or PDF attachment of at most 7,000,000 characters',
+      'attachments[0] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters',
     ],
   ])('refuses %s for continue, naming the field and not the value', async (_label, fields, rule) => {
     const sent = stubFetch()
@@ -308,6 +308,31 @@ describe('failures', () => {
     expect(error.message).toBe('run is still active')
     expect((error.cause as { status?: number }).status).toBe(409)
     expect(keys()).toEqual([['default', 'runs']])
+  })
+
+  it('back-to-back 409s join one refetch rather than cancelling and restarting it', async () => {
+    stubFetch(() => jsonResponse({ error: 'run is still active' }, 409))
+    const queryClient = new QueryClient()
+    const registry = createCommandRegistry()
+    registerCoreCommands(registry, { queryClient })
+    // An observed runs list whose answers the test releases by hand, as a mounted view would have.
+    const pending: Array<() => void> = []
+    const queryFn = vi.fn(() => new Promise<string[]>((resolve) => pending.push(() => resolve([]))))
+    const unsubscribe = new QueryObserver(queryClient, { queryKey: ['default', 'runs', 'list'], queryFn }).subscribe(
+      () => {},
+    )
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
+    pending.shift()?.()
+    await vi.waitFor(() => expect(queryClient.getQueryState(['default', 'runs', 'list'])?.status).toBe('success'))
+
+    // The idle-teardown retry: the same refusal, again and again, while the refetch is in flight.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await rejection(registry.execute(TaskContinue, { taskId: 'r1' }))
+    }
+
+    expect(queryFn).toHaveBeenCalledTimes(2)
+    pending.shift()?.()
+    unsubscribe()
   })
 
   it('another refusal rejects command-failed and invalidates nothing', async () => {
