@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
+import { ComponentsProvider } from '@/component-registry/provider'
 import type { ApiRun, HealthResponse, WorktreeEntry } from '@open-mercato/cezar-api-client'
 
 import { TaskFilesRoute } from './task-files'
@@ -98,11 +99,13 @@ function renderFilesRoute() {
   render(
     <QueryClientProvider client={createQueryClient()}>
       <CommandsProvider>
-        <MemoryRouter initialEntries={['/tasks/r1/files']}>
-          <Routes>
-            <Route path="/tasks/:id/files" element={<TaskFilesRoute />} />
-          </Routes>
-        </MemoryRouter>
+        <ComponentsProvider>
+          <MemoryRouter initialEntries={['/tasks/r1/files']}>
+            <Routes>
+              <Route path="/tasks/:id/files" element={<TaskFilesRoute />} />
+            </Routes>
+          </MemoryRouter>
+        </ComponentsProvider>
       </CommandsProvider>
     </QueryClientProvider>,
   )
