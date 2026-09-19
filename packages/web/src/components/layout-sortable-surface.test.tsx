@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { LayoutElement } from './layout-element'
@@ -6,10 +6,10 @@ import { LayoutRegistryProvider } from './layout-registry'
 import { LayoutSortableSurface, resolveLayoutMove } from './layout-sortable-surface'
 import { LayoutRegistry } from '@/lib/layout-elements'
 
-function renderSurface(enabled: boolean) {
+function renderSurface(enabled: boolean, dragMode: 'sortable' | 'container' = 'sortable') {
   return render(
     <LayoutRegistryProvider>
-      <LayoutSortableSurface enabled={enabled}>
+      <LayoutSortableSurface enabled={enabled} dragMode={dragMode}>
         <LayoutElement id="first" kind="widget">First</LayoutElement>
         <LayoutElement id="second" kind="widget">Second</LayoutElement>
       </LayoutSortableSurface>
@@ -38,6 +38,41 @@ describe('LayoutSortableSurface', () => {
     expect(handle?.getAttribute('data-edit-mode-action')).toBe('allow')
     expect(first?.getAttribute('data-layout-sortable')).toBe('true')
     expect(handle).not.toBeNull()
+  })
+
+  it('uses draggable containers without sortable transforms or a sorting context', () => {
+    renderSurface(true, 'container')
+
+    const first = screen.getByText('First').closest('[data-layout-element]') as HTMLElement
+    const second = screen.getByText('Second').closest('[data-layout-element]') as HTMLElement
+    const firstHandle = first.querySelector('[data-layout-drag-handle]') as HTMLElement
+
+    expect(first.dataset.layoutDragMode).toBe('container')
+    expect(second.dataset.layoutDragMode).toBe('container')
+    expect(first.dataset.layoutSortable).toBe('false')
+    expect(first.style.transform).toBe('')
+    expect(firstHandle.getAttribute('aria-roledescription')).toBe('draggable')
+  })
+
+  it('keeps the source and siblings static while a container drag is active', () => {
+    renderSurface(true, 'container')
+
+    const first = screen.getByText('First').closest('[data-layout-element]') as HTMLElement
+    const second = screen.getByText('Second').closest('[data-layout-element]') as HTMLElement
+    const handle = first.querySelector('[data-layout-drag-handle]') as HTMLElement
+
+    fireEvent.pointerDown(handle, { button: 0, isPrimary: true, pointerId: 1, clientX: 10, clientY: 10 })
+    fireEvent.pointerMove(document, { isPrimary: true, pointerId: 1, clientX: 30, clientY: 30 })
+
+    expect(first.dataset.layoutDragging).toBe('true')
+    expect(first.style.transform).toBe('')
+    expect(second.style.transform).toBe('')
+    expect(first.style.visibility).toBe('hidden')
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' })
+
+    expect(first.dataset.layoutDragging).toBe('false')
+    expect(first.style.visibility).toBe('')
   })
 
   it('resolves same-parent targets and limits cross-parent movement to groups', () => {

@@ -371,6 +371,7 @@ export const AppShell = React.memo(function AppShell({
         <LayoutSortableSurface
           className="contents"
           ids={['shell-sidebar', 'shell-main']}
+          dragMode="container"
           onLayoutChange={handleShellLayoutChange}
           renderOverlay={(element) => (
             <div className="rounded-lg border border-primary bg-card px-4 py-3 shadow-lg">

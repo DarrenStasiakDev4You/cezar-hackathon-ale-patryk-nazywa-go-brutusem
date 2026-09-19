@@ -1,9 +1,10 @@
 import * as React from 'react'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
 import { useLayoutRegistry } from '@/components/layout-registry'
-import { useLayoutSortableContext } from '@/components/layout-sortable-surface'
+import { useLayoutSortableContext, type LayoutDragMode } from '@/components/layout-sortable-surface'
 import type { LayoutElementKind } from '@/lib/layout-elements'
 
 export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
@@ -11,13 +12,18 @@ export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
   kind: LayoutElementKind
   parentId?: string
   as?: 'article' | 'div' | 'section'
+  /** Use a stable draggable/droppable node for full shell containers instead of sortable transforms. */
+  dragMode?: LayoutDragMode
 }
 
 /** Declares a dashboard widget/group and projects the declaration onto its DOM representative. */
-export function LayoutElement({ id, kind, parentId, as = 'div', children, ...props }: LayoutElementProps) {
+export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: requestedDragMode, children, ...props }: LayoutElementProps) {
   const registry = useLayoutRegistry()
-  const { enabled } = useLayoutSortableContext()
-  const sortable = useSortable({ id, disabled: !enabled })
+  const { enabled, dragMode: surfaceDragMode } = useLayoutSortableContext()
+  const dragMode = requestedDragMode ?? surfaceDragMode
+  const sortable = useSortable({ id, disabled: !enabled || dragMode !== 'sortable' })
+  const draggable = useDraggable({ id, disabled: !enabled || dragMode !== 'container' })
+  const droppable = useDroppable({ id, disabled: !enabled || dragMode !== 'container' })
   const removed = registry.isRemoved(id)
   const order = registry.get(id)?.order ?? -1
   const nodeRef = React.useRef<HTMLElement | null>(null)
@@ -25,7 +31,12 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
   const setNodeRef = React.useCallback((node: HTMLElement | null) => {
     nodeRef.current = node
     sortable.setNodeRef(node)
-  }, [sortable.setNodeRef])
+    draggable.setNodeRef(node)
+    droppable.setNodeRef(node)
+  }, [draggable.setNodeRef, droppable.setNodeRef, sortable.setNodeRef])
+
+  const interaction = dragMode === 'container' ? draggable : sortable
+  const isDragging = dragMode === 'container' ? draggable.isDragging : sortable.isDragging
 
   React.useEffect(() => {
     const unregister = registry.registerDeferred({ id, kind, ...(parentId === undefined ? {} : { parentId }) })
@@ -46,23 +57,25 @@ export function LayoutElement({ id, kind, parentId, as = 'div', children, ...pro
       style: {
         ...props.style,
         ...(order >= 0 ? { order } : {}),
-        ...(sortable.transform ? { transform: CSS.Transform.toString(sortable.transform) } : {}),
-        transition: sortable.transition,
+        ...(dragMode === 'sortable' && sortable.transform ? { transform: CSS.Transform.toString(sortable.transform) } : {}),
+        transition: dragMode === 'sortable' ? sortable.transition : undefined,
+        ...(dragMode === 'container' && draggable.isDragging ? { visibility: 'hidden' } : {}),
       },
       'data-layout-element': 'true',
       'data-layout-id': id,
       'data-layout-kind': kind,
-      'data-layout-sortable': enabled ? 'true' : 'false',
-      'data-layout-dragging': sortable.isDragging ? 'true' : 'false',
+      'data-layout-sortable': enabled && dragMode === 'sortable' ? 'true' : 'false',
+      'data-layout-drag-mode': dragMode,
+      'data-layout-dragging': isDragging ? 'true' : 'false',
       ...(parentId === undefined ? {} : { 'data-layout-parent-id': parentId }),
     },
     enabled ? (
       <button
         type="button"
         className="layout-drag-handle"
-        ref={sortable.setActivatorNodeRef}
-        {...sortable.attributes}
-        {...sortable.listeners}
+        ref={interaction.setActivatorNodeRef}
+        {...interaction.attributes}
+        {...interaction.listeners}
         aria-label={`Przenieś ${kind === 'group' ? 'grupę' : 'element'} ${id}`}
         data-layout-drag-handle="true"
         data-edit-mode-action="allow"

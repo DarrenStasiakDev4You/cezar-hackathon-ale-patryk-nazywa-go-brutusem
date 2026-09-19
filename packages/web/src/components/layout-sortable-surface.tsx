@@ -21,9 +21,16 @@ import type { LayoutElementDescriptor, LayoutMove, LayoutRegistry, RegisteredLay
 type LayoutSortableContextValue = {
   enabled: boolean
   activeId: string | null
+  dragMode: LayoutDragMode
 }
 
-const LayoutSortableContext = React.createContext<LayoutSortableContextValue>({ enabled: false, activeId: null })
+export type LayoutDragMode = 'sortable' | 'container'
+
+const LayoutSortableContext = React.createContext<LayoutSortableContextValue>({
+  enabled: false,
+  activeId: null,
+  dragMode: 'sortable',
+})
 
 export function useLayoutSortableContext(): LayoutSortableContextValue {
   return React.useContext(LayoutSortableContext)
@@ -35,6 +42,8 @@ export type LayoutSortableSurfaceProps = {
   className?: string
   /** Limit this surface to one layout container; useful when a page and the shell share a registry. */
   ids?: string[]
+  /** Container surfaces drag their shell as one stable block; ordinary surfaces reorder siblings. */
+  dragMode?: LayoutDragMode
   renderOverlay?: (element: RegisteredLayoutElement) => React.ReactNode
   onLayoutChange?: (snapshot: RegisteredLayoutElement[]) => void
 }
@@ -110,7 +119,15 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   }
 }
 
-export function LayoutSortableSurface({ children, enabled, className, ids, renderOverlay, onLayoutChange }: LayoutSortableSurfaceProps) {
+export function LayoutSortableSurface({
+  children,
+  enabled,
+  className,
+  ids,
+  dragMode = 'sortable',
+  renderOverlay,
+  onLayoutChange,
+}: LayoutSortableSurfaceProps) {
   const registry = useLayoutRegistry()
   const snapshot = useLayoutSnapshot()
   const detectedEditMode = useDetectedEditMode()
@@ -122,14 +139,22 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
   )
   const [activeId, setActiveId] = React.useState<string | null>(null)
   const [overId, setOverId] = React.useState<string | null>(null)
+  const [activeGeometry, setActiveGeometry] = React.useState<{
+    top: number
+    left: number
+    width: number
+    height: number
+  } | null>(null)
   const [liveMessage, setLiveMessage] = React.useState('')
   const activeElement = activeId ? registry.get(activeId) : undefined
 
   const handleDragStart = React.useCallback((event: DragStartEvent) => {
     const id = String(event.active.id)
     const element = registry.get(id)
+    const rect = event.active.rect.current.initial
     setActiveId(id)
     setOverId(null)
+    setActiveGeometry(rect ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height } : null)
     setLiveMessage(element ? `Podniesiono: ${elementLabel(element)}` : '')
   }, [registry])
 
@@ -176,12 +201,14 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
 
     setActiveId(null)
     setOverId(null)
+    setActiveGeometry(null)
     setLiveMessage(moved && source ? `Przeniesiono: ${elementLabel(source)}` : 'Przeciąganie anulowane')
   }, [onLayoutChange, overId, registry])
 
   const handleDragCancel = React.useCallback(() => {
     setActiveId(null)
     setOverId(null)
+    setActiveGeometry(null)
     setLiveMessage('Przeciąganie anulowane')
   }, [])
 
@@ -189,9 +216,55 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
     ? renderOverlay?.(activeElement) ?? <div className="layout-drag-overlay-label">{elementLabel(activeElement)}</div>
     : null
 
+  const dropIndicatorStyle = React.useMemo<React.CSSProperties | undefined>(() => {
+    if (!activeElement || !overId || activeElement.id === overId || overId.startsWith('layout-zone:')) return undefined
+    const target = registry.get(overId)
+    const rect = target?.domNode?.getBoundingClientRect()
+    const bounds = rect && (rect.width !== 0 || rect.height !== 0)
+      ? rect
+      : activeGeometry
+        ? {
+            top: activeGeometry.top,
+            left: activeGeometry.left,
+            right: activeGeometry.left + activeGeometry.width,
+            bottom: activeGeometry.top + activeGeometry.height,
+            width: activeGeometry.width,
+            height: activeGeometry.height,
+          }
+        : undefined
+    if (!bounds) return undefined
+
+    const siblings = registry.getSiblingIds(activeElement.parentId)
+    const sourceIndex = siblings.indexOf(activeElement.id)
+    const targetIndex = siblings.indexOf(overId)
+    const position = activeElement.parentId === target?.parentId && sourceIndex < targetIndex ? 'after' : 'before'
+
+    if (dragMode === 'container') {
+      return {
+        position: 'fixed',
+        top: bounds.top,
+        left: position === 'after' ? bounds.right - 1 : bounds.left - 1,
+        width: 3,
+        height: bounds.height,
+        margin: 0,
+        minHeight: 0,
+      }
+    }
+
+    return {
+      position: 'fixed',
+      top: position === 'after' ? bounds.bottom - 1 : bounds.top - 1,
+      left: bounds.left,
+      width: bounds.width,
+      height: 3,
+      margin: 0,
+      minHeight: 0,
+    }
+  }, [activeElement, activeGeometry, dragMode, overId, registry])
+
   if (!isEnabled) {
     return (
-      <LayoutSortableContext.Provider value={{ enabled: false, activeId: null }}>
+      <LayoutSortableContext.Provider value={{ enabled: false, activeId: null, dragMode }}>
         <div className={className} data-slot="layout-sortable-surface" data-edit-mode="false">
           {children}
         </div>
@@ -200,7 +273,7 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
   }
 
   return (
-    <LayoutSortableContext.Provider value={{ enabled: isEnabled, activeId }}>
+    <LayoutSortableContext.Provider value={{ enabled: isEnabled, activeId, dragMode }}>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -209,7 +282,27 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
         onDragEnd={isEnabled ? finishDrag : undefined}
         onDragCancel={isEnabled ? handleDragCancel : undefined}
       >
-        <SortableContext items={sortableSnapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
+        {dragMode === 'sortable' ? (
+          <SortableContext items={sortableSnapshot.map((element) => element.id)} strategy={rectSortingStrategy}>
+            <div
+              className={className}
+              data-slot="layout-sortable-surface"
+              data-edit-mode={isEnabled ? 'true' : 'false'}
+              data-layout-active-id={activeId ?? undefined}
+              data-layout-over-id={overId ?? undefined}
+            >
+              {children}
+              {activeId && overId && activeId !== overId ? (
+                <div
+                  aria-hidden="true"
+                  data-slot="layout-drop-indicator"
+                  data-layout-drop-target={overId}
+                  style={dropIndicatorStyle}
+                />
+              ) : null}
+            </div>
+          </SortableContext>
+        ) : (
           <div
             className={className}
             data-slot="layout-sortable-surface"
@@ -219,11 +312,21 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
           >
             {children}
             {activeId && overId && activeId !== overId ? (
-              <div aria-hidden="true" data-slot="layout-drop-indicator" data-layout-drop-target={overId} />
+              <div
+                aria-hidden="true"
+                data-slot="layout-drop-indicator"
+                data-layout-drop-target={overId}
+                style={dropIndicatorStyle}
+              />
             ) : null}
           </div>
-        </SortableContext>
-        <DragOverlay>{isEnabled ? overlay : null}</DragOverlay>
+        )}
+        <DragOverlay
+          dropAnimation={null}
+          style={activeGeometry ? { width: activeGeometry.width, height: activeGeometry.height } : undefined}
+        >
+          {isEnabled ? overlay : null}
+        </DragOverlay>
       </DndContext>
       <div aria-live="polite" className="sr-only" data-slot="layout-sortable-live-region">
         {liveMessage}
