@@ -131,6 +131,14 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
   scale `1` while anchored and `0.92` while detached. Escape/cancel clears the placeholder state.
 - Focused layout tests passed — 3 files, 92 tests; `npm run typecheck:web` passed.
 
+### Final continuation — 2026-09-19
+
+- Fixed the launcher fixture to use the versioned `/api/v1/health` endpoint; `npm run test:unit` now passes 36/36. — a5a5ee41
+- Fixed placeholder exit detection to use rectangle overlap in both axes and added vertical-exit regression coverage. — 407b6a93
+- Final configured gate passed in order: `npm run typecheck`, `npm test` (416 files, 7720 tests), `npm run test:unit` (36 tests), `npm run build` including `check:pack`, and `npm run test:package` (16 tests).
+- Authoritative review found no remaining blocker, major, minor, or nit finding after the fixes; GitHub cannot accept a formal self-review from the PR author.
+- Browser QA partially passed for normal/edit mode, accessible handles, pointer sidebar movement, and edit-mode exit. Seeded placeholder threshold/scaling, keyboard/touch/mobile, and browser deletion scenarios remain unexercised; no QA approval is claimed. Evidence is posted on PR #27.
+
 ## Risks
 
 - The handle must retain a minimum 44px target and not steal ordinary widget clicks or touch scrolling.
@@ -160,4 +168,4 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 ### Phase 3: verification and handoff
 
 - [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
-- [ ] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow.
+- [x] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow. — 407b6a93
