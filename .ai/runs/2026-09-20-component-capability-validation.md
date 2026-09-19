@@ -24,7 +24,7 @@ Non-goals: settings UI, stored preferences, HTTP routes, persisted data, or chan
 - [x] 1.1 Add `missingCapabilities` and `customCapabilities` to compatibility results, update TSDoc/README, and add compatibility regression tests. — 87709910
 - [x] 1.2 Record capability lists on registry registrations, preserve unknown-contract behavior, and add registry regression tests. — 98ac183e
 - [x] 1.3 Add `listComponentChoices` with resolver agreement, deterministic grouping, and focused choices tests. — 5db468d1
-- [ ] 1.4 Add extension-host Definition of Done coverage and update the extension API README and `AGENTS.md` guidance.
+- [x] 1.4 Add extension-host Definition of Done coverage and update the extension API README and `AGENTS.md` guidance. — 38279c6a
 
 ## Progress
 
