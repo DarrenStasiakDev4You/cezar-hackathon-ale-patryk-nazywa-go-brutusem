@@ -107,6 +107,19 @@ export function ReferenceStatusProvider({
   requests: readonly ReferenceStatusRequest[]
   children: ReactNode
 }) {
+  const lookup = useReferenceLookup(requests)
+  const value = useMemo(() => ({ lookup, projectId }), [lookup, projectId])
+  return <ReferenceStatusContext.Provider value={value}>{children}</ReferenceStatusContext.Provider>
+}
+
+/**
+ * One surface's look-up, without a provider: registers `requests` with the root registry (or,
+ * with none above, fetches them itself) and answers for them. `ReferenceStatusProvider` is this
+ * plus a context for the chips below it. The task header's model calls it directly, because it
+ * hands each reference's answer to its part as props rather than letting a chip ask a context
+ * (spec `2026-09-19-task-header-contract`).
+ */
+export function useReferenceLookup(requests: readonly ReferenceStatusRequest[]): ReferenceStatusLookup {
   const registry = useContext(ReferenceStatusRegistryContext)
   const id = useId()
   // The CONTENT is what the registry needs, and it is rebuilt every render — so the effect keys
@@ -130,9 +143,7 @@ export function ReferenceStatusProvider({
   // Only when there is no registry above us. Called unconditionally with an empty list otherwise:
   // hooks cannot be skipped, and an empty list fetches nothing.
   const own = useReferenceStatuses(registry ? EMPTY_REQUESTS : requests)
-  const lookup = registry?.lookup ?? own
-  const value = useMemo(() => ({ lookup, projectId }), [lookup, projectId])
-  return <ReferenceStatusContext.Provider value={value}>{children}</ReferenceStatusContext.Provider>
+  return registry?.lookup ?? own
 }
 
 /** Stable identity, so the fallback hook's signature does not churn. */
