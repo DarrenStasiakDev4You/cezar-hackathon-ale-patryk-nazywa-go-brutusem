@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from './api/query-client'
+import { CommandsProvider } from './commands/provider'
 import { queryKeys, workspaceQueryKeys } from './api/queries'
 import type { ProjectsResponse, WorkspaceUiState } from '@open-mercato/cezar-api-client'
 import { AppearanceProvider } from './components/appearance-provider'
@@ -129,16 +130,18 @@ function renderAt(
   }
   render(
     <QueryClientProvider client={client}>
-      <ThemeProvider>
-        <AppearanceProvider>
-          <MemoryRouter initialEntries={[entry]}>
-            <ListViewProvider>
-              <AppRoutes />
-              <LocationProbe />
-            </ListViewProvider>
-          </MemoryRouter>
-        </AppearanceProvider>
-      </ThemeProvider>
+      <CommandsProvider>
+        <ThemeProvider>
+          <AppearanceProvider>
+            <MemoryRouter initialEntries={[entry]}>
+              <ListViewProvider>
+                <AppRoutes />
+                <LocationProbe />
+              </ListViewProvider>
+            </MemoryRouter>
+          </AppearanceProvider>
+        </ThemeProvider>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
   return client
@@ -299,16 +302,18 @@ describe('scoped route map (/p/:projectId)', () => {
     client.setQueryData(workspaceQueryKeys.projects, REGISTRY)
     render(
       <QueryClientProvider client={client}>
-        <ThemeProvider>
-          <AppearanceProvider>
-            <MemoryRouter initialEntries={[`/p/${BOOT}/`]}>
-              <ListViewProvider>
-                <AppRoutes />
-                <ProjectNavigationProbe />
-              </ListViewProvider>
-            </MemoryRouter>
-          </AppearanceProvider>
-        </ThemeProvider>
+        <CommandsProvider>
+          <ThemeProvider>
+            <AppearanceProvider>
+              <MemoryRouter initialEntries={[`/p/${BOOT}/`]}>
+                <ListViewProvider>
+                  <AppRoutes />
+                  <ProjectNavigationProbe />
+                </ListViewProvider>
+              </MemoryRouter>
+            </AppearanceProvider>
+          </ThemeProvider>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
 
@@ -671,16 +676,18 @@ describe('the /p/default alias', () => {
     client.setQueryData(queryKeys.health, HEALTH)
     render(
       <QueryClientProvider client={client}>
-        <ThemeProvider>
-          <AppearanceProvider>
-            <MemoryRouter initialEntries={['/p/default/tasks/x']}>
-              <ListViewProvider>
-                <AppRoutes />
-                <LocationProbe />
-              </ListViewProvider>
-            </MemoryRouter>
-          </AppearanceProvider>
-        </ThemeProvider>
+        <CommandsProvider>
+          <ThemeProvider>
+            <AppearanceProvider>
+              <MemoryRouter initialEntries={['/p/default/tasks/x']}>
+                <ListViewProvider>
+                  <AppRoutes />
+                  <LocationProbe />
+                </ListViewProvider>
+              </MemoryRouter>
+            </AppearanceProvider>
+          </ThemeProvider>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
     // The client retries a 5xx once with ~1 s of backoff before erroring — give it room.

@@ -20,7 +20,7 @@ import {
 import { Fragment, memo, useEffect, useId, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from '@/lib/project-router'
 
-import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunIn, openRunInCli } from '@/api/client'
+import { ApiError, deleteRun, openRunIn, openRunInCli } from '@/api/client'
 import {
   queryKeys,
   useAgentProfiles,
@@ -37,6 +37,8 @@ import {
   useRuns,
 } from '@/api/queries'
 import { DEFAULT_AGENT_ACCOUNT_ID, type ApiRun, type OpenTarget } from '@open-mercato/cezar-api-client'
+import { TaskArchive, TaskContinue, TaskStop } from '@open-mercato/cezar-extension-api'
+import { useCommand } from '@/commands/provider'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { TitleEditInput, useTitleEditor, type TitleEditor } from '@/components/editable-title'
 import { Pill } from '@/components/pill'
@@ -459,35 +461,43 @@ function useRunActions(run: ApiRun, onMarkedUnread?: () => void) {
   const [confirming, setConfirming] = useState<'cancel' | 'delete' | null>(null)
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
+  const showError = (error: Error) => toast(error.message, { tone: 'danger' })
   const onError = (error: Error) => {
     // Every 409 here says the same thing: the record these buttons were drawn from is not the run
     // the server has (Continue on a run that is running again, Cancel on one that just finished).
     // Refetch it, so the bar redraws to the truth instead of offering the same refused action —
     // the composer's rule (deliver-prompt.ts) and the thread's healer (run-reconcile.ts), applied
-    // to the actions. `useSendMessage` in queries.ts has always done exactly this.
+    // to the actions. `useSendMessage` in queries.ts has always done exactly this. The task
+    // commands below apply the same rule in their handlers (commands/core-commands.ts).
     if (error instanceof ApiError && error.status === 409) void invalidate()
-    toast(error.message, { tone: 'danger' })
+    showError(error)
   }
 
   // Shared with the review panel's ✓ Accept (use-finish-run.ts) — the review-accept semantics
   // must be ONE implementation, not two buttons that happen to agree today.
   const finish = useFinishRun(run.id)
   const continuation = useContinuationProvider(run)
-  const continueMutation = useMutation({
-    mutationFn: async () => {
-      if (!continuation.canContinue) return null
-      return continueRun(run.id, { runner: continuation.runnerOverride })
+  // Continue, Archive and Cancel are commands (spec 2026-09-19-command-api): the handler owns the
+  // request and the cache rule, the 409 refetch included, so what stays here is presentation —
+  // pending state, the confirmation dialog, the toast with the server's words.
+  const continueCommand = useCommand(TaskContinue, { onError: showError })
+  const continueRun = {
+    isPending: continueCommand.isPending,
+    mutate: () => {
+      // No usable agent provider: send nothing, even for a click the disabled button let through.
+      if (!continuation.canContinue) return
+      const { runnerOverride } = continuation
+      continueCommand.mutate(
+        runnerOverride === undefined ? { taskId: run.id } : { taskId: run.id, runner: runnerOverride },
+      )
     },
-    onSuccess: (result) => {
-      if (result !== null) invalidate()
-    },
-    onError,
-  })
-  const archive = useMutation({
-    mutationFn: () => archiveRun(run.id, !run.archived),
-    onSuccess: invalidate,
-    onError,
-  })
+  }
+  const archiveCommand = useCommand(TaskArchive, { onError: showError })
+  const archive = {
+    isPending: archiveCommand.isPending,
+    // Toggling off the record: an archived run is restored.
+    mutate: () => archiveCommand.mutate({ taskId: run.id, archived: !run.archived }),
+  }
   // Pin/unpin (#935) — the shared hook rather than a local mutation, because the sidebar and the
   // Tasks table drive the same action and the cache rule belongs in one place. Toggling off the
   // record, exactly like archive above.
@@ -510,7 +520,11 @@ function useRunActions(run: ApiRun, onMarkedUnread?: () => void) {
       markUnreadMutation.mutate(run.id, { onError })
     },
   }
-  const cancel = useMutation({ mutationFn: () => cancelRun(run.id), onSuccess: invalidate, onError })
+  const cancelCommand = useCommand(TaskStop, { onError: showError })
+  const cancel = {
+    isPending: cancelCommand.isPending,
+    mutate: () => cancelCommand.mutate({ taskId: run.id }),
+  }
   const deleteMutation = useMutation({
     mutationFn: () => deleteRun(run.id),
     onSuccess: () => {
@@ -536,7 +550,7 @@ function useRunActions(run: ApiRun, onMarkedUnread?: () => void) {
   return {
     finish,
     continuation,
-    continueRun: continueMutation,
+    continueRun,
     archive,
     pin,
     markUnread,

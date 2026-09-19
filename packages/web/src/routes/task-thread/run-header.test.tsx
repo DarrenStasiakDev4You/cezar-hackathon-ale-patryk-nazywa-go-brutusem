@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -5,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
@@ -105,23 +110,25 @@ function renderHeader(
 ) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
-        <Routes>
-          <Route
-            path="/tasks/:id"
-            element={
-              <RunHeader
-                run={record}
-                onMarkedUnread={onMarkedUnread}
-                planTally={planTally}
-                continuationEngine={continuationEngine}
-              />
-            }
-          />
-          <Route path="/" element={<div data-slot="home-probe" />} />
-        </Routes>
-        <Toaster />
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
+          <Routes>
+            <Route
+              path="/tasks/:id"
+              element={
+                <RunHeader
+                  run={record}
+                  onMarkedUnread={onMarkedUnread}
+                  planTally={planTally}
+                  continuationEngine={continuationEngine}
+                />
+              }
+            />
+            <Route path="/" element={<div data-slot="home-probe" />} />
+          </Routes>
+          <Toaster />
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }
@@ -406,6 +413,24 @@ describe('Mark unread (#775)', () => {
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Run actions' }))
     const menu = within(await screen.findByRole('menu'))
     expect(menu.getByRole('menuitem', { name: 'Mark unread' })).not.toBeNull()
+  })
+})
+
+describe('actions run through commands (spec 2026-09-19-command-api)', () => {
+  it('Continue, Cancel and Archive no longer reach for the API client', () => {
+    const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'run-header.tsx'), 'utf8')
+    // Every import of the client, however many statements there are.
+    const names = [...source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'@\/api\/client'/g)]
+      .flatMap((match) => (match[1] ?? '').split(','))
+      .map((name) => name.replace(/^type\s+/, '').split(/\s+as\s+/)[0]?.trim())
+
+    // A namespace or default import would hide the names from the check above.
+    expect(source).not.toMatch(/import\s+(?:\*\s*as\s+)?\w+\s*(?:,\s*\{[^}]*\})?\s*from\s*'@\/api\/client'/)
+    expect(names).toContain('deleteRun')
+    expect(names).not.toContain('continueRun')
+    expect(names).not.toContain('cancelRun')
+    expect(names).not.toContain('archiveRun')
+    expect(source).toContain("from '@/commands/provider'")
   })
 })
 
@@ -940,14 +965,16 @@ describe('meta line, tabs, pill and resume hint', () => {
     stubFetch()
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter initialEntries={['/tasks/r1']}>
-          <Routes>
-            <Route
-              path="/tasks/:id"
-              element={<RunHeader run={run('running')} planTally={{ done: 2, total: 5 }} />}
-            />
-          </Routes>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter initialEntries={['/tasks/r1']}>
+            <Routes>
+              <Route
+                path="/tasks/:id"
+                element={<RunHeader run={run('running')} planTally={{ done: 2, total: 5 }} />}
+              />
+            </Routes>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
 

@@ -15,6 +15,9 @@ describe('@open-mercato/cezar-extension-api surface', () => {
   it('exports exactly these runtime names', () => {
     expect(Object.keys(api).sort()).toEqual([
       'ExtensionDefinitionError',
+      'TaskArchive',
+      'TaskContinue',
+      'TaskStop',
       'defineCommand',
       'defineComponentContract',
       'defineEvent',

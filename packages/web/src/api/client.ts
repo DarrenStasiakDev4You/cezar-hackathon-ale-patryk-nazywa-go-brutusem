@@ -1131,6 +1131,16 @@ export async function cancelRun(id: string): Promise<CancelResponse> {
   )
 }
 
+/** The same cancel by EXPLICIT project — see `archiveProjectRun`. */
+export async function cancelProjectRun(projectId: string, id: string): Promise<CancelResponse> {
+  return unwrap(
+    await cez.api.v1.p[':projectId'].runs[':id'].cancel.$post({
+      param: { projectId, id: encodeURIComponent(id) },
+    }),
+    runPath(id, '/cancel'),
+  )
+}
+
 /** Archives by default; pass `false` to bring a run back into the live list. */
 export async function archiveRun(id: string, archived = true): Promise<RunRecord> {
   return unwrap(
