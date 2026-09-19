@@ -47,6 +47,13 @@ function throwingGetter<T extends object>(target: T, key: string): T {
   })
 }
 
+/** An array whose `length` claims `length` entries — the proxy a hostile extension could pass. */
+function lyingLength(length: number): string[] {
+  return new Proxy<string[]>([], {
+    get: (target, key, receiver) => (key === 'length' ? length : (Reflect.get(target, key, receiver) as unknown)),
+  })
+}
+
 function revoked(): object {
   const { proxy, revoke } = Proxy.revocable({}, {})
   revoke()
@@ -267,6 +274,26 @@ describe('checkComponentCompatibility — hostile input', () => {
       ['implementation.capabilities'],
     ],
     ['every argument is malformed', () => check(null, null, null), ['contract', 'implementation', 'implemented']],
+    [
+      'a list reports only its first bad element',
+      () => check(Composer, { ...good, capabilities: ['restores-draft', 1, 2] }),
+      ['implementation.capabilities[1]'],
+    ],
+    [
+      'a sparse list claims 2³²−1 entries',
+      () => check(Composer, { ...good, capabilities: new Array<string>(2 ** 32 - 1) }),
+      ['implementation.capabilities'],
+    ],
+    [
+      'a proxy lies that its list holds 1e12 entries',
+      () => check({ ...Composer, requiredCapabilities: lyingLength(1e12) }, good),
+      ['contract.requiredCapabilities'],
+    ],
+    [
+      'a list holds 257 names',
+      () => check(Composer, { ...good, capabilities: Array.from({ length: 257 }, (_, index) => `c${index}`) }),
+      ['implementation.capabilities'],
+    ],
   ])('returns malformed, never throwing, when %s', (_, run, paths) => {
     let outcome: ComponentCompatibility | undefined
     expect(() => {
@@ -276,6 +303,15 @@ describe('checkComponentCompatibility — hostile input', () => {
     expect(outcome?.capabilities).toEqual([])
     expect(outcome?.issues.map((issue) => issue.code)).toEqual(paths.map(() => 'malformed'))
     expect(outcome?.issues.map((issue) => (issue.code === 'malformed' ? issue.path : ''))).toEqual(paths)
+  })
+
+  it('reads a list of 256 names', () => {
+    const names = Array.from({ length: 256 }, (_, index) => `c${index}`)
+    const outcome = check(Composer, { ...good, capabilities: ['restores-draft', 'submits.on-enter', ...names.slice(2)] })
+    expect(outcome.compatible).toBe(true)
+    expect(check(Composer, { ...good, capabilities: [...names, 'x'] }).issues[0]?.message).toBe(
+      'implementation.capabilities must hold at most 256 names',
+    )
   })
 
   it('names the field and the rule in a malformed message', () => {
@@ -426,6 +462,13 @@ describe('checkComponentCompatibility — types', () => {
       }
       checkComponentCompatibility(Composer, withoutCapabilities, structural)
       checkComponentCompatibility(Composer, implementation())
+      // A full implementation written inline: its title and component are not excess properties.
+      checkComponentCompatibility(Composer, {
+        id: 'acme.zen.composer',
+        title: 'Zen',
+        capabilities: ['restores-draft'],
+        component: () => null,
+      })
       // @ts-expect-error — the implementation's id is required
       checkComponentCompatibility(Composer, { capabilities: ['restores-draft'] })
       // @ts-expect-error — capabilities are a list of names

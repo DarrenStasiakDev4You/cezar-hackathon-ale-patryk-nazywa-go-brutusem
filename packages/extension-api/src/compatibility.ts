@@ -27,6 +27,7 @@ export type ComponentCompatibilityIssue =
   | { readonly code: 'missing-capability'; readonly message: string; readonly capability: ComponentCapability }
   | { readonly code: 'malformed'; readonly message: string; readonly path: string }
 
+/** The outcome of {@link checkComponentCompatibility}. Frozen. */
 export interface ComponentCompatibility {
   /** `true` exactly when `issues` is empty. */
   readonly compatible: boolean
@@ -50,23 +51,29 @@ export interface ComponentCompatibility {
  * 4. each required capability the implementation does not declare is one `missing-capability`.
  *
  * A missing capability list, on either side, counts as `[]`. Declared names that are neither
- * required nor optional are ignored.
+ * required nor optional are ignored. A capability list is read up to 256 names: a longer one (or a
+ * `length` that lies) is `malformed` rather than walked, and each list reports at most one
+ * `malformed` issue.
  *
  * @param contract       the contract as the checker knows it (a host passes its own token)
- * @param implementation its `id` and `capabilities` — a `ComponentImplementation` fits
+ * @param implementation its `id` and `capabilities` — a `ComponentImplementation` fits, written
+ *                       inline too: the parameter is generic only so that its other fields
+ *                       (`title`, `component`) are not rejected as excess properties
  * @param implemented    the token the implementation was compiled against. Defaults to
  *                       `contract`, which suits an author checking their own implementation's
  *                       capabilities. A host MUST pass the token `provide` received: without it,
  *                       the id and version rules cannot fire.
  */
-export function checkComponentCompatibility(
+export function checkComponentCompatibility<
+  Implementation extends { readonly id: ContributionId; readonly capabilities?: readonly ComponentCapability[] },
+>(
   contract: {
     readonly id: ContributionId
     readonly version: number
     readonly requiredCapabilities?: readonly ComponentCapability[]
     readonly optionalCapabilities?: readonly ComponentCapability[]
   },
-  implementation: { readonly id: ContributionId; readonly capabilities?: readonly ComponentCapability[] },
+  implementation: Implementation,
   implemented?: { readonly id: ContributionId; readonly version: number },
 ): ComponentCompatibility {
   const issues: ComponentCompatibilityIssue[] = []
@@ -160,6 +167,10 @@ function result(
   })
 }
 
+/** The most names a capability list may hold before the check stops reading it: far above the 32
+ *  a contract may declare, so only a hostile or broken list reaches it. */
+const MAX_LIST_LENGTH = 256
+
 /** A field's owner and the dotted path it is reported under. */
 interface Fields {
   readonly source: object
@@ -170,7 +181,8 @@ interface FieldReader {
   object(value: unknown, path: string): Fields | undefined
   string(fields: Fields, key: string): string | undefined
   version(fields: Fields, key: string): number | undefined
-  /** A capability list: absent is `[]`; otherwise an array whose every element is a string. */
+  /** A capability list: absent is `[]`; otherwise an array of at most {@link MAX_LIST_LENGTH}
+   *  strings. Reading stops at the first bad element, so a list yields at most one issue. */
   names(fields: Fields, key: string): ComponentCapability[] | undefined
 }
 
@@ -233,22 +245,17 @@ function fieldReader(issues: ComponentCompatibilityIssue[]): FieldReader {
       if (typeof length !== 'number' || !Number.isInteger(length) || length < 0) {
         return malformed(path, 'must be an array of strings')
       }
+      if (length > MAX_LIST_LENGTH) return malformed(path, `must hold at most ${MAX_LIST_LENGTH} names`)
 
       const names: ComponentCapability[] = []
-      let readable = true
       for (let index = 0; index < length; index += 1) {
         const elementPath = `${path}[${index}]`
         const element = field(list as object, String(index), elementPath)
-        if (element === undefined) {
-          readable = false
-        } else if (typeof element.value === 'string') {
-          names.push(element.value)
-        } else {
-          readable = false
-          malformed(elementPath, 'must be a string')
-        }
+        if (element === undefined) return undefined
+        if (typeof element.value !== 'string') return malformed(elementPath, 'must be a string')
+        names.push(element.value)
       }
-      return readable ? names : undefined
+      return names
     },
   }
 }
