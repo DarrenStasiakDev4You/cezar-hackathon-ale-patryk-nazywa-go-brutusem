@@ -18,6 +18,7 @@ import { registerCoreCommands } from '../commands/core-commands'
 import { createCommandRegistry } from '../commands/registry'
 import { CORE_COMPONENT_CONTRACTS } from '../component-registry/core-contracts'
 import { createComponentRegistry, type CockpitComponentRegistry } from '../component-registry/registry'
+import { resolveComponent, type ComponentResolution } from '../component-registry/resolve'
 import { createEventBus, type EventErrorReport } from '../events/bus'
 import { BUILTIN_EXTENSIONS } from './builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost, unavailableServices } from './host'
@@ -483,6 +484,141 @@ describe('the components service', () => {
     })
     expect(components.listUsable(TaskHeader)).toEqual([])
     expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  describe('resolving which implementation renders', () => {
+    const DEFAULT = 'cezar.fixture.task-header.default'
+    const JIRA = 'acme.jira.task-header'
+    const COMPACT = 'acme.compact.task-header'
+
+    const TaskHeaderV2 = defineComponentContract<TaskHeaderProps>('cezar.fixture.task-header', {
+      version: 2,
+      requiredCapabilities: ['shows-title'],
+    })
+
+    /** A resolution by ids, comparable across two boots whose registrations are different objects. */
+    const byId = (resolution: ComponentResolution<TaskHeaderProps>) =>
+      resolution.status === 'unresolved'
+        ? resolution
+        : {
+            component: resolution.component.componentId,
+            fallback: resolution.fallback.componentId,
+            source: resolution.source,
+            rejected: resolution.source === 'default' ? resolution.rejected : undefined,
+          }
+
+    it('DoD, the brief’s example: the chosen extension renders, and core’s default renders with no choice', async () => {
+      const { components, ready } = bootServingHeader([
+        provider('acme.jira', 'Jira header'),
+        provider('acme.compact', 'Compact header'),
+      ])
+
+      await ready
+
+      expect(resolveComponent(components, TaskHeader, JIRA)).toEqual({
+        status: 'resolved',
+        component: components.get(JIRA),
+        fallback: components.get(DEFAULT),
+        source: 'preference',
+      })
+      expect(resolveComponent(components, TaskHeader)).toEqual({
+        status: 'resolved',
+        component: components.get(DEFAULT),
+        fallback: components.get(DEFAULT),
+        source: 'default',
+      })
+    })
+
+    it('DoD, removing an extension: the same call falls back to core’s default, never unresolved', async () => {
+      const { registry, components, ready } = bootServingHeader([
+        provider('acme.jira', 'Jira header'),
+        provider('acme.compact', 'Compact header'),
+      ])
+      await ready
+      const before = resolveComponent(components, TaskHeader, JIRA)
+
+      await registry.deactivate('acme.jira')
+      const after = resolveComponent(components, TaskHeader, JIRA)
+
+      expect(after).toEqual({
+        status: 'resolved',
+        component: components.get(DEFAULT),
+        fallback: components.get(DEFAULT),
+        source: 'default',
+        rejected: { reason: 'not-found', componentId: JIRA },
+      })
+      if (before.status !== 'resolved' || after.status !== 'resolved') throw new Error('expected resolved results')
+      expect(before.component.componentId).toBe(JIRA)
+      expect(after.fallback).toBe(before.fallback)
+    })
+
+    it('DoD, an incompatible implementation is not used: acme.jira built for @2 is set aside', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { registry, components, ready } = bootServingHeader([
+        fixture('acme.jira', {
+          activate(context) {
+            context.components.provide(TaskHeaderV2, header(JIRA, 'Jira header'))
+          },
+        }),
+      ])
+
+      await ready
+
+      expect(registry.get('acme.jira')?.status).toBe('active')
+      expect(resolveComponent(components, TaskHeader, JIRA)).toMatchObject({
+        status: 'resolved',
+        component: components.get(DEFAULT),
+        source: 'default',
+        rejected: {
+          reason: 'incompatible',
+          componentId: JIRA,
+          issues: [{ code: 'contract-version-mismatch', expected: 1, actual: 2 }],
+        },
+      })
+    })
+
+    it('sets aside an extension whose activate threw after it provided, and keeps the others choosable', async () => {
+      const { registry, components, ready } = bootServingHeader([
+        fixture('acme.jira', {
+          activate(context) {
+            context.components.provide(TaskHeader, header(JIRA, 'Jira header'))
+            throw new Error('jira broke')
+          },
+        }),
+        provider('acme.compact', 'Compact header'),
+      ])
+
+      await ready
+
+      expect(registry.get('acme.jira')?.status).toBe('failed')
+      expect(registry.get('acme.compact')?.status).toBe('active')
+      expect(resolveComponent(components, TaskHeader, JIRA)).toMatchObject({
+        component: components.get(DEFAULT),
+        source: 'default',
+        rejected: { reason: 'not-found', componentId: JIRA },
+      })
+      expect(resolveComponent(components, TaskHeader, COMPACT)).toMatchObject({
+        component: components.get(COMPACT),
+        source: 'preference',
+      })
+    })
+
+    it('resolves the same way whichever order the extensions activated in', async () => {
+      const boot = async (extensions: readonly Extension[]) => {
+        const { components, ready } = bootServingHeader(extensions)
+        await ready
+        return components
+      }
+      const forward = await boot([provider('acme.jira', 'Jira header'), provider('acme.compact', 'Compact header')])
+      const backward = await boot([provider('acme.compact', 'Compact header'), provider('acme.jira', 'Jira header')])
+
+      expect(provenance(backward)).not.toEqual(provenance(forward))
+      for (const preference of [undefined, JIRA, COMPACT, DEFAULT, 'acme.gone.task-header']) {
+        expect(byId(resolveComponent(backward, TaskHeader, preference))).toEqual(
+          byId(resolveComponent(forward, TaskHeader, preference)),
+        )
+      }
+    })
   })
 })
 
