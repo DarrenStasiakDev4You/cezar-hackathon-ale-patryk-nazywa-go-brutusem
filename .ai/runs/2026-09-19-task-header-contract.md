@@ -105,9 +105,9 @@ and tracked by its own plan. Both are separate PRs by the spec's own decision, n
 
 ### Phase 1: The slot, with the complete model
 
-- [ ] 1.1 The contract
-- [ ] 1.2 The adapter
-- [ ] 1.3 Core's default on props only
+- [x] 1.1 The contract — 52ac8beb
+- [x] 1.2 The adapter — 344dd43a
+- [x] 1.3 Core's default on props only — 3d8541b6
 - [ ] 1.4 Core's default registered, and the registry provided
 - [ ] 1.5 The split
 - [ ] 1.6 AGENTS.md
