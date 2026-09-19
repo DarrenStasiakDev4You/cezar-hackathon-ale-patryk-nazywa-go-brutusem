@@ -30,6 +30,7 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 - [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
 - [ ] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow.
+- [x] Post-review regression coverage: prove moving a group preserves its children and their parent links. — 4b77649e
 
 ## Validation notes
 
@@ -51,6 +52,16 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - `npm run test:package`: 1 passed, 4 existing CLI/release tests failed.
 - Browser QA: partial evidence captured from the PR build. Edit mode rendered accessible drag handles and normal mode rendered none; a seeded populated layout was unavailable, so pointer/keyboard reorder, cancellation, cross-parent rejection, and mobile behavior remain unexercised. Evidence is posted on PR #27.
 - Authoritative review: changes requested because the configured full validation gate is not green; no additional code finding was identified.
+
+### Continuation attempt — 2026-09-19 (resume)
+
+- Focused layout regression tests: passed — 3 files, 16 tests.
+- `npm run typecheck`: passed.
+- `npm test`: stopped after 30 seconds with the established unrelated server/workspace failures and timeouts.
+- `npm run test:unit`: failed in the existing `skills-remote.test.ts` and `test-env-launcher.test.ts` cases.
+- `npm run build`: server/web builds passed; `check:pack` failed because the environment denies child Node `spawnSync` with `EPERM`.
+- `npm run test:package`: 1 passed, 4 existing CLI/release tests failed.
+- Browser QA and authoritative review remain the outstanding 3.2 handoff because the seeded interaction matrix is still unavailable and the full gate remains non-green.
 
 ## Risks
 
