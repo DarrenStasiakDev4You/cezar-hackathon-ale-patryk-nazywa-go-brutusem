@@ -7,9 +7,11 @@ import {
   isExtensionError,
   type Commands,
   type CommandToken,
+  type Disposable,
   type Events,
   type EventToken,
 } from '../src/index.ts'
+import { createFakeContext } from './fake-context.ts'
 
 interface Pay {
   amount: number
@@ -142,6 +144,29 @@ describe('types', () => {
     expectTypeOf(unused).toBeFunction()
   })
 
+  it('subscribes with on and once, and unsubscribes with off, with the token\'s listener type', () => {
+    const Refreshed = defineEvent('acme.tasks.refreshed')
+    const Paid = defineEvent<Pay>('acme.pay.paid')
+    const unused = (events: Events): void => {
+      expectTypeOf(events.on(Paid, () => {})).toEqualTypeOf<Disposable>()
+      expectTypeOf(events.once(Paid, () => {})).toEqualTypeOf<Disposable>()
+      events.once(Paid, (payload) => expectTypeOf(payload).toEqualTypeOf<Pay>())
+      events.once(Refreshed, (payload) => expectTypeOf(payload).toEqualTypeOf<void>())
+      const onPaid = (payload: Pay): void => void payload.amount
+      events.on(Paid, onPaid)
+      expectTypeOf(events.off(Paid, onPaid)).toEqualTypeOf<void>()
+      // @ts-expect-error — a listener with the wrong payload type
+      events.on(Paid, (payload: { amount: string }) => payload.amount)
+      // @ts-expect-error — nor with once
+      events.once(Paid, (payload: number) => payload)
+      // @ts-expect-error — off takes the token's listener type too
+      events.off(Paid, (payload: number) => payload)
+      // @ts-expect-error — off needs the listener to remove
+      events.off(Paid)
+    }
+    expectTypeOf(unused).toBeFunction()
+  })
+
   it('keeps tokens of different types distinct', () => {
     expectTypeOf<EventToken<Pay>>().not.toExtend<EventToken<number>>()
     expectTypeOf<EventToken<number>>().not.toExtend<EventToken<Pay>>()
@@ -160,5 +185,31 @@ describe('types', () => {
     const command: CommandToken<[name: string], string> = { kind: 'command', id: 'acme.hello.say-hello' }
     expect(token.id).toBe(defineEvent<Pay>('acme.pay.paid').id)
     expect(command.kind).toBe('command')
+  })
+})
+
+describe('the recording fake', () => {
+  it('records on and once listeners by id, and off removes every subscription of that listener', () => {
+    const Paid = defineEvent<Pay>('acme.pay.paid')
+    const fake = createFakeContext({ id: 'acme.pay', name: 'Pay', version: '1.0.0', engines: { cezar: '^0.11.0' } })
+    const first = (): void => {}
+    const second = (): void => {}
+
+    fake.context.events.on(Paid, first)
+    fake.context.events.once(Paid, first)
+    fake.context.events.on(Paid, second)
+
+    expect(fake.listeners.get('acme.pay.paid')?.map((recorded) => [recorded.listener, recorded.once])).toEqual([
+      [first, false],
+      [first, true],
+      [second, false],
+    ])
+
+    fake.context.events.off(Paid, first)
+    expect(fake.listeners.get('acme.pay.paid')?.map((recorded) => recorded.listener)).toEqual([second])
+
+    fake.context.events.off(Paid, second)
+    fake.context.events.off(Paid, second)
+    expect(fake.listeners.has('acme.pay.paid')).toBe(false)
   })
 })

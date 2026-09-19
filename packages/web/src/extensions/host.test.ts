@@ -139,7 +139,14 @@ describe('unavailableServices', () => {
     await ready
     const live = context as ExtensionContext
 
-    expect(() => live.events.on(pingEvent, () => {})).toThrow('context.events is not available in this Cezar version yet')
+    for (const call of [
+      () => live.events.on(pingEvent, () => {}),
+      () => live.events.once(pingEvent, () => {}),
+      () => live.events.off(pingEvent, () => {}),
+      () => live.events.emit(pingEvent),
+    ]) {
+      expect(call).toThrow('context.events is not available in this Cezar version yet')
+    }
     await expect(live.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
 
     await registry.deactivate('acme.alpha')
@@ -156,6 +163,8 @@ describe('unavailableServices', () => {
       () => live.commands.register(pingCommand('acme.alpha'), () => {}),
       () => live.commands.has(pingCommand('acme.alpha')),
       () => live.events.on(pingEvent, () => {}),
+      () => live.events.once(pingEvent, () => {}),
+      () => live.events.off(pingEvent, () => {}),
       () => live.events.emit(pingEvent),
       () => live.components.provide(listContract, { id: 'acme.alpha.list', title: 'List', component: () => null }),
     ]) {

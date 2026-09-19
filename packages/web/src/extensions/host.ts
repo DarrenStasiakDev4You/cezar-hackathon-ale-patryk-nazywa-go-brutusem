@@ -29,7 +29,7 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
   }
   return {
     commands: { register: fails('commands'), execute: rejects('commands'), has: fails('commands') },
-    events: { on: fails('events'), emit: fails('events') },
+    events: { on: fails('events'), once: fails('events'), off: fails('events'), emit: fails('events') },
     storage: {
       get: rejects('storage'),
       set: rejects('storage'),

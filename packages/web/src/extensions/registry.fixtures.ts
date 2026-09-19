@@ -66,7 +66,12 @@ export function recordingServices(log: string[] = []): RecordingServices {
           return false
         },
       },
-      events: { on: (event) => register(`listener ${event.id}`), emit: () => scope.assertLive() },
+      events: {
+        on: (event) => register(`listener ${event.id}`),
+        once: (event) => register(`listener ${event.id}`),
+        off: () => scope.assertLive(),
+        emit: () => scope.assertLive(),
+      },
       storage: { get: live, set: live, delete: live, keys: live },
       components: { provide: (_contract, implementation) => register(`component ${implementation.id}`) },
     }
