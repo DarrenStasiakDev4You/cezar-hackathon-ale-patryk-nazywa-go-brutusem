@@ -72,6 +72,8 @@ spec's own decision, not a duplicate.
 
 ## Progress
 
+PR: #38
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 2: Taking over the actions, and the proof
