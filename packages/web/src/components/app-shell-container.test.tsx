@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import { workspaceQueryKeys } from '@/api/queries'
 import type {
   HealthResponse,
@@ -94,13 +95,15 @@ function renderShell(entry = '/', client: QueryClient = createQueryClient()) {
     client,
     ...render(
     <QueryClientProvider client={client}>
-      <ThemeProvider>
-        <MemoryRouter initialEntries={[entry]}>
-          <AppShellContainer>
-            <p>route content</p>
-          </AppShellContainer>
-        </MemoryRouter>
-      </ThemeProvider>
+      <CommandsProvider>
+        <ThemeProvider>
+          <MemoryRouter initialEntries={[entry]}>
+            <AppShellContainer>
+              <p>route content</p>
+            </AppShellContainer>
+          </MemoryRouter>
+        </ThemeProvider>
+      </CommandsProvider>
     </QueryClientProvider>,
     ),
   }

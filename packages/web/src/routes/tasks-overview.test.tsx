@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalEventsProvider } from '@/api/global-events'
 import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ProcessUsage, RunRecord } from '@open-mercato/cezar-api-client'
 import { ListViewProvider } from '@/components/list-view'
 import { TaskQuickListContainer } from '@/components/task-quick-list'
@@ -686,19 +687,21 @@ describe('TasksOverview — usage cells', () => {
     client.setQueryData(queryKeys.health, { bootProject: 'boot' })
     render(
       <QueryClientProvider client={client}>
-        <GlobalEventsProvider>
-          <MemoryRouter>
-            <TasksOverview
-              runs={runs}
-              view="active"
-              onViewChange={vi.fn()}
-              onArchiveFinished={vi.fn()}
-              onMarkAllRead={vi.fn()}
-              onRename={vi.fn()}
-              now={NOW}
-            />
-          </MemoryRouter>
-        </GlobalEventsProvider>
+        <CommandsProvider>
+          <GlobalEventsProvider>
+            <MemoryRouter>
+              <TasksOverview
+                runs={runs}
+                view="active"
+                onViewChange={vi.fn()}
+                onArchiveFinished={vi.fn()}
+                onMarkAllRead={vi.fn()}
+                onRename={vi.fn()}
+                now={NOW}
+              />
+            </MemoryRouter>
+          </GlobalEventsProvider>
+        </CommandsProvider>
       </QueryClientProvider>
     )
   }
@@ -1039,13 +1042,15 @@ describe('TasksOverviewRoute — wired to the app', () => {
     })
     return render(
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter>
-          <ListViewProvider>
-            {/* The sidebar and the overview together, under ONE provider — the point under test. */}
-            <TaskQuickListContainer />
-            <TasksOverviewRoute />
-          </ListViewProvider>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter>
+            <ListViewProvider>
+              {/* The sidebar and the overview together, under ONE provider — the point under test. */}
+              <TaskQuickListContainer />
+              <TasksOverviewRoute />
+            </ListViewProvider>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>
     )
   }
@@ -1104,11 +1109,13 @@ describe('TasksOverviewRoute — wired to the app', () => {
 
     const first = render(
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter>
-          <ListViewProvider>
-            <TasksOverviewRoute />
-          </ListViewProvider>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter>
+            <ListViewProvider>
+              <TasksOverviewRoute />
+            </ListViewProvider>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
     const restore = await screen.findByRole('button', { name: 'Expand Branch column', pressed: false })
@@ -1134,11 +1141,13 @@ describe('TasksOverviewRoute — wired to the app', () => {
     first.unmount()
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter>
-          <ListViewProvider>
-            <TasksOverviewRoute />
-          </ListViewProvider>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter>
+            <ListViewProvider>
+              <TasksOverviewRoute />
+            </ListViewProvider>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>,
     )
     expect(await screen.findByRole('button', { name: 'Fold Branch column', pressed: true })).not.toBeNull()

@@ -8,8 +8,6 @@ import {
   browseFs,
   checkoutProject,
   connectProvider,
-  continueRun,
-  continueProjectRun,
   createAgentProfile,
   getAgentConfig,
   getAgentConfigFile,
@@ -82,7 +80,6 @@ import { useProjectScope } from './project-scope-context'
 import { isReferenceStatus } from '@/lib/reference-status'
 import { githubRepoBase } from '@/lib/tasks-table'
 import { normalizeTagsForDisplay } from '@/lib/project-tags'
-import type { ContinueOptions } from './client'
 import type {
   CheckoutProjectInput,
   CreateAgentProfileInput,
@@ -1430,21 +1427,6 @@ export function useSendMessage(id: string, projectId?: string) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
       }
     },
-  })
-}
-
-/** Reopen a closed run's last agent session (`POST /api/runs/:id/continue`), starting it on an
- *  opening prompt. The sibling of `useSendMessage` for a run whose session has already ended:
- *  same invalidation (the record flips to `running`, the transcript grows over SSE) and the
- *  same contract that errors belong to the CALLER, so a refusal can be shown where the user
- *  acted. The thread composer keeps its own mutation (`useContinueAction`) because it also owns
- *  the runner/model pills; this hook is the plain "resume on the run's own engine" path. */
-export function useContinueRun(id: string, projectId?: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (opts: ContinueOptions = {}) =>
-      projectId === undefined ? continueRun(id, opts) : continueProjectRun(projectId, id, opts),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
   })
 }
 

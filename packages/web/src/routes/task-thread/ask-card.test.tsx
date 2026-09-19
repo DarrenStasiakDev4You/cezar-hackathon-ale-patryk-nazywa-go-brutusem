@@ -1,25 +1,52 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/api/client'
+import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import { AskCard } from './ask-card'
 import type { ThreadAsk } from './thread-state'
 import type { ApiRun, ProviderStatusResponse, StepState } from '@open-mercato/cezar-api-client'
 
 const mutateAsync = vi.fn().mockResolvedValue({})
-const continueAsync = vi.fn().mockResolvedValue({})
 let providerStatus: ProviderStatusResponse
-vi.mock('@/api/queries', () => ({
+vi.mock('@/api/queries', async (importOriginal) => ({
+  // The real module otherwise: the continue command's handler reads its cache keys from it.
+  ...(await importOriginal<typeof import('@/api/queries')>()),
   useSendMessage: () => ({ mutateAsync, isPending: false }),
-  useContinueRun: () => ({ mutateAsync: continueAsync, isPending: false }),
   useProviderStatus: () => ({ data: providerStatus, isSuccess: true }),
 }))
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+
+/** The bodies of every `POST /continue` — the resume runs through `cezar.task.continue`, so
+ *  it is the stubbed server, not a mocked hook, that sees it. */
+let continues: unknown[]
+/** Queued answers for the next `POST /continue`s; an empty queue accepts. */
+let continueAnswers: Array<() => Response | Promise<Response>>
+
+beforeEach(() => {
+  continues = []
+  continueAnswers = []
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if ((init.method ?? 'GET') === 'POST' && String(input) === '/api/v1/runs/r1/continue') {
+        continues.push(JSON.parse(String(init.body)))
+        return continueAnswers.shift()?.() ?? json({ continued: true })
+      }
+      return json({})
+    }),
+  )
+})
+
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   mutateAsync.mockClear().mockResolvedValue({})
-  continueAsync.mockClear().mockResolvedValue({})
   providerStatus = {
     providers: [
       { provider: 'claude', status: 'connected', enabled: true },
@@ -60,9 +87,13 @@ const closedRun: ApiRun = {
 }
 
 const renderAsk = (ask: ThreadAsk, run: ApiRun = activeRun) => render(
-  <MemoryRouter>
-    <AskCard ask={ask} run={run} />
-  </MemoryRouter>,
+  <QueryClientProvider client={createQueryClient()}>
+    <CommandsProvider>
+      <MemoryRouter>
+        <AskCard ask={ask} run={run} />
+      </MemoryRouter>
+    </CommandsProvider>
+  </QueryClientProvider>,
 )
 
 const singleAsk: ThreadAsk = {
@@ -206,9 +237,9 @@ describe('AskCard — answering after the session has ended', () => {
   it('a closed run resumes instead of replying, with the same answer text', async () => {
     renderAsk(singleAsk, closedRun)
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
-    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(continues).toHaveLength(1))
     // No runner override: answering a question must not silently switch the run's engine.
-    expect(continueAsync).toHaveBeenCalledWith({ text: 'Library: date-fns' })
+    expect(continues).toEqual([{ text: 'Library: date-fns' }])
     expect(mutateAsync).not.toHaveBeenCalled()
   })
 
@@ -239,10 +270,8 @@ describe('AskCard — answering after the session has ended', () => {
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
     fireEvent.click(screen.getByRole('button', { name: /Relative/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Send answer & reopen' }))
-    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(1))
-    expect(continueAsync).toHaveBeenCalledWith({
-      text: 'Library: date-fns\nStyle: Relative',
-    })
+    await waitFor(() => expect(continues).toHaveLength(1))
+    expect(continues).toEqual([{ text: 'Library: date-fns\nStyle: Relative' }])
   })
 
   it('a stale record that still claims a live session falls back to a resume on 409', async () => {
@@ -250,33 +279,33 @@ describe('AskCard — answering after the session has ended', () => {
     mutateAsync.mockRejectedValueOnce(new ApiError(409, 'session closed'))
     renderAsk(singleAsk, { ...activeRun, steps: [step({ sessionId: 'sess-1' })] })
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
-    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(1))
-    expect(continueAsync).toHaveBeenCalledWith({ text: 'Library: date-fns' })
+    await waitFor(() => expect(continues).toHaveLength(1))
+    expect(continues).toEqual([{ text: 'Library: date-fns' }])
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('waits for idle teardown before retrying the continuation, without accepting a duplicate tap', async () => {
     mutateAsync.mockRejectedValueOnce(new ApiError(409, 'session closed'))
-    let resolveContinuation: ((value: { continued: true }) => void) | undefined
-    const continuation = new Promise<{ continued: true }>((resolve) => {
-      resolveContinuation = resolve
-    })
-    continueAsync
-      .mockRejectedValueOnce(new ApiError(409, 'run is still active'))
-      .mockReturnValueOnce(continuation)
+    let resolveContinuation: (() => void) | undefined
+    continueAnswers.push(
+      () => json({ error: 'run is still active' }, 409),
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveContinuation = () => resolve(json({ continued: true }))
+        }),
+    )
     renderAsk(singleAsk, { ...activeRun, steps: [step({ sessionId: 'sess-1' })] })
 
     const option = screen.getByRole('button', { name: /date-fns/ })
     fireEvent.click(option)
-    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(continues).toHaveLength(1))
     expect((option as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(option)
 
-    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(2))
-    expect(continueAsync).toHaveBeenNthCalledWith(1, { text: 'Library: date-fns' })
-    expect(continueAsync).toHaveBeenNthCalledWith(2, { text: 'Library: date-fns' })
+    await waitFor(() => expect(continues).toHaveLength(2))
+    expect(continues).toEqual([{ text: 'Library: date-fns' }, { text: 'Library: date-fns' }])
     expect(mutateAsync).toHaveBeenCalledTimes(1)
-    resolveContinuation?.({ continued: true })
+    resolveContinuation?.()
     await waitFor(() => expect((option as HTMLButtonElement).disabled).toBe(false))
     expect(screen.queryByRole('alert')).toBeNull()
   })
@@ -298,11 +327,11 @@ describe('AskCard — answering after the session has ended', () => {
         'Claude Code credentials are unavailable. Authorize it in Settings → Agents → Providers.',
       ),
     ).toBeTruthy()
-    expect(continueAsync).not.toHaveBeenCalled()
+    expect(continues).toEqual([])
   })
 
   it('a refused delivery is shown on the card instead of being dropped', async () => {
-    continueAsync.mockRejectedValueOnce(new ApiError(409, 'no agent session to resume'))
+    continueAnswers.push(() => json({ error: 'no agent session to resume' }, 409))
     renderAsk(singleAsk, closedRun)
     fireEvent.click(screen.getByRole('button', { name: /date-fns/ }))
     expect((await screen.findByRole('alert')).textContent).toBe('no agent session to resume')
@@ -317,6 +346,6 @@ describe('AskCard — answering after the session has ended', () => {
       ),
     ).toBeTruthy()
     expect(mutateAsync).not.toHaveBeenCalled()
-    expect(continueAsync).not.toHaveBeenCalled()
+    expect(continues).toEqual([])
   })
 })

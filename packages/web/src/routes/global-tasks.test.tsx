@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ProjectListEntry, RunIndexEntry } from '@open-mercato/cezar-api-client'
 import { ListViewProvider, useListView } from '@/components/list-view'
 import { __clearRememberedStatusesForTests, workspaceQueryKeys } from '@/api/queries'
@@ -222,13 +223,15 @@ function stubFetch({
 function renderPage(client = createQueryClient(), entry = '/tasks') {
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[entry]}>
-        <ListViewProvider>
-          <GlobalTasksRoute />
-          <Toaster />
-          <LocationProbe />
-        </ListViewProvider>
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={[entry]}>
+          <ListViewProvider>
+            <GlobalTasksRoute />
+            <Toaster />
+            <LocationProbe />
+          </ListViewProvider>
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }
@@ -506,12 +509,14 @@ describe('global tasks page', () => {
       stubFetch()
       render(
         <QueryClientProvider client={createQueryClient()}>
-          <MemoryRouter initialEntries={['/tasks?archived=1']}>
-            <ListViewProvider>
-              <GlobalTasksRoute />
-              <SharedViewProbe />
-            </ListViewProvider>
-          </MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter initialEntries={['/tasks?archived=1']}>
+              <ListViewProvider>
+                <GlobalTasksRoute />
+                <SharedViewProbe />
+              </ListViewProvider>
+            </MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
 

@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { RunRecord } from '@open-mercato/cezar-api-client'
 import { ListViewProvider } from '@/components/list-view'
 import { TaskQuickList, TaskQuickListContainer } from '@/components/task-quick-list'
@@ -649,9 +650,11 @@ describe('TaskQuickListContainer', () => {
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(runs), { status: 200 }))
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter initialEntries={[route]}>
-          <ListViewProvider>{children}</ListViewProvider>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter initialEntries={[route]}>
+            <ListViewProvider>{children}</ListViewProvider>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>
     )
     return render(<TaskQuickListContainer />, { wrapper })
@@ -693,9 +696,11 @@ describe('TaskQuickListContainer', () => {
     })
     const wrapper = ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={createQueryClient()}>
-        <MemoryRouter initialEntries={['/']}>
-          <ListViewProvider>{children}</ListViewProvider>
-        </MemoryRouter>
+        <CommandsProvider>
+          <MemoryRouter initialEntries={['/']}>
+            <ListViewProvider>{children}</ListViewProvider>
+          </MemoryRouter>
+        </CommandsProvider>
       </QueryClientProvider>
     )
     render(<TaskQuickListContainer />, { wrapper })

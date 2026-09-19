@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RunRecord, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 
 import { ApiError } from '@/api/client'
+import { CommandError } from '@/commands/registry'
 import {
   askDeliveryMode,
   IDLE_TEARDOWN_RETRY_DELAYS_MS,
@@ -83,6 +84,34 @@ describe('resumeAfterIdleTeardown', () => {
     new ApiError(409, 'cannot continue a waiting run'),
     new ApiError(0, 'cannot reach the cezar server'),
   ])('does not retry a non-transitional refusal: %s', async (error) => {
+    const resume = vi.fn().mockRejectedValue(error)
+    const wait = vi.fn().mockResolvedValue(undefined)
+
+    await expect(resumeAfterIdleTeardown(resume, wait)).rejects.toBe(error)
+    expect(resume).toHaveBeenCalledTimes(1)
+    expect(wait).not.toHaveBeenCalled()
+  })
+
+  /** What `cezar.task.continue` rejects with when its request failed: the `ApiError` is the cause. */
+  const wrapped = (error: ApiError) =>
+    new CommandError('command-failed', error.message, { commandId: 'cezar.task.continue', cause: error })
+
+  it('waits through the teardown refusal when it arrives wrapped by the continue command', async () => {
+    const resume = vi.fn()
+      .mockRejectedValueOnce(wrapped(new ApiError(409, 'run is still active')))
+      .mockResolvedValueOnce({ taskId: 'r1', continued: true })
+    const wait = vi.fn().mockResolvedValue(undefined)
+
+    await expect(resumeAfterIdleTeardown(resume, wait)).resolves.toEqual({ taskId: 'r1', continued: true })
+    expect(resume).toHaveBeenCalledTimes(2)
+    expect(wait).toHaveBeenCalledWith(IDLE_TEARDOWN_RETRY_DELAYS_MS[0])
+  })
+
+  it.each([
+    wrapped(new ApiError(409, 'no agent session to resume')),
+    wrapped(new ApiError(0, 'cannot reach the cezar server')),
+    new CommandError('invalid-input', 'Invalid input for cezar.task.continue: text must be a string'),
+  ])('does not retry a wrapped non-transitional failure: %s', async (error) => {
     const resume = vi.fn().mockRejectedValue(error)
     const wait = vi.fn().mockResolvedValue(undefined)
 
