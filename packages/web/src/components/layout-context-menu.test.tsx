@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -90,6 +90,36 @@ describe('LayoutElementContextMenu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(onDelete).not.toHaveBeenCalled()
     expect(confirmDelete).not.toHaveBeenCalled()
+  })
+
+  it('drops a confirmed delete whose target unmounted, or whose edit mode ended, while confirming', async () => {
+    const onDelete = vi.fn()
+    let confirm: (value: boolean) => void = () => {}
+    const confirmDelete = vi.fn(() => new Promise<boolean>((resolve) => { confirm = resolve }))
+    const layout = (enabled: boolean, mounted: boolean) => (
+      <LayoutRegistryProvider>
+        <LayoutElementContextMenu enabled={enabled} onDelete={onDelete} confirmDelete={confirmDelete}>
+          {mounted ? <LayoutElement id="card" kind="widget"><span>Revenue</span></LayoutElement> : null}
+        </LayoutElementContextMenu>
+      </LayoutRegistryProvider>
+    )
+    const view = render(layout(true, true))
+    await waitFor(() => expect(document.querySelector('[data-layout-id="card"]')).not.toBeNull())
+
+    fireEvent.contextMenu(screen.getByText('Revenue'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
+    view.rerender(layout(true, false))
+    await act(async () => confirm(true))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    view.rerender(layout(true, true))
+    await waitFor(() => expect(document.querySelector('[data-layout-id="card"]')).not.toBeNull())
+    fireEvent.contextMenu(screen.getByText('Revenue'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
+    view.rerender(layout(false, true))
+    await act(async () => confirm(true))
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(confirmDelete).toHaveBeenCalledTimes(2)
   })
 
   it('keeps Delete usable under the shell edit-mode guard, by click and by Enter', async () => {

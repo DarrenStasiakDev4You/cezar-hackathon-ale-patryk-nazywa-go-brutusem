@@ -55,6 +55,11 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
   const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({})
   const menuRef = React.useRef<HTMLDivElement>(null)
   const deletingRef = React.useRef(false)
+  const enabledRef = React.useRef(enabled)
+
+  React.useLayoutEffect(() => {
+    enabledRef.current = enabled
+  }, [enabled])
 
   const close = React.useCallback(() => {
     setTarget(null)
@@ -124,6 +129,12 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
     }
     deletingRef.current = true
     if (confirmDelete && !(await confirmDelete(target))) {
+      close()
+      return
+    }
+    // Confirmation can take arbitrarily long: re-check the spec's preconditions (a live target,
+    // edit mode still on) against the present, not against the moment Delete was chosen.
+    if (!enabledRef.current || !registry.get(target.id)?.domNode) {
       close()
       return
     }
