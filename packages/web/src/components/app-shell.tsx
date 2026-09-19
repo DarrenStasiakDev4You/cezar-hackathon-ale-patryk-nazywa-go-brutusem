@@ -17,7 +17,10 @@ import { CloneProjectDialog } from '@/components/clone-project-dialog'
 import { openCommandPalette } from '@/components/command-palette'
 import { GithubIcon } from '@/components/icons'
 import { EditModeControl } from '@/components/edit-mode-control'
-import { shouldBlockEditModeActivation } from '@/components/edit-mode-interaction-guard'
+import {
+  shouldBlockEditModeActivation,
+  shouldBlockEditModeKeyActivation,
+} from '@/components/edit-mode-interaction-guard'
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from '@/components/layout-context-menu'
 import { LayoutRegistryProvider } from '@/components/layout-registry'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
@@ -288,6 +291,17 @@ export const AppShell = React.memo(function AppShell({
     target.domNode?.remove()
   }, [])
 
+  const handleEditModeKeyGuard = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!editMode) return
+      if (shouldBlockEditModeKeyActivation(event.nativeEvent)) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    },
+    [editMode],
+  )
+
   return (
     <LayoutRegistryProvider>
       <LayoutElementContextMenu enabled={editMode} allowAnyElement onDelete={handleLayoutElementDelete}>
@@ -297,6 +311,7 @@ export const AppShell = React.memo(function AppShell({
           data-edit-mode={editMode ? 'true' : 'false'}
           onClickCapture={handleEditModeActivationGuard}
           onSubmitCapture={handleEditModeSubmitGuard}
+          onKeyDownCapture={handleEditModeKeyGuard}
         >
       <div
         data-slot="edit-mode-surface"

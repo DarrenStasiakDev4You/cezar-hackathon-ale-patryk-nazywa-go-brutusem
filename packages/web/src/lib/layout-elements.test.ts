@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LayoutRegistry } from './layout-elements'
+import { LayoutRegistry, type LayoutElementDescriptor } from './layout-elements'
 
 describe('LayoutRegistry', () => {
   it('indexes roots, children, nested groups, and deterministic subtrees', () => {
@@ -40,6 +40,23 @@ describe('LayoutRegistry', () => {
 
     expect(() => unregisterParent()).toThrow('while it has children')
     expect(registry.get('group')).toBeDefined()
+  })
+
+  it('lets a refused unregister succeed once the children are gone', () => {
+    const registry = new LayoutRegistry()
+    const unregisterParent = registry.register({ id: 'group', kind: 'group' })
+    const unregisterChild = registry.register({ id: 'widget', kind: 'widget', parentId: 'group' })
+
+    expect(() => unregisterParent()).toThrow('while it has children')
+    unregisterChild()
+    unregisterParent()
+    expect(registry.getSnapshot()).toEqual([])
+  })
+
+  it('rejects an unknown kind at compile time', () => {
+    // @ts-expect-error 'panel' is not a LayoutElementKind
+    const descriptor: LayoutElementDescriptor = { id: 'panel', kind: 'panel' }
+    expect(() => new LayoutRegistry().register(descriptor)).toThrow('Unknown layout element kind')
   })
 
   it('does not expose mutable registry state and tracks DOM nodes separately', () => {

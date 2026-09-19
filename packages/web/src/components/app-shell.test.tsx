@@ -106,6 +106,28 @@ describe('AppShell', () => {
       expect(screen.queryByRole('button', { name: 'Exit edit mode' })).toBeNull()
     })
 
+    it('blocks keyboard activations that never become a click, but keeps typing and newlines', () => {
+      const onKeyDown = vi.fn()
+      renderShell('/', {}, <textarea aria-label="Composer" onKeyDown={(event) => onKeyDown(event.key)} />)
+      const composer = screen.getByRole('textbox', { name: 'Composer' })
+
+      fireEvent.keyDown(composer, { key: 'Enter' })
+      expect(onKeyDown).toHaveBeenCalledWith('Enter')
+      onKeyDown.mockClear()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
+      const sendAttempt = fireEvent.keyDown(composer, { key: 'Enter' })
+      fireEvent.keyDown(composer, { key: 'Enter', metaKey: true })
+      expect(sendAttempt).toBe(false)
+      expect(onKeyDown).not.toHaveBeenCalled()
+
+      fireEvent.keyDown(composer, { key: 'a' })
+      fireEvent.keyDown(composer, { key: 'Enter', shiftKey: true })
+      expect(onKeyDown.mock.calls).toEqual([['a'], ['Enter']])
+
+      expect(fireEvent.keyDown(screen.getByRole('button', { name: 'Exit edit mode' }), { key: 'Enter' })).toBe(true)
+    })
+
     it('allows only explicitly marked editor actions', () => {
       const onClick = vi.fn()
       renderShell(
