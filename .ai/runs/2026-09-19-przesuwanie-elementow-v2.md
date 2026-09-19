@@ -34,7 +34,7 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 ### Phase 3: verification and handoff
 
 - [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
-- [ ] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow.
+- [x] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow. — 25c62604
 - [x] Post-review regression coverage: prove moving a group preserves its children and their parent links. — 4b77649e
 
 ## Validation notes
@@ -96,6 +96,18 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - Browser evidence passed for readable edit mode, accessible handles, sidebar movement to the other
   side, and exit behavior. Context-menu deletion and populated keyboard/touch/mobile coverage remain
   unexercised; no QA approval is claimed. Evidence is posted on PR #27.
+
+### Container drag stability fix — 2026-09-19
+
+- Shell containers now use `useDraggable` + `useDroppable`; ordinary layout widgets retain
+  `useSortable`.
+- The active container keeps a static, hidden source in the layout, while only `DragOverlay` moves;
+  the drop indicator is fixed-positioned and cannot change grid/flex dimensions.
+- Added a regression test for active container drags, sibling transform isolation, and Escape cancel.
+- Focused layout tests: passed — 5 tests; web typecheck: passed.
+- Full configured gate rerun after dependency setup: passed — `npm run typecheck`, `npm test` (416
+  files, 7719 tests), `npm run test:unit` (36), `npm run build`/`check:pack`, and
+  `npm run test:package` (16).
 
 ## Risks
 
