@@ -51,6 +51,6 @@ avoid painting values from a previous implementation or project after an async s
 - [x] 4.1 Document the durable contract and compatibility surface. — d0df71bc
 - [x] 4.2 Run the full configured validation gate and focused suites. — d7bdd934
 
-Validation: `npm run typecheck`, `npm test` (433 files / 8,140 tests), `npm run test:unit`,
+Validation: `npm run typecheck`, `npm test` (433 files / 8,141 tests), `npm run test:unit`,
 `npm run build`, and `npm run test:package` all pass. Focused extension-api and component-registry
 suites also pass. No browser QA is required: the spec adds no visible settings UI or new route.

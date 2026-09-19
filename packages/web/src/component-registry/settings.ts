@@ -27,7 +27,8 @@ export function createMemoryComponentSettingsStore(initial: Readonly<Record<stri
 export function resolveComponentProjectId(): string | null {
   if (typeof window === 'undefined') return getApiScope()
   const match = /^\/p\/([^/]+)(?:\/|$)/.exec(window.location.pathname)
-  return match?.[1] === undefined ? null : decodeURIComponent(match[1])
+  if (match?.[1] === undefined) return null
+  try { return decodeURIComponent(match[1]) } catch { return null }
 }
 
 export function targetForScope(scope: ComponentSettingsScope, resolve: () => string | null): ComponentSettingsTarget {
@@ -39,7 +40,7 @@ export function targetForScope(scope: ComponentSettingsScope, resolve: () => str
 export function createPersistentComponentSettingsStore(options: { readonly resolveProjectId?: () => string | null } = {}): ComponentSettingsStore {
   const resolve = options.resolveProjectId ?? resolveComponentProjectId; const listeners = new Set<(target: ComponentSettingsTarget, id: ContributionId) => void>(); const tails = new Map<string, Promise<void>>()
   const verify = (target: ComponentSettingsTarget) => { if (target.scope === 'project' && target.projectId !== resolve()) throw new ComponentSettingsError('settings-unavailable', 'The active project changed before the settings operation completed') }
-  const read = async (target: ComponentSettingsTarget) => { verify(target); const state = target.scope === 'global' ? await getWorkspaceUiState() : await getUiState(); const value = state.componentSettings; return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, Record<string, boolean>> : {} }
+  const read = async (target: ComponentSettingsTarget) => { verify(target); const state = target.scope === 'global' ? await getWorkspaceUiState() : await getUiState(); verify(target); const value = state.componentSettings; return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, Record<string, boolean>> : {} }
   const write = async (target: ComponentSettingsTarget, map: Record<string, Record<string, boolean>>) => { verify(target); if (target.scope === 'global') await putWorkspaceUiState({ componentSettings: map }); else await putUiState({ componentSettings: map }) }
   const notify = (target: ComponentSettingsTarget, id: ContributionId) => { for (const listener of [...listeners]) { try { listener(target, id) } catch {} } }
   const enqueue = (target: ComponentSettingsTarget, task: () => Promise<void>) => { const key = `${target.scope}:${target.scope === 'project' ? target.projectId : ''}`; const previous = tails.get(key) ?? Promise.resolve(); const next = previous.catch(() => {}).then(task); const settled = next.catch(() => {}).finally(() => { if (tails.get(key) === settled) tails.delete(key) }); tails.set(key, settled); return next }

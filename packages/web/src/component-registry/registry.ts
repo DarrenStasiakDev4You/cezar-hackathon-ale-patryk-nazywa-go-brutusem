@@ -25,11 +25,11 @@ export { ComponentSettingsError } from './settings'
  * implementation of a component contract, from core and from extensions, as one registration
  * with its provenance and its fit.
  *
- * PURE on purpose, like `commands/registry.ts` and `events/bus.ts`: the extension API is its only
- * runtime import (React through `import type` only). No DOM, no module-level state, so it runs
- * unchanged under vitest and outside React. `options.contracts` is the host's own catalog: every
- * implementation is checked against the host's token for its contract id, never against the token
- * the implementation brought along.
+ * The registration core stays independent of React and the DOM (React is an `import type` only),
+ * while the host-owned settings store is injected through `options.settings`. No module-level
+ * state is used, so it runs unchanged under vitest and outside React. `options.contracts` is the
+ * host's own catalog: every implementation is checked against the host's token for its contract
+ * id, never against the token the implementation brought along.
  *
  * Core registers with `register` and throws on any misfit. Each extension activation gets
  * `forExtension(scope)`, the `ComponentRegistry` it sees as `context.components`: its ids stay under
@@ -108,7 +108,7 @@ export interface CockpitComponentRegistry {
   /** Core registration: `cezar.*` implementation ids, for a contract in `options.contracts`, and
    *  it must be compatible. Throws `ComponentError`: `invalid-id`, `namespace-violation`,
    *  `duplicate-registration`, `contract-version-mismatch`, `invalid-input`. */
-  register<P>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>>): Disposable
+  register<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>, Settings>): Disposable
   /** Every registration of this contract id, compatible or not, any major, in registration order:
    *  the brief's list, and the picker's. A new frozen array per call. Never throws; a malformed
    *  argument returns `[]`. */
@@ -180,6 +180,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
   /** One entry per `subscribe` call, so the same function subscribed twice is two subscriptions. */
   const listeners = new Set<{ readonly listener: () => void }>()
   const settingsListeners = new Map<string, Set<(settings: unknown | undefined) => void>>()
+  const malformedSettingsReports = new Set<ContributionId>()
   let revision = 0
   /** Bumps the revision, then tells every listener subscribed at that moment. */
   const changed = (): void => {
@@ -195,7 +196,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
   settingsStore.subscribe((_target, componentId) => {
     changed()
     const listenersForComponent = settingsListeners.get(componentId)
-    if (listenersForComponent) void readSettings(registrations.get(componentId), settingsStore, resolveProjectId).catch(() => undefined).then((settings) => {
+    if (listenersForComponent) void readSettings(registrations.get(componentId), settingsStore, resolveProjectId, (registration, error) => reportMalformedSettings(registration, error)).catch(() => undefined).then((settings) => {
       for (const listener of [...listenersForComponent]) { try { listener(settings) } catch {} }
     })
   })
@@ -230,7 +231,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
   }
   const handleOf = <Settings>(registration: ComponentRegistration, tracked: Disposable): ComponentRegistrationHandle<Settings> => Object.assign(tracked as ComponentRegistrationHandle<Settings>, {
     componentId: registration.componentId,
-    async getSettings() { if (registrations.get(registration.componentId) !== registration) throw new ComponentSettingsError('disposed', 'Component registration is disposed'); return await readSettings(registration, settingsStore, resolveProjectId) as Settings | undefined },
+    async getSettings() { if (registrations.get(registration.componentId) !== registration) throw new ComponentSettingsError('disposed', 'Component registration is disposed'); return await readSettings(registration, settingsStore, resolveProjectId, (entry, error) => reportMalformedSettings(entry, error)) as Settings | undefined },
     onSettingsChange(listener: (settings: Settings | undefined) => void) { if (registrations.get(registration.componentId) !== registration) throw new ComponentSettingsError('disposed', 'Component registration is disposed'); let set = settingsListeners.get(registration.componentId); if (!set) { set = new Set(); settingsListeners.set(registration.componentId, set) }; const typed = listener as (settings: unknown | undefined) => void; set.add(typed); return { dispose() { set?.delete(typed); if (set?.size === 0) settingsListeners.delete(registration.componentId) } } },
   })
 
@@ -258,6 +259,13 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
     } catch {
       // A throwing reporter must not fail the provide.
     }
+  }
+
+  const reportMalformedSettings = (registration: ComponentRegistration, error: unknown): void => {
+    if (malformedSettingsReports.has(registration.componentId)) return
+    malformedSettingsReports.add(registration.componentId)
+    const message = error instanceof Error ? error.message : 'stored settings did not match the definition'
+    console.warn(`[cezar:extensions] ${registration.componentId} settings were ignored: ${message}`)
   }
 
   /** Every registration that `keep` accepts, in registration order, as a new frozen array. */
@@ -344,7 +352,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
     revision() {
       return revision
     },
-    async getSettings(componentId) { const registration = registrations.get(componentId); if (!registration?.settings) return undefined; return readSettings(registration, settingsStore, resolveProjectId) },
+    async getSettings(componentId) { const registration = registrations.get(componentId); if (!registration?.settings) return undefined; return readSettings(registration, settingsStore, resolveProjectId, (entry, error) => reportMalformedSettings(entry, error)) },
     async setSettings(componentId, patch) {
       const registration = registrations.get(componentId); const definition = registration?.settings
       if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
@@ -408,7 +416,8 @@ function prepare(
     throw invalid('component must be a React component: a function, or an object such as memo, forwardRef or lazy return')
   }
   if (!capabilities.ok) throw invalid(`capabilities ${capabilities.rule}`)
-  if (settings !== undefined && !validSettingsDefinition(settings)) throw invalid('settings must be a valid settings definition')
+  const settingsDefinition = settings === undefined ? undefined : snapshotSettingsDefinition(settings)
+  if (settings !== undefined && settingsDefinition === undefined) throw invalid('settings must be a valid settings definition')
   const names = capabilities.names ?? []
   for (let index = 0; index < names.length; index += 1) {
     if (typeof names[index] !== 'string') throw invalid(`capabilities[${index}] must be a string`)
@@ -421,7 +430,7 @@ function prepare(
     component: component as ComponentType<never>,
     declaredCapabilities: Object.freeze([...new Set(names as readonly ComponentCapability[])]),
     metadata: Object.freeze(description === undefined ? { title } : { title, description }),
-    settings: settings as ComponentSettingsDefinition<unknown> | undefined,
+    settings: settingsDefinition,
   }
 }
 
@@ -499,19 +508,36 @@ function implementationFields(implementation: unknown): ImplementationFields {
   return { id, title, description, capabilities, component, settings }
 }
 
-function validSettingsDefinition(value: unknown): value is ComponentSettingsDefinition<unknown> {
-  if (typeof value !== 'object' || value === null) return false
-  const candidate = value as { scope?: unknown; parse?: unknown; defaults?: unknown }
-  return (candidate.scope === 'global' || candidate.scope === 'project') && typeof candidate.parse === 'function' && isRecord(candidate.defaults)
+function snapshotSettingsDefinition(value: unknown): ComponentSettingsDefinition<unknown> | undefined {
+  if (!isRecord(value) || (value.scope !== 'global' && value.scope !== 'project') || typeof value.parse !== 'function' || !isRecord(value.schema) || !isRecord(value.defaults)) return undefined
+  const schema: Record<string, { readonly type: 'boolean'; readonly default: boolean }> = {}
+  for (const key of Object.keys(value.schema)) {
+    const descriptor = value.schema[key]
+    if (!isRecord(descriptor) || descriptor.type !== 'boolean' || typeof descriptor.default !== 'boolean' || key.length === 0 || key.length > 64) return undefined
+    schema[key] = Object.freeze({ type: 'boolean', default: descriptor.default })
+  }
+  if (Object.keys(schema).length > 64) return undefined
+  const defaults: Record<string, boolean> = {}
+  for (const key of Object.keys(value.defaults)) {
+    if (!Object.prototype.hasOwnProperty.call(schema, key) || typeof value.defaults[key] !== 'boolean') return undefined
+    defaults[key] = value.defaults[key] as boolean
+  }
+  if (Object.keys(defaults).length !== Object.keys(schema).length || Object.keys(schema).some((key) => defaults[key] !== schema[key]?.default)) return undefined
+  return Object.freeze({
+    scope: value.scope,
+    schema: Object.freeze(schema),
+    defaults: Object.freeze(defaults),
+    parse: value.parse as (input: unknown) => Record<string, boolean>,
+  })
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function targetOf(definition: ComponentSettingsDefinition<unknown>, resolve: () => string | null) { return targetForScope(definition.scope, resolve) }
 async function rawSettings(registration: ComponentRegistration, store: ComponentSettingsStore, resolve: () => string | null): Promise<unknown> { return registration.settings ? store.get(targetOf(registration.settings, resolve), registration.componentId) : undefined }
-async function readSettings(registration: ComponentRegistration | undefined, store: ComponentSettingsStore, resolve: () => string | null): Promise<unknown | undefined> {
+async function readSettings(registration: ComponentRegistration | undefined, store: ComponentSettingsStore, resolve: () => string | null, onMalformed?: (registration: ComponentRegistration, error: unknown) => void): Promise<unknown | undefined> {
   if (!registration?.settings) return undefined
   let raw: unknown
   try { raw = await rawSettings(registration, store, resolve) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
-  try { return registration.settings.parse(raw ?? {}) } catch { return registration.settings.defaults }
+  try { return registration.settings.parse(raw ?? {}) } catch (error) { onMalformed?.(registration, error); return registration.settings.defaults }
 }
 function sparseSettings(definition: ComponentSettingsDefinition<unknown>, parsed: unknown): Record<string, boolean> {
   if (!isRecord(parsed) || !isRecord(definition.defaults)) throw new ComponentSettingsError('invalid-settings', 'Settings parser must return an object')
