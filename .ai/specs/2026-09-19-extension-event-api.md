@@ -1,16 +1,22 @@
 # Extension Event API — `on`, `off`, `once`, `emit` and the first public core events
 
-> Slug: `extension-event-api` · Status: **designed, awaiting implementation** · Epic 1 (Extension
-> Runtime), item 5. Builds on item 1, `2026-09-18-extension-api-package.md` (`EventToken`,
-> `defineEvent` and the `Events` contract, merged in #3), item 2,
-> `2026-09-18-extension-registry.md` (the lifecycle and the `services(scope)` seam, merged in #6),
-> and item 3, `2026-09-19-command-api.md` (the pattern this item copies: a pure registry with a
-> core view and `forExtension(scope)`, merged in #11). It does not depend on item 4 (#17). This
-> spec covers **the event bus, the extension-facing `events` service and five public core
-> events**. Storage, components, a management UI and the loader are later items. Delivery: two
-> PRs to `main`. The first carries Phases 1–2: the bus, the service and
-> `cezar.extension.activated`. The second carries Phase 3: the task and project sources, which
-> touch the stream hot path.
+> Slug: `extension-event-api` · Status: **designed, decisions confirmed by the owner, awaiting
+> implementation** · Epic 1 (Extension Runtime), item 5. Builds on:
+> - item 1, `2026-09-18-extension-api-package.md`: `EventToken`, `defineEvent` and the `Events`
+>   contract, merged in #3;
+> - item 2, `2026-09-18-extension-registry.md`: the lifecycle and the `services(scope)` seam,
+>   merged in #6;
+> - item 3, `2026-09-19-command-api.md`: the pattern this item copies, a pure registry with a
+>   core view and `forExtension(scope)`, merged in #11.
+>
+> It does not depend on item 4 (#17). This spec covers **the event bus, the extension-facing
+> `events` service and the first public core events**. Storage, components, a management UI and
+> the loader are later items.
+>
+> Delivery: two PRs to `main`.
+> - **PR 1 (Phases 1–2):** the bus, the service and `cezar.extension.activated`.
+> - **PR 2 (Phase 3):** the task events (a server-side transition feed on the workspace stream)
+>   and `cezar.project.changed`.
 
 ## 📝 TLDR
 
@@ -20,26 +26,35 @@ core emits nothing an extension could react to.
 
 The proposal adds an **event bus** to the cockpit (`packages/web/src/events/`) and completes the
 contract with `off` and `once`. Extension events stay in their owner's namespace: only `acme.x`
-may emit `acme.x.*`, and only core may emit `cezar.*`. Core emits five **public events**:
-`cezar.task.started`, `cezar.task.completed`, `cezar.task.archived`, `cezar.project.changed` and
-`cezar.extension.activated`. Every listener is registered through the activation's scope, so
-deactivating an extension removes all its listeners, including deliveries already queued.
+may emit `acme.x.*`, and only core may emit `cezar.*`. Every listener is registered through the
+activation's scope, so deactivating an extension removes all its listeners, including deliveries
+already queued.
 
-## Resolved assumptions (autonomous defaults)
+Core emits these **public events**:
 
-The brief left these open. Each default is the most reversible choice, and all are safe to
-override before merge. The extension API package is private and experimental, the bus is
-internal to the cockpit, and no HTTP route, SSE event, state file or published surface changes.
+- **every status change**, as `cezar.task.status-changed`;
+- **semantic task events:** `cezar.task.started`, `cezar.task.completed`, `cezar.task.failed`,
+  `cezar.task.cancelled` and `cezar.task.archived`;
+- `cezar.project.changed` and `cezar.extension.activated`.
 
-| # | Question | Applied default | Why |
+The server detects task transitions in the run store and sends them on the workspace SSE stream
+as one new, additive event.
+
+## Decisions (confirmed by the owner, 2026-09-19)
+
+The brief left these open. PR #21 first proposed autonomous defaults; the owner then answered
+each question. Rows marked *changed* differ from the first draft.
+
+| # | Question | Decision | Why |
 |---|---|---|---|
-| Q1 | Should the bus and the core event sources (task stream, project route) be separate specs? | **One spec, three phases, two PRs.** Phases 1–2 build the bus, the extension service and `cezar.extension.activated`, and already meet all four DoD checks (§ Phasing). Phase 3 adds the task and project events on a second PR. | The DoD says an extension can subscribe to a *public* event, so core must emit at least one. Activation is the only one that needs neither the stream nor the router. The task events are why extensions want a bus, and the brief lists all five. |
-| Q2 | Should event ids be the brief's bare `task.started` or namespaced? | **`cezar.task.started`, `cezar.task.completed`, `cezar.task.archived`, `cezar.project.changed`, `cezar.extension.activated`.** | Item 1 reserves the `cezar` publisher for core, and item 3 (Q3) used it for commands. A bare `task.started` would belong to a third-party publisher called `task`. |
-| Q3 | "Private/namespaced" extension events: may other extensions listen, or only the owner? | **The owner alone emits; any extension may listen.** "Private" means *owned*: nobody else can emit into `acme.x.*`, so a listener knows where the event came from. No extension may emit any `cezar.*` id, not even a built-in whose own id is under `cezar` (registry Q6 allows those), so core events cannot be spoofed. | This is item 1's merged `Events` contract ("Any extension may listen to any event"). It matches command visibility, where extension commands are visible to all. Every extension shares one origin, so a listen restriction would not be a security boundary. It can still be tightened before any third-party extension exists (the loader item). |
-| Q4 | Where do task events come from? | **The cockpit derives them from the existing workspace stream** (`run` / `run-deleted`) for **every project**. The payload carries `projectId`. No server or SSE change. They are **per-page notifications**, best-effort across disconnects (§ Edge Cases). Every open cockpit (each tab, a phone) sees the same transition, and choosing one leader page to act on it is out of scope. | The SSE vocabulary is a protected surface (`BACKWARD_COMPATIBILITY.md` § 2), and the stream already carries every project's records. A server-side source can replace the tracker later behind the same tokens. |
-| Q5 | What exactly do the three task events mean? | **started:** the status becomes `running` from `queued` or from a finished status. A Continue, a send-back or an auto-resume counts. Answering an agent's question does not: `waiting` is a run parked on a `CEZ:ASK`, and it goes back to `running`. **completed:** the status becomes finished (`review`, `done`, `failed`, `cancelled`: the cockpit's `TERMINAL_STATUSES`) from `queued`, `running` or `waiting`, and `status` says how the task ended. **archived:** `archived` becomes `true`. Restoring a task emits nothing. | This reuses the cockpit's existing definition of "finished". The payload lets an extension filter. Separate `failed`, `cancelled` or `restored` events can be added later without breaking anything. |
-| Q6 | What does `project.changed` track, and do late subscribers get the current value? | **The registered project the URL shows** (`/p/:projectId` after `default` normalization). It is `null` on workspace pages and on the "not registered here" screen. The value starts at `null`, and the event fires on every change, including the first project resolved after load. **No replay and no getter.** | That is the switch the user sees. The API scope is `null` for the boot project, which is an implementation detail. Replay or a getter would add contract surface; a `cezar.project.current` command can follow additively. |
-| Q7 | "Removing an extension clears its listeners": the registry has no unregister, so what is removal? | **Deactivation**, whether explicit or the end of a failed or timed-out activation. It is the registry's only removal path. It disposes every listener through `scope.track()` and drops events that were emitted but not yet delivered. Unregister or uninstall ships with the management-UI or loader item. | Registry Q5 deferred runtime removal. The scope seam already guarantees cleanup, so a later `unregister` (deactivate, then delete the entry) gets it for free. |
+| Q1 | Should the bus and the core event sources be separate specs? | **One spec, three phases, two PRs.** Phases 1–2 (PR 1) build the bus, the extension service and `cezar.extension.activated`, and meet all four DoD checks (§ Phasing). Phase 3 (PR 2) adds the task and project events. | The DoD needs at least one public event, and activation depends on neither the stream nor the router. PR 2 touches the server, the SSE protocol and the stream hot path, so it gets its own review. |
+| Q2 | What format do core event ids take? | **`cezar.`-prefixed, kebab-case segments**, for example `cezar.task.started` and `cezar.task.status-changed`. | Item 1 reserves the `cezar` publisher for core, and item 3 names commands the same way. The id grammar (`ids.ts`: `[a-z0-9][a-z0-9-]*` segments) has no uppercase, so the owner's `statusChanged` is spelled `status-changed`. |
+| Q3 | "Private/namespaced" extension events: may other extensions listen, or only the owner? | **The owner alone emits; any extension may listen.** "Private" means *owned*: nobody else can emit into `acme.x.*`. No extension may emit any `cezar.*` id, not even a built-in whose own id is under `cezar` (registry Q6 allows those), so core events cannot be spoofed. | This is item 1's merged `Events` contract, and it matches command visibility. Every extension shares one origin, so a listen restriction would not be a security boundary. |
+| Q4 | Where do task events come from? *(changed)* | **The server.** `RunStore` detects each status or archive transition at its single broadcast point (`touch`). The workspace stream relays it as a new stamped event, `task-transition`, and the cockpit maps that to bus events for **every project**. The change is additive: no existing route or event changes, and `BACKWARD_COMPATIBILITY.md` gains the new name. | The server knows the true previous state, so no event is guessed. The first draft's client-side cache baselines and `archivedAt` recency window are gone. |
+| Q5 | What do the task events mean? *(changed)* | **A canonical event plus semantic events.** `cezar.task.status-changed` fires on *every* status change. On top of it:<br>• `cezar.task.started`: into `running` from anything but `running` and `waiting`;<br>• `cezar.task.completed`: into `done` or `review` from outside that pair (successful completion);<br>• `cezar.task.failed`: into `failed`;<br>• `cezar.task.cancelled`: into `cancelled`;<br>• `cezar.task.archived`: `archived` becomes `true`; restoring a task emits nothing. | `status-changed` gives flexibility, and each semantic event lets an extension subscribe to exactly what it means (`on(TaskFailed, …)`) without filtering. The extra tokens cost nothing. `review` counts as success: a finished, successful run with changes waiting for a human (`docs/reference.md`, review gate). |
+| Q6 | What does `project.changed` track, and do late subscribers get the current value? | **The registered project the URL shows** (`/p/:projectId` after `default` normalization), and `null` on workspace pages and on the "not registered here" screen. The value starts at `null`, and the event fires on every change. **No replay and no getter.** | That is the switch the user sees. A `cezar.project.current` command can follow additively if extensions need it. |
+| Q7 | "Removing an extension clears its listeners": what is removal? | **Deactivation**, whether explicit or the end of a failed or timed-out activation. It disposes every listener through `scope.track()` and drops deliveries not yet made. `unregister` ships with the management-UI or loader item. | The registry has no unregister (registry Q5), and the scope seam already guarantees the cleanup. |
+| Q8 | Several open cockpits (tabs, a phone) each receive the same task event. What should happen? | **Every page reacts; this is documented.** The README warns never to trigger a non-idempotent action (for example `TaskContinue`) from a task event. Choosing one leader page is out of scope. | It needs no extra mechanism. The warning covers the one risky use. |
 
 ## 📝 Problem Statement
 
@@ -49,15 +64,14 @@ internal to the cockpit, and no HTTP route, SSE event, state file or published s
   `events.emit`. The worked example, `examples/hello-extension`, emits `example.hello.greeted`,
   but nothing receives it.
 - **There is no `off` or `once`.** The only way to unsubscribe is to keep the `Disposable`. To
-  wait for the next completion, an extension must dispose inside its own listener. That is the
-  bookkeeping `once` exists to remove, and every mainstream emitter (Node, Obsidian, mitt)
-  offers both.
-- **Nothing to react to.** The cockpit sees a task finish only as a cache patch. In
-  `api/global-events.tsx`, each `run` SSE message carries the whole `RunRecord`, once per step
-  and per token update, and is folded into the query cache. No code ever names the transition.
-  An extension that wants to know "a task completed" has to open its own `EventSource` and diff
-  records itself. That spends the per-origin connection budget the one-stream design protects
-  (`global-events.tsx`, `useGlobalEvents`) and couples the extension to internals.
+  wait for the next completion, an extension must dispose inside its own listener, the
+  bookkeeping `once` exists to remove.
+- **Nothing to react to.** No code, on the server or in the cockpit, names a task transition.
+  The store emits the whole `RunRecord` on every change (`RunStore.touch`), once per step and
+  per token update, and the cockpit folds it into its caches (`api/global-events.tsx`). The
+  workspace stream sends no snapshot on connect. An extension that wants "a task failed" would
+  have to open its own `EventSource` and diff records itself, with no way to know the state
+  before its first message.
 - **A project switch is equally invisible.** `ProjectScopeRoute` (`routes.tsx`) re-scopes the
   API client when the URL changes, and nothing outside the routed subtree learns about it.
 
@@ -70,21 +84,18 @@ internal to the cockpit, and no HTTP route, SSE event, state file or published s
    subscribe to anything. Each extension activation gets `bus.forExtension(scope)`, the `Events`
    it sees as `context.events`. Every subscription goes through `scope.track()`. That tracking is
    what makes the DoD's cleanup automatic.
-3. **The contract gains `off` and `once`.** § Delivery, precisely pins the host semantics the
-   TSDoc promises: asynchronous delivery, per-listener isolation, and a JSON snapshot taken at
-   emit time.
-4. **Five public core events.** Their tokens live in
-   `packages/extension-api/src/core-events.ts`, so extensions subscribe with compile-time
-   payload types. They come from three existing points:
-   - the registry's new `onStatusChange` callback emits `cezar.extension.activated`;
-   - a pure task-transition tracker, fed by the stream `global-events.tsx` already holds, emits
-     `cezar.task.*`;
-   - a `ProjectChangeReporter` in the router emits `cezar.project.changed`.
+3. **The contract gains `off` and `once`.** § Delivery, precisely pins the host semantics:
+   asynchronous FIFO delivery, per-listener isolation, a JSON snapshot taken at emit time, a
+   cascade depth limit and a per-macrotask delivery budget.
+4. **Public core events.** Their tokens live in `packages/extension-api/src/core-events.ts`, so
+   extensions subscribe with compile-time payload types. They come from three points:
+   - `RunStore.touch` detects a task transition. The workspace SSE stream relays it as
+     `task-transition`, and the cockpit maps it to `cezar.task.*`;
+   - a `ProjectChangeReporter` in the router emits `cezar.project.changed`;
+   - the registry's new `onStatusChange` callback emits `cezar.extension.activated`.
 5. **Two kinds of event, one rule.** Core events are `cezar.*` and only core emits them.
    Extension events are `${extension.id}.*` and only their owner emits them. Anyone may listen.
-   Names cannot collide because every id sits under exactly one owner's prefix. The bus carries
-   public events only. Core's internal signals stay where they already are: the SSE layer and
-   React state.
+   Names cannot collide because every id sits under exactly one owner's prefix.
 
 ### Prior art
 
@@ -92,56 +103,71 @@ internal to the cockpit, and no HTTP route, SSE event, state file or published s
   registered through the plugin detach automatically on unload. We adopt that, using
   `scope.track()`, and adopt `off` by listener reference.
 - **VS Code** (`EventEmitter`, `Event<T>` returning a `Disposable`): no `off`; `fire` is
-  synchronous and isolates listener errors. Extensions share events only through exported APIs.
-  We adopt the `Disposable` return and the isolation. We deliver asynchronously (item 1's
-  contract) and use one shared, namespaced bus instead of per-API emitters.
+  synchronous and isolates listener errors. We adopt the `Disposable` return and the isolation,
+  but deliver asynchronously (item 1's contract) on one shared, namespaced bus.
 - **Node `EventEmitter`** (`on/off/once/emit`): `off` removes the single most recently added
-  instance, and `maxListeners` warns at 10. Our `off` removes *every* subscription of that
-  listener to that event made by the caller, so after `off` the listener is never called again.
-  A listener-count warning is deferred.
-- **Grafana** (`getAppEvents().subscribe(EventClass, handler)`, `BusEventWithPayload`): typed
-  event classes identify events. That is the closest match to `EventToken`. We keep matching
-  tokens by `id`, because every bundle carries its own copy of the package.
+  instance. Our `off` removes *every* subscription of that listener to that event made by the
+  caller, so after `off` the listener is never called again.
+- **Grafana** (`getAppEvents().subscribe(EventClass, handler)`): typed event classes identify
+  events, the closest match to `EventToken`. We keep matching tokens by `id`, because every
+  bundle carries its own copy of the package.
+- **GitHub webhooks** (`pull_request` with an `action` such as `opened`/`closed`, plus
+  `check_suite` and `workflow_run` with a `conclusion`): one canonical event carrying the state
+  sits next to narrower named events. That is the owner's `status-changed` plus semantic-events
+  model.
 - **mitt** (`on('*', …)`): the wildcard handler is deferred. It would let one extension observe
   every other extension's traffic by default, and nothing in the brief needs it.
 
 ### Alternatives considered
 
+- **Derive task events in the cockpit from `run` records.** This was the first draft's choice.
+  The owner rejected it (Q4). It needed per-task baselines from the query caches, an
+  `archivedAt` recency window guarded against clock skew, and it still missed any task whose
+  first message was already the transition.
+- **Server-side semantic event names on the wire** (`task-completed`, `task-failed`, …). Rejected:
+  the wire carries one neutral transition, the minimal protocol addition. Naming what a
+  transition *means* is the extension layer's job and can grow there without a protocol change.
 - **Use a library** (mitt, eventemitter3). Rejected: the emitter core is a few dozen lines. The
-  real work is namespaces, scope tracking, JSON snapshots, isolation and the cascade guard, and
-  the extension runtime takes no dependencies (AGENTS.md, `packages/extension-api` row).
-- **Synchronous delivery** (VS Code, Node). Rejected: item 1's contract promises asynchronous
-  delivery. Synchronous delivery would run extension code inside the emitter's stack, including
-  the SSE message handler, where a slow listener would delay cache patching. It would also rule
-  out a later worker runtime.
-- **Server-side lifecycle events** (a new workspace SSE event name). Deferred (Q4). It is exact,
-  but it is a protocol addition and a server change. The tracker can be swapped for it behind
-  the same tokens.
-- **DOM `EventTarget` / `CustomEvent`.** Rejected: it is DOM-bound (the bus must run under
-  vitest's Node environment), has no ownership or namespaces, and has no per-extension cleanup.
-- **Put the bus in `packages/extension-api`.** Rejected: that package is a contract with no host
-  code, by design (its README and `test/boundary.test.ts`).
+  real work is namespaces, scope tracking, snapshots, isolation and the storm guards, and the
+  extension runtime takes no dependencies.
+- **Synchronous delivery.** Rejected: item 1 promises asynchronous delivery. Synchronous
+  delivery would run extension code inside the SSE message handler.
+- **DOM `EventTarget` / `CustomEvent`.** Rejected: it is DOM-bound, has no ownership and no
+  per-extension cleanup.
 
 ## 📝 Architecture
 
 ```mermaid
 flowchart LR
-  ge["api/global-events.tsx<br/>(changed: observes run / run-deleted)"] --> tt["events/task-transitions.ts<br/>(NEW, pure) tracker"]
-  tt -->|"cezar.task.*"| bus["events/bus.ts<br/>(NEW, pure) createEventBus"]
-  pr["events/project-change-reporter.tsx<br/>(NEW, mounted in routes.tsx)"] -->|"cezar.project.changed"| bus
-  reg["extensions/registry.ts<br/>(changed: onStatusChange)"] -->|"cezar.extension.activated<br/>(host.ts helper)"| bus
+  store["runs/store.ts<br/>(changed: transition in touch)"] -->|"'transition'"| sse["server.ts workspace SSE<br/>(changed: task-transition, additive)"]
+  sse -->|"task-transition (stamped)"| ge["api/global-events.tsx<br/>(changed: relays to bus)"]
+  ge --> map["events/task-events.ts<br/>(NEW, pure) wire → bus events"]
+  map -->|"cezar.task.*"| bus["events/bus.ts<br/>(NEW, pure) createEventBus"]
+  pr["events/project-change-reporter.tsx<br/>(NEW, in routes.tsx)"] -->|"cezar.project.changed"| bus
+  reg["extensions/registry.ts<br/>(changed: onStatusChange)"] -->|"cezar.extension.activated"| bus
   host["extensions/host.ts<br/>(changed) cockpitServices"] -->|"forExtension(scope)"| bus
   ext["extension<br/>(built-ins; list still empty)"] -->|"context.events"| host
-  bus -->|"Events · tokens · codes"| api["@open-mercato/cezar-extension-api<br/>(changed: off, once, 5 tokens)"]
+  bus -->|"Events · tokens"| api["@open-mercato/cezar-extension-api<br/>(changed: off, once, 8 tokens)"]
 ```
 
-Core facts enter the bus at three points that already exist, and extensions reach the bus only
-through `context.events`.
+The server names *that* a task changed state, the cockpit names *what it means*, and extensions
+reach it only through `context.events`.
 
-- **Placement.** `packages/web/src/events/`:
-  - `bus.ts`, pure; its only runtime import is the extension API, plus a type-only
-    `ExtensionScope`;
-  - `task-transitions.ts`, pure; it reuses `TERMINAL_STATUSES` from `lib/tasks-table.ts`;
+- **Server (PR 2).**
+  - `RunStore` keeps a `Map<runId, { status, archived }>` snapshot. It is seeded in `open()`
+    from the reconciled records, recorded without an event on a run's first `touch` (creation,
+    `queued`), and dropped on delete and prune.
+  - `touch(run)` compares against the snapshot. On a status or archive change it emits
+    `('transition', { run, previousStatus, previousArchived })` right after `('run', run)`.
+  - In `attach()`, the workspace SSE handler (`server.ts`, `GET /workspace/events`) subscribes
+    to `'transition'` and writes a stamped `task-transition` event.
+  - The per-project streams do not carry it. Widening the boot-project stream is a breaking
+    change (`BACKWARD_COMPATIBILITY.md` § 2).
+- **Contract (PR 2).** `taskTransitionEventSchema` in `packages/contract/src/runs.ts` (additive)
+  is what the cockpit's parser validates against: Zod at the boundary.
+- **Cockpit placement.** `packages/web/src/events/`:
+  - `bus.ts`, pure;
+  - `task-events.ts`, pure: a function from one wire transition to its bus events;
   - `provider.tsx`;
   - `project-change-reporter.tsx`;
   - tests beside each file.
@@ -151,28 +177,24 @@ through `context.events`.
 - **Boot order.** `main.tsx` creates the query client, the command registry and the event bus,
   then registers the core commands. It starts the extension host with
   `cockpitServices({ commands, events })` and `onStatusChange: extensionLifecycleEvents(events)`,
-  then renders `<App queryClient commands events />`. The bus exists before any extension
-  activates. Rendered without the `events` prop (tests), `App` creates its own bus.
-- **Extension host.** `host.ts` gains the real `events` service in `cockpitServices` and a
-  helper, `extensionLifecycleEvents(bus)`, which maps `→ active` to `cezar.extension.activated`.
-  `startExtensionHost` passes an optional `onStatusChange` through to the registry. Its default
-  services stay `unavailableServices`, whose `events` gains `once`/`off` placeholders.
-  `BUILTIN_EXTENSIONS` still ships empty.
-- **Registry.** One additive option: `onStatusChange(record, previous)`. It is called after
-  every status change and isolated like `onError`. Every existing behaviour and test stays as
-  it is.
-- **Stream.** `useGlobalEvents` reads the bus from `EventBusProvider`, which is `null` outside
-  it. Only when a bus is present, it feeds each parsed `run` / `run-deleted` into a per-mount
-  tracker *before* the project filter. That way another project's completion is observed even
-  though it never patches the active cache. Only this path observes; nothing else in the
-  message loop changes.
-- **Extension API package.** Adds `Events.off`, `Events.once`, the TSDoc updates and
-  `core-events.ts`: five tokens and their payload types, exported from the barrel. It gains no
-  new error codes. `test/surface.test.ts` and `test/fake-context.ts` are updated deliberately.
-- **Not in this item:** wildcard subscriptions, replay or "sticky" events, a current-project
-  getter, `task.deleted` / `task.failed` / `task.restored` / `extension.deactivated`, listener
-  caps or leak warnings, server-side lifecycle events, a leader page that alone reacts to task
-  events, and a devtools event log.
+  then renders `<App queryClient commands events />`. Rendered without `events` (tests), `App`
+  creates its own bus.
+- **Stream (PR 2).** `task-transition` joins the stamped names `global-events.tsx` listens to.
+  With a bus present (from `EventBusProvider`, `null` outside it), each parsed transition goes
+  through `taskEventsFor()` and onto the bus. That happens *before* the active-project filter,
+  and the filter itself does not change, so another project's transitions still reach
+  extensions. A `task-transition` never patches a cache: the `run` event that precedes it
+  already did.
+- **Extension API package.** Adds `Events.off`, `Events.once`, TSDoc updates and
+  `core-events.ts`: eight tokens and their payload types, exported from the barrel. No new error
+  codes.
+- **Not in this item:**
+  - wildcard subscriptions, replay or sticky events, and a current-project getter;
+  - `task.deleted`, `task.restored` and `extension.deactivated`;
+  - listener caps and leak warnings;
+  - replay of transitions missed during a disconnect;
+  - a leader page;
+  - a devtools event log.
 
 ## 📝 API Contracts
 
@@ -208,11 +230,11 @@ export interface TaskEvent {
   readonly taskId: string
   /** The registered project that owns the task — always present, unlike `TaskRef.projectId`. */
   readonly projectId: string
-  /** The task's status after the change: `queued`, `running`, `waiting`, `review`, `done`, `failed` or `cancelled` today (the union may grow). */
+  /** The status now: `queued`, `running`, `waiting`, `review`, `done`, `failed` or `cancelled` today (the union may grow). */
   readonly status: string
 }
 export interface TaskTransition extends TaskEvent {
-  /** The status the cockpit last saw before the change. */
+  /** The status the server held before this change. */
   readonly previousStatus: string
 }
 export interface ProjectChange {
@@ -225,25 +247,23 @@ export interface ExtensionActivation {
   readonly version: string
 }
 
+/** Every status change; the canonical event the semantic ones below refine. */
+export const TaskStatusChanged = defineEvent<TaskTransition>('cezar.task.status-changed')
 export const TaskStarted = defineEvent<TaskTransition>('cezar.task.started')
 export const TaskCompleted = defineEvent<TaskTransition>('cezar.task.completed')
+export const TaskFailed = defineEvent<TaskTransition>('cezar.task.failed')
+export const TaskCancelled = defineEvent<TaskTransition>('cezar.task.cancelled')
 export const TaskArchived = defineEvent<TaskEvent>('cezar.task.archived')
 export const ProjectChanged = defineEvent<ProjectChange>('cezar.project.changed')
 export const ExtensionActivated = defineEvent<ExtensionActivation>('cezar.extension.activated')
 ```
 
-The payloads are narrow view models declared here: they carry ids and statuses only, with no
-prompt, title or path. `status` is a `string` because this package never imports the contract.
-That is the same reason `TaskContinueInput.runner` is a string (item 3). Because `TaskEvent`
-includes `taskId` and `projectId`, a payload works as a task command input:
-`events.on(TaskCompleted, (task) => commands.execute(TaskArchive, task))` addresses exactly that
-task in exactly its project.
-
-Task events are **per-page notifications** (Q4). Each open cockpit derives them and runs its
-own extensions, so a listener that acts runs once per open page. Archiving twice is harmless;
-continuing twice starts two sessions. The README states this beside the example: an action
-that is not idempotent must not be triggered by a task event until a leader-page mechanism
-exists.
+The payloads are narrow view models: ids and statuses only, with no prompt, title or path.
+`status` is a `string` because this package never imports the contract (item 3's reason for
+`runner: string`). A payload works as a task command input:
+`events.on(TaskCompleted, (task) => commands.execute(TaskArchive, task))`. That line archives
+the task once per open cockpit (Q8). Archiving twice is harmless, but continuing twice starts
+two sessions, so the README forbids non-idempotent reactions to task events.
 
 ### Host bus (`packages/web/src/events/bus.ts`, cockpit-internal)
 
@@ -293,9 +313,9 @@ export function createEventBus(options?: EventBusOptions): EventBus
 2. **Resolve.** If `token` is not an object with `kind === 'event'` and a valid `id`, it throws
    `invalid-id`.
 3. **Own.** The extension view refuses every `cezar.*` id first, whatever the extension's own
-   id. A built-in extension under the `cezar` publisher (allowed by registry Q6) emits only
-   through core code. Then it requires the id to start with `${extension.id}.`. The core view
-   requires `cezar.`. Anything else throws `namespace-violation`.
+   id. A built-in extension under the `cezar` publisher emits only through core code. Then it
+   requires the id to start with `${extension.id}.`. The core view requires `cezar.`. Anything
+   else throws `namespace-violation`.
 4. **Snapshot the payload** with `JSON.stringify`. If it throws (a cycle, a `bigint`), the emit
    throws `invalid-input`, naming the event and never the value. If the snapshot is `undefined`
    (a payload-less event, or a top-level function), listeners receive `undefined` and nothing
@@ -314,18 +334,20 @@ export function createEventBus(options?: EventBusOptions): EventBus
    on a listener. The queue drains in a microtask. After `deliveryBudget` listener calls
    without a macrotask in between, draining pauses and resumes in the next macrotask (a
    `MessageChannel` post, as React's scheduler does). The first pause of a streak is reported
-   (`kind: 'backlog'`). That way a storm of async re-emits or fan-out can slow the bus, but it
-   never starves rendering or input.
+   (`kind: 'backlog'`).
 8. **Deliver.** Each snapshotted subscription that is still live gets its own copy of the
    payload (`JSON.parse` of the snapshot). A subscription is not live when it was disposed or
    `off`-ed, or its extension was deactivated, since the emit. A synchronous throw, or a
    rejection of a returned promise, is reported (`kind: 'listener'`) and delivery continues. A
    delivered `once` subscription is untracked from its scope.
 
-Guarantees: emits are delivered in emit order, and within one emit, in subscription order. A
-listener receives only events emitted after it subscribed. No listener failure reaches the
-emitter or another listener. The extension that owns a failing listener stays `active`.
-Rendering always gets a turn.
+Guarantees:
+
+- Emits are delivered in emit order, and within one emit, in subscription order.
+- A listener receives only events emitted after it subscribed.
+- No listener failure reaches the emitter or another listener, and the extension that owns a
+  failing listener stays `active`.
+- Rendering always gets a turn.
 
 **`on(token, listener)` / `once(token, listener)`** (extension view):
 
@@ -335,93 +357,97 @@ Rendering always gets a turn.
 4. the subscription goes through `scope.track()`, and the returned `Disposable` is the tracked
    handle: idempotent, and it untracks.
 
-Any well-formed id may be subscribed, whether it is core's, another extension's, or one nobody
-emits. A subscription to an id nobody emits is inert, so an extension written for a newer
-Cezar still activates on an older one.
+Any well-formed id may be subscribed. A subscription to an id nobody emits is inert, so an
+extension written for a newer Cezar still activates on an older one.
 
 **`off(token, listener)`** (extension view):
 
 1. `scope.assertLive()`;
 2. a malformed token throws `invalid-id`;
 3. it disposes every subscription *of the calling extension* whose id is `token.id` and whose
-   listener is `===` the given one, `on` and `once` alike. That includes a `once` already taken
-   off the subscriber list for a pending delivery. The extension view keeps its own index, so
-   `off` reaches it. Any snapshotted delivery to a disposed subscription is skipped.
+   listener is `===` the given one, `on` and `once` alike. That includes a pending `once`: the
+   extension view keeps its own index, so `off` reaches it. Any snapshotted delivery to a
+   disposed subscription is skipped.
 
 If nothing matches, `off` does nothing. It never touches another extension's subscriptions.
 
 **Cleanup.** When an activation ends (after `deactivate()` settles or times out, or when
 `activate()` fails), the scope disposes every tracked subscription. From that point none of
-that extension's listeners runs again, including for events emitted before the deactivation
-and not yet delivered. While `deactivate()` itself is running, the extension is still active
-and its listeners may still be called.
+that extension's listeners runs again, including for events emitted before the end and not yet
+delivered. While `deactivate()` itself is running, the extension is still active and its
+listeners may still be called.
+
+### Server: the `task-transition` workspace event (PR 2)
+
+```ts
+// packages/contract/src/runs.ts (additive)
+export const taskTransitionEventSchema = z.object({
+  /** The registered project, as on every stamped workspace event. */
+  project: z.string(),
+  id: z.string(),
+  status: runStatusSchema,
+  previousStatus: runStatusSchema,
+  archived: z.boolean(),
+  previousArchived: z.boolean(),
+});
+```
+
+- **Emitted by** `RunStore.touch` when `status` or `archived` differs from the store's snapshot
+  of that run. Other field changes (tokens, steps, titles) produce no transition. Several
+  changes made to a run between two `touch` calls produce one transition, from the last
+  broadcast state to the current one.
+- **Carried by** `GET /api/v1/workspace/events` only, as event `task-transition`. It is written
+  right after the `run` event for the same `touch`.
+- **Not carried by** the per-project streams, because widening them is breaking.
+- **Compatibility.** The name is additive and inert to older cockpits, whose `EventSource`
+  never listens for it. `BACKWARD_COMPATIBILITY.md` § 2 lists it among the workspace names. The
+  server builds the frame as `z.infer<typeof taskTransitionEventSchema>`, the same schema the
+  cockpit parses with, so no api-client mirror (and no `api-types.test.ts` pair) is needed.
+- **Not emitted** at boot. The snapshot is seeded *after* `reconcileLoadedRun`, so an
+  interrupted run the server rewrites from `running` to `failed` on restart emits nothing, and
+  no stream is open yet anyway.
+- **Not emitted** for a new run's creation (`queued`). Its first real transition is
+  `queued → running`.
+
+### Task events (`packages/web/src/events/task-events.ts`)
+
+```ts
+export type TaskBusEvent = { readonly token: EventToken<TaskTransition> | EventToken<TaskEvent>; readonly payload: TaskTransition | TaskEvent }
+/** One wire transition → its bus events, in emit order. Pure. */
+export function taskEventsFor(transition: TaskTransitionWire): readonly TaskBusEvent[]
+```
+
+| Wire change | Bus events, in order |
+|---|---|
+| `status !== previousStatus` | `cezar.task.status-changed`, always first |
+| into `running` from anything but `running`/`waiting` | then `cezar.task.started` |
+| into `done` or `review` from outside that pair | then `cezar.task.completed` |
+| into `failed` | then `cezar.task.failed` |
+| into `cancelled` | then `cezar.task.cancelled` |
+| `archived` from `false` to `true` | last, `cezar.task.archived` |
+
+These rules are what they mean in practice:
+
+- **Answering an agent's question** (`waiting` → `running`, a run parked on a `CEZ:ASK`) is a
+  status change but not a start.
+- **Accepting a review** (`review` → `done`) is a status change but not a second completion.
+- **A Continue, a send-back or an auto-resume** (any finished status → `running`) is a start.
 
 ### Core events
 
-| Token | Id | Payload | Emitted when | Source |
-|---|---|---|---|---|
-| `TaskStarted` | `cezar.task.started` | `TaskTransition` | The status becomes `running` from `queued` or from a finished status (`review`, `done`, `failed`, `cancelled`). | Task tracker |
-| `TaskCompleted` | `cezar.task.completed` | `TaskTransition` | The status becomes finished (`TERMINAL_STATUSES`) from `queued`, `running` or `waiting`. | Task tracker |
-| `TaskArchived` | `cezar.task.archived` | `TaskEvent` | `archived` becomes `true`. | Task tracker |
-| `ProjectChanged` | `cezar.project.changed` | `ProjectChange` | The project the cockpit shows changes. The value starts at `null`, so the first project resolved after load emits and a workspace page at load does not. | `ProjectChangeReporter` |
-| `ExtensionActivated` | `cezar.extension.activated` | `ExtensionActivation` | An extension's `activate()` resolved and it is `active`. | Registry `onStatusChange` |
+| Token | Id | Payload | Source |
+|---|---|---|---|
+| `TaskStatusChanged` | `cezar.task.status-changed` | `TaskTransition` | `task-transition` |
+| `TaskStarted` | `cezar.task.started` | `TaskTransition` | `task-transition` |
+| `TaskCompleted` | `cezar.task.completed` | `TaskTransition` | `task-transition` |
+| `TaskFailed` | `cezar.task.failed` | `TaskTransition` | `task-transition` |
+| `TaskCancelled` | `cezar.task.cancelled` | `TaskTransition` | `task-transition` |
+| `TaskArchived` | `cezar.task.archived` | `TaskEvent` | `task-transition` |
+| `ProjectChanged` | `cezar.project.changed` | `ProjectChange` | `ProjectChangeReporter` |
+| `ExtensionActivated` | `cezar.extension.activated` | `ExtensionActivation` | Registry `onStatusChange` |
 
 `cezar.extension.activated` is emitted after the new extension's own listeners are live, so it
 also receives its own activation.
-
-### Task tracker (`packages/web/src/events/task-transitions.ts`)
-
-```ts
-export interface TaskSnapshot { readonly status: RunStatus; readonly archived: boolean }
-
-export type TaskTransitionEvent =
-  | { readonly type: 'started' | 'completed'; readonly payload: TaskTransition }
-  | { readonly type: 'archived'; readonly payload: TaskEvent }
-
-export interface TaskTransitionTracker {
-  /**
-   * One `run` record from the stream, at receipt. `baseline` is read only when the tracker has
-   * no memory of this task; `now` is the receipt time. Returns the transitions, in the order
-   * started → completed → archived, and remembers the record.
-   */
-  observe(
-    projectId: string,
-    run: Pick<RunRecord, 'id' | 'status' | 'archived' | 'archivedAt'>,
-    baseline: TaskSnapshot | undefined,
-    now: number,
-  ): readonly TaskTransitionEvent[]
-  /** `run-deleted`: forget the task. */
-  forget(projectId: string, taskId: string): void
-}
-export function createTaskTransitionTracker(): TaskTransitionTracker
-```
-
-The tracker keys tasks by `${projectId}:${taskId}`. It takes `previous` from its own memory,
-falls back to `baseline`, and treats the task as unknown when neither exists.
-
-- **Previous known:**
-  - `started` when the new status is `running` and the previous status was neither `running`
-    nor `waiting` (a run parked on a `CEZ:ASK` question that got its answer);
-  - `completed` when the new status is in `TERMINAL_STATUSES` and the previous one was not;
-  - `archived` when `archived` went from `false` to `true`.
-- **Previous unknown:** no `started` and no `completed`, because a mid-life update cannot be
-  told apart from a transition. `archived` is emitted only when
-  `0 ≤ now − archivedAt ≤ ARCHIVE_RECENCY_MS` (60 s). An idle task that is archived usually
-  has no earlier record in this session. The recency test separates the archive itself from a
-  later change to an old archived task, such as a worktree reclaim. Two limits:
-  - The store stamps `archivedAt` again whenever it archives (`RunStore.setArchived`), so
-    archiving an already-archived task the page has not seen emits again.
-  - Clock skew between browser and server moves the window, which can miss an archive or
-    admit one.
-
-**Baselines.** In `useGlobalEvents`, a small helper reads the task from the query caches the
-cockpit already holds, at receipt, before the 50 ms batcher patches them:
-
-- the active project's `queryKeys.runs.list()`, for events of the active project;
-- `workspaceQueryKeys.runsIndex`, keyed by `projectId` and `id`.
-
-These caches only give a first-seen task its starting point. The tracker never writes to a
-cache.
 
 ### Project change reporter (`packages/web/src/events/project-change-reporter.tsx`)
 
@@ -433,9 +459,8 @@ the `/p/:projectId` tree and the workspace routes. It works out the shown projec
 - `useProjects()` loaded and the id unknown → `null`;
 - registry still loading → nothing yet;
 - registry errored → the URL's id, the same stance `ProjectScopeRoute` takes. The exception is
-  `/p/default` with no `health.bootProject` to name the slug: nothing is emitted until the
-  registry or health answers. The route mounts the scope under the alias there, but `default`
-  is not a project id.
+  `/p/default` with no `health.bootProject`: nothing is emitted until the registry or health
+  answers.
 
 In an effect, it emits `ProjectChanged { projectId, previousProjectId }` whenever that value
 differs from the last one it emitted. The last value is held in a ref and starts as `null`. A
@@ -457,19 +482,19 @@ renders `useGlobalEvents` or a route without the provider keeps its current beha
 
 ## 📝 UI/UX
 
-No visible change. The bus, the tracker and the reporter render nothing, and no screen reads
-them. The run list, the global Tasks page and the project switcher behave exactly as today,
-with the same requests and the same cache patches. The existing `global-events` and `routes`
-tests are the proof (§ Implementation Plan, Steps 7–8).
+No visible change. The bus, the mapper and the reporter render nothing, and no screen reads
+them. The run list, the global Tasks page and the project switcher behave exactly as today. The
+existing `global-events` and `routes` tests are the proof (§ Implementation Plan).
 
 ## 📝 Edge Cases & Failure Scenarios
+
+**Bus and listeners**
 
 | Scenario | Behaviour |
 |---|---|
 | A listener throws or rejects | Reported (`[cezar:extensions] <ext>: listener for <event> failed`). The emitter, the other listeners and the extension's status are unaffected. |
 | Emit with a non-JSON payload (a cycle, a `bigint`) | `emit` throws `invalid-input` and nothing is delivered. |
-| The emitter mutates the payload after `emit` | Listeners see the value at emit time. |
-| A listener mutates its payload | It changes only its own copy. |
+| The emitter mutates the payload after `emit`, or a listener mutates its own | Neither is visible to anyone else: every listener has its own snapshot. |
 | An extension emits `cezar.*` (even a built-in with a `cezar.*` id) or another extension's id | `namespace-violation`, thrown synchronously. |
 | An extension subscribes to an id nobody emits (a typo, a newer core event) | Allowed and inert. |
 | A malformed token, or a listener that is not a function | `invalid-id` / `invalid-input`, thrown. |
@@ -477,68 +502,70 @@ tests are the proof (§ Implementation Plan, Steps 7–8).
 | The same listener subscribed twice | It is called twice per emit. `off` removes both; each `Disposable` removes one. |
 | `once`, then two quick emits | Only the first is delivered. |
 | `once`, emit, then `off` before the flush | Not delivered: a pending `once` stays cancellable. |
-| `off`/`dispose` between the emit and the delivery | Not delivered. |
-| The extension deactivates between the emit and the delivery | Not delivered. After `deactivate` resolves, none of its listeners runs again. |
-| `activate()` subscribes, then throws or times out | The scope ends and its listeners are disposed. The extension is `failed` and hears nothing. |
+| `off` or `dispose`, or the extension deactivates, between the emit and the delivery | Not delivered. After `deactivate` resolves, none of its listeners runs again. |
+| `activate()` subscribes, then throws or times out | The scope ends and its listeners are disposed. |
 | Any events call after deactivation | `on`, `once`, `off` and `emit` throw `disposed`. |
-| A listener re-emits what it handles synchronously (a ping-pong between two extensions) | Delivered up to depth 16. The next emit is dropped and reported once. |
-| A listener re-emits after an `await`, or fans out 2× per event | The depth does not follow an `await` (JavaScript has no async context yet), so an async ping-pong is not stopped. The delivery budget still yields every 1,000 calls, so the page keeps rendering, and the first pause is reported as `backlog`. |
-| A listener doing heavy synchronous work | It blocks the main thread like any extension code; in-process code cannot prevent that (a later worker runtime). |
-| An agent's question is answered (`waiting` → `running`) | No event: the task never stopped. |
-| The cockpit loads while a task is running | The first record seen is the baseline, so `started` is not emitted for that run. `completed` is emitted when it finishes. |
-| The stream drops and reconnects | A transition during the gap is reported late, on the next record that differs, or not at all if the task came back to the same status. Nothing is replayed. |
-| A usage-limit parking (spec `2026-08-03-auto-resume-after-usage-limit`) | `completed` with `status: 'failed'`, then `started` with `previousStatus: 'failed'` when the resume runs. `autoResumeAt` is not in the payload. |
-| `queued` → `cancelled` | `completed` with `previousStatus: 'queued'`, and no `started` before it. |
-| `review` → `done` (a review accepted) | No event: both statuses are finished. |
-| A task archived from the CLI, another tab or an extension, not seen since load | Emitted when a cache holds its baseline or its `archivedAt` is recent (0–60 s); otherwise missed. |
-| An old archived task changes (a worktree reclaim) with no baseline | Not emitted: its `archivedAt` is old. |
-| An already-archived task not seen since load is archived again | Emitted again: the store re-stamps `archivedAt`. |
-| Browser and server clocks differ by more than 60 s | Only the no-baseline archive case is affected. The window shifts, so an archive can be missed or a re-stamped one admitted. |
-| A task is deleted | The tracker forgets it. No event (`cezar.task.deleted` can be added later). |
-| An extension activates after the first `project.changed` | It misses the current value (no replay, Q6) and hears the next change. |
+| A synchronous re-emit ping-pong | Delivered up to depth 16. The next emit is dropped and reported once. |
+| An async re-emit (after an `await`), or a 2× fan-out | The depth does not follow an `await`. The delivery budget still yields every 1,000 calls, so the page keeps rendering, and the first pause is reported as `backlog`. |
+| A listener doing heavy synchronous work | It blocks the main thread like any extension code (a later worker runtime). |
+
+**Task events**
+
+| Scenario | Behaviour |
+|---|---|
+| A task that was already running when the cockpit loaded finishes | Exact: `status-changed`, then `completed`/`failed`/`cancelled`. The server knows the previous state. |
+| The stream drops and reconnects | Transitions during the gap are lost: the workspace stream has no replay. Everything after the reconnect is exact. |
+| The server restarts | The snapshot is re-seeded from the reconciled records. Boot-time rewrites (interrupted run → `failed`) emit nothing. |
+| An agent's question is answered (`waiting` → `running`) | `status-changed` only. |
+| `review` → `done` (a review accepted) | `status-changed` only. `completed` fired when the run entered `review`. |
+| `review` → `running` (sent back) → `done` | `status-changed` and `started`, then `status-changed` and `completed` again. |
+| A usage-limit parking (spec `2026-08-03-auto-resume-after-usage-limit`) | `failed` when parked, then `started` (previous `failed`) when the resume runs. `autoResumeAt` is not in the payload. |
+| `queued` → `cancelled` | `status-changed` and `cancelled`, with no `started` before them. |
+| A task archived from anywhere (the UI, the CLI, the sweep, an extension) | `archived`, exactly once per `false → true`. Re-archiving an archived task changes nothing, so nothing is emitted. |
+| Status and archive change between two `touch` calls | One transition: the status events, then `archived`. |
+| A task is deleted | The store drops its snapshot. No event (`task.deleted` can be added later). |
+| Two tabs, or a tab plus a phone | Each page receives the stream and runs its own extensions. A reaction runs once per page (Q8); non-idempotent reactions are documented as unsafe. |
+| The mapper or the bus throws inside the SSE handler | Caught and logged. The `run` frames and the caches are unaffected. |
+| An older cockpit connected to a newer server | It never listens for `task-transition`, so nothing changes for it. |
+
+**Project events**
+
+| Scenario | Behaviour |
+|---|---|
+| An extension activates after the first `project.changed` | It misses the current value (Q6) and hears the next change. |
 | `/p/default/…` | Only the normalized slug is emitted. With the registry errored and no health answer, nothing is emitted. |
-| Two tabs, or a tab plus a phone | Each page has its own bus and extension instances, and each derives the same task events. A listener that acts on them acts once per page (Q4); non-idempotent reactions are documented as unsafe. |
-| The tracker or the bus throws inside the SSE handler | Caught and logged. The frame is still applied to the cache. |
-| StrictMode double-invokes effects and initializers | The reporter deduplicates against the last emitted value. The bus and the tracker are created once per page or per mount, and have no outside side effects. |
+| StrictMode double-invokes effects and initializers | The reporter deduplicates against the last emitted value. The bus is created once per page. |
 
 ## 📝 Risks & Impact Review
 
-- **Changing a mechanism that works (AGENTS.md).** `useGlobalEvents` keeps the caches live, and
-  its message loop is the only hot path this item touches. Four constraints protect it:
-  - the observer runs only with a bus present;
-  - it is `O(1)` per message (one Map lookup and compare);
-  - it sits before the project filter without changing it;
-  - it is wrapped so a throw costs nothing.
-
-  The existing `global-events` tests must pass without changes. A new test pins that a bus
-  whose `emit` throws still lets the frame patch the cache. The registry change is one
-  additive, isolated option.
-- **Best-effort events.** Task events are derived from the stream, so a transition can be missed
-  across a disconnect, or for a task first seen at its transition with no cached baseline. The
-  README states that they are notifications, not an audit log. If exactness is ever needed, the
-  upgrade is a server-side source behind the same tokens.
-- **Contract growth.** `Events` gains `off` and `once`. That breaks only implementers of
-  `Events`: the cockpit's placeholder and the package's test fake, and both change in this PR.
-  Five tokens and four payload types are added, all JSON view models. There are no new error
-  codes, so an older bundled copy of the package still classifies every error the bus raises.
-- **Microtask delivery.** Microtasks alone never yield to rendering. The cascade depth stops
-  synchronous re-emit chains, and the per-macrotask delivery budget guarantees a yield even
-  for async ping-pong and fan-out. A buggy extension can still keep the bus busy forever, but
-  not frozen. A single slow listener is unbounded, as for any in-process extension code.
-- **Duplicate reactions across pages.** Every open cockpit emits the same task events (Q4). An
-  extension that reacts with a non-idempotent action repeats it once per page. The README and
-  the example say so. A leader-page election (e.g. `BroadcastChannel` or Web Locks) is left to
-  a later item.
-- **Security and privacy.** Payloads carry ids and statuses only. Extension code already runs
-  in the cockpit's origin and can read the same stream (item 1 § Risks), so observing task
-  transitions is no new capability. Any extension can listen to any extension's events (Q3),
-  so no secret belongs in an event payload; the README says so. The loader item's trust model
-  must cover events before third-party code runs.
-- **Compatibility surfaces.** None of the surfaces in `BACKWARD_COMPATIBILITY.md` change: no
-  CLI, route, SSE event name, state file, workflow or skill format, or package manifest.
-- **Rollback.** Revert the `main.tsx` and `App` wiring, the observer in `global-events.tsx`, the
-  reporter in `routes.tsx`, the `onStatusChange` option and the `events/` directory, then
-  revert the extension API additions together with the surface snapshot. Nothing is persisted.
+- **Changing a mechanism that works (AGENTS.md).** PR 2 touches two load-bearing paths:
+  - `RunStore.touch` runs on every token update. The addition is one Map lookup and two
+    comparisons, and it emits a second store event only on a real transition. Every
+    construction site of the snapshot must stay in step: seed in `open()`, record on create,
+    drop in `deleteRun` and `pruneOldRuns`, and grep `this.runs.delete` for any other. A
+    missing drop leaks a row; a missing seed turns the first post-boot touch of an old run into
+    a silent baseline. Neither emits a wrong event.
+  - The `useGlobalEvents` message loop gains one more stamped name. The relay runs only with a
+    bus present, never patches a cache, and is wrapped so a throw costs nothing. The existing
+    `global-events` and store tests must pass without changes.
+- **Protocol growth.** The workspace stream gains `task-transition`. It is additive by the
+  compatibility doc's own rule ("a new workspace event name is inert to older consumers"), and
+  `BACKWARD_COMPATIBILITY.md` § 2 is updated in the same PR. Removing it later would be a
+  breaking change for extensions that rely on task events, so it is a durable contract.
+- **Contract growth.** `Events` gains `off` and `once`, which breaks only the cockpit
+  placeholder and the package's test fake; both change in PR 1. Eight tokens and four payload
+  types are added. There are no new error codes.
+- **Delivery storms.** The cascade depth stops synchronous chains, and the delivery budget
+  guarantees rendering gets a turn. A buggy extension can keep the bus busy, but cannot freeze
+  the page.
+- **Duplicate reactions across pages (Q8).** Documented, not prevented.
+- **Security and privacy.** Payloads carry ids and statuses only. The workspace stream already
+  carries full run records to the same origin, so the new event exposes nothing new. Any
+  extension can listen to any extension's events (Q3), so no secret belongs in an event
+  payload; the README says so.
+- **Rollback.** PR 1: revert the bus, the host wiring and the extension API additions. PR 2:
+  also revert the store snapshot, the SSE event and its compatibility-doc line. Nothing is
+  persisted.
 
 ## 📋 Phasing
 
@@ -552,43 +579,41 @@ The brief's Definition of Done, and where each check is proven:
 4. **Removing an extension clears its listeners** (removal is deactivation or a failed
    activation, per Q7). Steps 3 and 5.
 
-Each phase leaves the app working. Only Phase 3 touches code that runs on every page today.
+Each phase leaves the app working.
 
 1. **Phase 1 — The bus and the contract** (PR 1). `off`/`once` in the extension API, and the
    pure bus with its core and extension views, fully unit-tested. Nothing is wired in yet.
 2. **Phase 2 — The extension service and `cezar.extension.activated`** (PR 1). Registry
-   `onStatusChange`, `cockpitServices({ commands, events })` and the `main.tsx` boot order. This
-   meets all four DoD checks end to end.
-3. **Phase 3 — Task and project events, docs** (PR 2). The tracker and its stream hook-up, the
-   project reporter, their tokens, the README and `AGENTS.md`. PR 1 carries the README's
-   `on`/`once`/`off`/`emit` section and the `AGENTS.md` bus row. PR 2 adds the core events
-   table.
+   `onStatusChange`, `cockpitServices({ commands, events })`, the `main.tsx` boot order and the
+   PR 1 docs. This meets all four DoD checks end to end.
+3. **Phase 3 — Task and project events** (PR 2). The server transition feed, the `task-events`
+   mapper and its stream hook-up, the project reporter, their tokens, the compatibility doc and
+   the PR 2 docs.
 
 ## 📋 Implementation Plan
 
 Every step keeps `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build` and
 `npm run test:package` green. Bus tests are vitest tests in the `web` project. They use tokens
 from `defineEvent` imported by package name and a recording `ExtensionScope` fake, the same one
-the command registry's tests use. Tests flush delivery with `await Promise.resolve()` or
-`await vi.waitFor(…)`.
+the command registry's tests use (`fakeScope` in `commands/registry.test.ts`). Tests flush
+delivery with `await Promise.resolve()` or `await vi.waitFor(…)`.
 
-### Phase 1 — The bus and the contract
+### Phase 1 — The bus and the contract (PR 1)
 
 1. **Extension API: `off` and `once`.** Add both to `Events`, restate the TSDoc from § Delivery,
    precisely, and widen the `errors.ts` TSDoc. `test/fake-context.ts` records `on` and `once`
-   listeners and removes them on `off`; it stays synchronous and semantics-free, as its header
-   says. `unavailableServices.events` gains `once: fails('events')` and `off: fails('events')`.
+   listeners and removes them on `off`; it stays synchronous and semantics-free.
+   `unavailableServices.events` gains `once: fails('events')` and `off: fails('events')`.
    *Test:* type tests in `commands-events.test.ts`:
    - `once` returns a `Disposable`;
    - `off` takes the token's listener type;
    - a listener with the wrong payload type is a compile error.
 
-   The `unavailableServices` cases in `host.test.ts` cover the two new methods (`disposed` after
-   the scope ends). `surface.test.ts` is unchanged: no runtime export yet.
+   The `unavailableServices` cases in `host.test.ts` cover the two new methods.
 2. **The bus, core view.** `createEventBus`, `emit`, `on`, `EventError` and § Delivery,
    precisely. *Test* (`events/bus.test.ts`):
-   - A core listener is not called before `emit` returns and is called after a flush, with
-     the payload.
+   - A core listener is not called before `emit` returns and is called after a flush, with the
+     payload.
    - Order: subscription order within one emit, emit order across emits, and a listener added
      after an emit does not receive it.
    - Payload isolation: mutating the payload after `emit` changes nothing delivered; two
@@ -599,27 +624,27 @@ the command registry's tests use. Tests flush delivery with `await Promise.resol
    - A core emit outside `cezar.*` throws `namespace-violation`. `null`, a string,
      `{ kind: 'command', … }` and an invalid id throw `invalid-id`. A non-function listener
      throws `invalid-input`. Every error satisfies `isExtensionError`.
-   - Cascade: a listener that re-emits its own event synchronously stops at `maxCascadeDepth`
-     with exactly one `cascade` report.
+   - Cascade: a synchronous re-emit stops at `maxCascadeDepth` with exactly one `cascade`
+     report.
    - Budget, with a small `deliveryBudget`:
-     - an async ping-pong (`await` then emit) and a 2× fan-out both let a `setTimeout(0)`
-       scheduled before the storm fire while the storm is still running;
+     - an async ping-pong and a 2× fan-out both let a `setTimeout(0)` scheduled before the
+       storm fire while the storm is still running;
      - exactly one `backlog` report per streak;
      - emit order is preserved across the pause.
 3. **The extension view.** `forExtension(scope)` with `on`, `once`, `off` and `emit`. *Test:*
-   - **DoD 1, subscribe:** an extension subscribes to a `cezar.*` event and receives a core
-     emit.
-   - **DoD 2, unsubscribe:**
+   - **DoD 1:** an extension subscribes to a `cezar.*` event and receives a core emit.
+   - **DoD 2:**
      - after `off` the listener is never called;
      - `off` removes both of two duplicate subscriptions;
-     - emit, `off`, then flush: the listener is not called (a cancelled pending delivery);
+     - emit, `off`, then flush: the listener is not called;
      - the `on` `Disposable` behaves the same;
      - `off` of an unknown listener is a no-op;
      - `off` leaves another extension's subscription alone even when it uses the same
        function;
-     - `once` fires once across two emits, and a `once` disposed before delivery never fires;
+     - `once` fires once across two emits;
+     - a `once` disposed before delivery never fires;
      - `once`, emit, `off`, flush: not called.
-   - **DoD 3, no collisions:**
+   - **DoD 3:**
      - `acme.a` emits `acme.a.ready`;
      - emitting `acme.b.ready` or `cezar.task.started` from `acme.a` throws
        `namespace-violation`;
@@ -627,12 +652,12 @@ the command registry's tests use. Tests flush delivery with `await Promise.resol
        `namespace-violation`;
      - `acme.a` and `acme.b` each emit their own `.ready`, and each listener receives only
        the event it subscribed to.
-   - **DoD 4, cleanup at the bus level:**
+   - **DoD 4 at the bus level:**
      - subscriptions go through `scope.track()` and are gone after the scope ends;
      - an event emitted just before the scope ends is not delivered after it;
      - every method throws `disposed` afterwards.
 
-### Phase 2 — The extension service and `cezar.extension.activated`
+### Phase 2 — The extension service and `cezar.extension.activated` (PR 1)
 
 4. **Lifecycle event.** Add `ExtensionActivated` and `ExtensionActivation` to `core-events.ts`,
    the barrel and the surface snapshot. Add `onStatusChange(record, previous)` to
@@ -662,52 +687,70 @@ the command registry's tests use. Tests flush delivery with `await Promise.resol
      event, then `registry.deactivate(id)` resolves. After that, neither a core emit nor
      another extension's emit reaches it. A fixture that subscribes and then throws in
      `activate` is left with no listener. Cancelling a delivery already queued is proven at
-     the bus level (Step 3): the registry's lifecycle queue may deliver an earlier emit before
-     `deactivate` runs, and that is correct.
+     the bus level (Step 3).
    - The existing `unavailableServices` tests still pass. `main.tsx` has no unit test (as in
      items 2 and 3), so the order is checked in review.
 
-### Phase 3 — Task and project events, docs
+### Phase 3 — Task and project events (PR 2)
 
-6. **The task tracker** (PR 2 starts here). Add `TaskStarted`, `TaskCompleted`,
-   `TaskArchived`, `TaskEvent` and `TaskTransition` to `core-events.ts`, the barrel and the
-   surface snapshot, then `events/task-transitions.ts`. *Test* (table-driven):
-   - Transitions from a known previous record:
-     - `queued → running`: started;
-     - `waiting → running`: nothing;
-     - `done → running`: started, with previous `done`;
-     - `running → waiting`: nothing;
-     - `waiting → done`: completed;
-     - `queued → cancelled`: completed;
-     - `review → done`: nothing;
-     - `archived` false → true: archived;
-     - one record carrying both completed and archived emits both, in that order.
-   - An unknown `running` record emits nothing.
-   - An unknown archived record emits archived only when `0 ≤ now − archivedAt ≤ 60 s`: a
-     future `archivedAt` and one 61 s old both emit nothing.
-   - A `baseline` is used only when memory is empty.
-   - After `forget`, the task counts as unknown again.
-7. **Stream hook-up.** `EventBusProvider` and `useEventBus`; `App` mounts the provider;
-   `useGlobalEvents` observes `run` and `run-deleted` for every project with cache baselines.
-   *Test* (`global-events.test.tsx`, with its existing fake `EventSource`):
-   - a `queued → running → done` sequence emits started and completed with the right
-     `projectId`, for the active project and for another project;
-   - an archive of a task that is in the cached list emits archived;
-   - a bus whose `emit` throws does not stop the cache patch;
-   - every existing test passes unchanged, without the provider.
-8. **Project reporter.** Add `ProjectChanged` and `ProjectChange` to `core-events.ts`, and
-   mount `ProjectChangeReporter` in `routes.tsx`. *Test* (`routes.test.tsx` or its own file):
+6. **Server transition feed.**
+   - The `RunStore` snapshot: seed in `open()` after reconcile, record on create, drop on
+     delete and prune, and emit `'transition'` from `touch`.
+   - `taskTransitionEventSchema` in the contract.
+   - `task-transition` on the workspace stream only.
+   - The `BACKWARD_COMPATIBILITY.md` § 2 line.
+
+   *Test:*
+   - Store:
+     - `queued → running → done` emits two transitions with the right previous status;
+     - a token-only `touch` emits none;
+     - `setArchived(id, true)` twice emits one;
+     - create emits none;
+     - a store re-opened over a `runs.json` holding a `running` run emits nothing at boot, and
+       its first later transition carries previous `failed`;
+     - delete drops the snapshot.
+   - Server (`packages/cezar/src/server/workspace-events.test.ts`): a transition arrives as
+     `task-transition` with `project` after its `run` event; the boot-project `/api/v1/events`
+     stream does not carry it.
+7. **Task events in the cockpit.**
+   - Add `TaskStatusChanged`, `TaskStarted`, `TaskCompleted`, `TaskFailed`, `TaskCancelled`,
+     `TaskArchived`, `TaskEvent` and `TaskTransition` to `core-events.ts`, the barrel and the
+     surface snapshot.
+   - Add `events/task-events.ts`.
+   - Add `EventBusProvider` / `useEventBus`, mounted by `App`.
+   - Parse and relay `task-transition` in `useGlobalEvents`.
+
+   *Test:*
+   - `taskEventsFor`, table-driven:
+     - `queued → running`: status-changed + started;
+     - `waiting → running`: status-changed only;
+     - `done → running`: status-changed + started;
+     - `running → review`: status-changed + completed;
+     - `review → done`: status-changed only;
+     - `running → failed`: status-changed + failed;
+     - `queued → cancelled`: status-changed + cancelled;
+     - archive only: archived only;
+     - status and archive together: the status events, then archived.
+   - `global-events.test.tsx` (its fake `EventSource`):
+     - a `task-transition` for the active project and one for another project both reach the
+       bus with the right `projectId`;
+     - a malformed frame is dropped;
+     - a bus whose `emit` throws leaves the `run` patching intact;
+     - every existing test passes unchanged without the provider.
+8. **Project reporter.** Add `ProjectChanged` and `ProjectChange` to `core-events.ts`, and mount
+   `ProjectChangeReporter` in `routes.tsx`. *Test:*
    - navigating `/p/a` → `/p/b` → `/tasks` emits `a` (previous `null`), `b` (previous `a`),
      then `null` (previous `b`);
    - `/p/default/…` emits only the boot slug;
    - an unknown project gives `null`;
    - StrictMode does not emit twice.
 9. **PR 2 docs.**
-   - The README gains the core events table, with two notes: these are "notifications, not an
-     audit log", and they are "per-page, so reactions run once per open cockpit; never trigger
-     a non-idempotent action such as `TaskContinue`". The auto-archive example sits beside
-     them.
-   - The `AGENTS.md` events row adds: core event sources never block or throw into their host
-     path, and the tracker observes the stream before the project filter without changing it.
+   - The README core events table, with two notes: a disconnect gap is not replayed, and
+     reactions run once per open cockpit, so never trigger a non-idempotent action such as
+     `TaskContinue`. The auto-archive example sits beside them.
+   - The `AGENTS.md` events row adds: the store is the only source of task transitions (never
+     re-derive them in the cockpit), and the relay never patches a cache or throws into the
+     message loop.
+   - The `Runs store` routing row mentions the transition snapshot and its construction sites.
 
    *Test:* the validation gate.
