@@ -169,3 +169,15 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 - [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
 - [x] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow. — 407b6a93
+
+### Phase 4: nested layout tree continuation
+
+- [x] 4.1 Replace the split descriptor/order maps with one node registry and expose atomic create, move, remove, and reorder operations. — 54d7616c
+- [x] 4.2 Preserve concrete child identity in the context menu and expand regression coverage for subtree deletion and multi-level tree operations. — 54d7616c
+- [x] 4.3 Keep drag-over state-only and apply cross-parent, before/after, and interior moves once on drag end; verify the focused web surface. — 54d7616c
+
+### Nested tree continuation validation — 2026-09-19
+
+- Focused layout tests: passed — 4 files, 27 tests.
+- Web package tests: passed — 198 files, 4039 tests.
+- Full configured gate passed in order after `npm ci`: `npm run typecheck`, `npm test` (416 files, 7721 tests), `npm run test:unit` (36 tests), `npm run build`/`check:pack`, and `npm run test:package` (16 tests).
