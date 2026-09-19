@@ -4,9 +4,12 @@ import { createElement, type ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ProjectScopeProvider } from '@/api/project-scope-context'
+import { rememberReferenceStatuses } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
+import { ReferenceStatusRegistry } from '@/components/reference-status'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { deriveAttention } from '@/lib/attention'
 import { workflowLabel } from '@/lib/tasks-table'
@@ -244,6 +247,42 @@ describe('useTaskHeaderModel: the data', () => {
         { kind: 'pr', number: 7101, url: 'https://github.com/o/r/pull/7101', status: 'ready', lookup: 'ready', conflicting: true },
       ]),
     )
+  })
+
+  // Review of #37: the look-up answers `idle` (nothing asked on this surface yet, or past the
+  // per-project cap) WITH the status it remembers, and the chip always painted it.
+  it('carries a remembered status while nothing has been asked yet', () => {
+    stubFetch()
+    rememberReferenceStatuses({ acme: { prs: { 7105: 'merged' }, issues: {} } })
+    const client = createQueryClient()
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          CommandsProvider,
+          null,
+          createElement(
+            MemoryRouter,
+            { initialEntries: ['/p/acme/tasks/r1'] },
+            createElement(ProjectScopeProvider, { projectId: 'acme', children: createElement(ReferenceStatusRegistry, { children }) }),
+          ),
+        ),
+      )
+    const firstRender: unknown[] = []
+    renderHook(
+      () => {
+        const model = useTaskHeaderModel(run('done', { referencedPullRequestUrl: 'https://github.com/o/r/pull/7105' }), {
+          requestStopConfirmation: () => {},
+        })
+        if (firstRender.length === 0) firstRender.push(model.props.meta.references?.[0])
+        return model
+      },
+      { wrapper },
+    )
+
+    // The first render, before the header's requests reach the registry: the look-up is idle.
+    expect(firstRender[0]).toEqual({ kind: 'pr', number: 7105, url: 'https://github.com/o/r/pull/7105', status: 'merged' })
   })
 
   it('says why a look-up is unavailable', async () => {
@@ -564,6 +603,20 @@ describe('useTaskHeaderModel: the intents', () => {
       await act(() => Promise.resolve())
       expect(requestsTo(sent, '/api/v1/runs/r1/archive')).toHaveLength(1)
     })
+  })
+
+  // Review of #37: the header is not remounted between tasks, so task A's request in flight must
+  // not disable task B's buttons.
+  it('keeps a request in flight for one task from disabling the next task’s actions', async () => {
+    const sent = stubFetch({ '/api/v1/runs/r1/archive': hang })
+    const { result, rerender } = renderModel(run('done'))
+    act(() => result.current.props.onArchive())
+    await waitFor(() => expect(result.current.props.actions.archive.pending).toBe(true))
+
+    rerender({ record: run('done', { id: 'r2' }) })
+    expect(result.current.props.actions.archive).toEqual({ available: true, enabled: true, pending: false })
+    act(() => result.current.props.onArchive())
+    await waitFor(() => expect(requestsTo(sent, '/api/v1/runs/r2/archive')).toHaveLength(1))
   })
 
   describe('onNavigate', () => {

@@ -16,6 +16,7 @@ import {
   TaskArchive,
   TaskContinue,
   TaskStop,
+  type TaskRef,
   type TaskHeaderActionState,
   type TaskHeaderMainProps,
   type TaskHeaderReference,
@@ -123,19 +124,22 @@ export function useTaskHeaderModel(run: ApiRun, options: TaskHeaderModelOptions)
 
   // Continue, Stop and Archive are commands (spec 2026-09-19-command-api): the handler owns the
   // request and the cache rule, the 409 refetch included, so what stays here is the state the
-  // part renders and the toast with the server's words. `inFlight` refuses a repeat made before
-  // the pending state has rendered.
-  const inFlight = useRef({ continue: false, stop: false, archive: false, resolveConflicts: false })
+  // part renders and the toast with the server's words. Pending is the task's own: the header is
+  // not remounted between tasks, so a request still in flight for task A must not disable task B's
+  // buttons. `inFlight` names the task each command is running for, and refuses a repeat for that
+  // task made before the pending state has rendered.
+  const inFlight = useRef<{ continue?: string; stop?: string; archive?: string; resolveConflicts: boolean }>({
+    resolveConflicts: false,
+  })
   const showError = (error: Error) => toast(error.message, { tone: 'danger' })
-  const continueCommand = useCommand(TaskContinue, {
-    onError: showError,
-    onSettled: () => void (inFlight.current.continue = false),
-  })
-  const stopCommand = useCommand(TaskStop, { onError: showError, onSettled: () => void (inFlight.current.stop = false) })
-  const archiveCommand = useCommand(TaskArchive, {
-    onError: showError,
-    onSettled: () => void (inFlight.current.archive = false),
-  })
+  const settled = (action: 'continue' | 'stop' | 'archive') => (_data: unknown, _error: unknown, input: TaskRef) => {
+    if (inFlight.current[action] === input.taskId) inFlight.current[action] = undefined
+  }
+  const continueCommand = useCommand(TaskContinue, { onError: showError, onSettled: settled('continue') })
+  const stopCommand = useCommand(TaskStop, { onError: showError, onSettled: settled('stop') })
+  const archiveCommand = useCommand(TaskArchive, { onError: showError, onSettled: settled('archive') })
+  const pendingHere = (command: { readonly isPending: boolean; readonly variables?: TaskRef }): boolean =>
+    command.isPending && command.variables?.taskId === run.id
   const continuation = useContinuationProvider(run)
   // "Resolve conflicts" rides the same delivery as an Ask answer: a live message, or a continue
   // for a task parked at review.
@@ -205,12 +209,14 @@ export function useTaskHeaderModel(run: ApiRun, options: TaskHeaderModelOptions)
     ...(options.planTally ? { plan: { done: options.planTally.done, total: options.planTally.total } } : {}),
     actions: {
       // No usable agent provider: offered, but not runnable, with the provider's reason.
-      continue: actionState(flags.continueRun, continueCommand.isPending, {
+      continue: actionState(flags.continueRun, pendingHere(continueCommand), {
         blocked: !continuation.canContinue,
         reason: continuation.reason,
       }),
-      stop: actionState(flags.cancel, stopCommand.isPending),
-      archive: actionState(flags.archive, archiveCommand.isPending),
+      stop: actionState(flags.cancel, pendingHere(stopCommand)),
+      archive: actionState(flags.archive, pendingHere(archiveCommand)),
+      // One delivery seam per header, so this one stays pending across a task switch: a second send
+      // while it is busy would be refused by the seam and read as sent.
       resolveConflicts: actionState(conflicting, resolving || delivery.isPending, {
         blocked: Boolean(delivery.blockedBy),
         reason: delivery.reason,
@@ -232,8 +238,8 @@ export function useTaskHeaderModel(run: ApiRun, options: TaskHeaderModelOptions)
     return {
       onContinue: () => {
         const { run: current, data: now, continuation: provider } = latest.current
-        if (!allowed(now.actions.continue) || inFlight.current.continue) return
-        inFlight.current.continue = true
+        if (!allowed(now.actions.continue) || inFlight.current.continue === current.id) return
+        inFlight.current.continue = current.id
         const { runnerOverride } = provider
         commands.current.continueCommand.mutate(
           runnerOverride === undefined ? { taskId: current.id } : { taskId: current.id, runner: runnerOverride },
@@ -244,14 +250,15 @@ export function useTaskHeaderModel(run: ApiRun, options: TaskHeaderModelOptions)
         latest.current.options.requestStopConfirmation()
       },
       stopTask: () => {
-        if (inFlight.current.stop) return
-        inFlight.current.stop = true
-        commands.current.stopCommand.mutate({ taskId: latest.current.run.id })
+        const taskId = latest.current.run.id
+        if (inFlight.current.stop === taskId) return
+        inFlight.current.stop = taskId
+        commands.current.stopCommand.mutate({ taskId })
       },
       onArchive: () => {
         const { run: current, data: now } = latest.current
-        if (!allowed(now.actions.archive) || inFlight.current.archive) return
-        inFlight.current.archive = true
+        if (!allowed(now.actions.archive) || inFlight.current.archive === current.id) return
+        inFlight.current.archive = current.id
         // Toggling off the record: an archived run is restored.
         commands.current.archiveCommand.mutate({ taskId: current.id, archived: !current.archived })
       },
@@ -375,12 +382,15 @@ function referencesOf(
   return result
 }
 
-/** A look-up entry as the contract spells it: `idle` (nothing asked) is absence. */
+/**
+ * A look-up entry as the contract spells it. `idle` (nothing asked on this surface yet, or past the
+ * per-project cap) is an absent `lookup`, but it still carries what was learned before — the last
+ * known status and conflict flag — as the chip always painted them.
+ */
 function lookupOf(entry: ReferenceStatusEntry): Partial<TaskHeaderReference> {
-  if (entry.state === 'idle') return {}
   return {
     ...(entry.status !== undefined ? { status: entry.status } : {}),
-    lookup: entry.state,
+    ...(entry.state !== 'idle' ? { lookup: entry.state } : {}),
     ...(entry.state === 'unavailable' && entry.reason ? { lookupReason: entry.reason } : {}),
     ...(entry.conflicting !== undefined ? { conflicting: entry.conflicting } : {}),
   }

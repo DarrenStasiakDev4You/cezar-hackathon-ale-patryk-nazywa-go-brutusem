@@ -251,15 +251,21 @@ function conflictActionFor(
 }
 
 /**
- * The panel's button. The intent returns nothing, so the panel closes when the action stops being
- * pending, whether the request worked or not; core's toast says which.
+ * The panel's button. The intent returns nothing, so the panel closes when the request it sent
+ * stops being pending, whether it worked or not; core's toast says which. Only this panel's own
+ * press closes it: another chip's request settling leaves it open.
  */
 function ResolveConflictsAction({ state, onResolve }: { state: TaskHeaderActionState; onResolve: () => void }) {
   const close = useCloseReferenceCard()
-  const wasPending = useRef(state.pending)
+  // `idle` → `pressed` on the click → `sent` once the request shows as pending → closed on settle.
+  const press = useRef<'idle' | 'pressed' | 'sent'>('idle')
   useEffect(() => {
-    if (wasPending.current && !state.pending) close()
-    wasPending.current = state.pending
+    if (state.pending) {
+      if (press.current === 'pressed') press.current = 'sent'
+    } else if (press.current === 'sent') {
+      press.current = 'idle'
+      close()
+    }
   }, [state.pending, close])
 
   return (
@@ -271,7 +277,10 @@ function ResolveConflictsAction({ state, onResolve }: { state: TaskHeaderActionS
         size="sm"
         data-slot="reference-conflict-action"
         disabled={!state.enabled}
-        onClick={onResolve}
+        onClick={() => {
+          press.current = 'pressed'
+          onResolve()
+        }}
         className="h-7 w-full text-xs"
       >
         {state.pending ? 'Sending…' : 'Resolve conflicts'}
