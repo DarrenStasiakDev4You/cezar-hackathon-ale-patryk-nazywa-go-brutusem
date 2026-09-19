@@ -106,9 +106,9 @@ separate PRs by the spec's own decision, not duplicates of each other.
 
 ### Phase 1: The bus and the contract
 
-- [ ] 1.1 Extension API: off and once
-- [ ] 1.2 The bus, core view
-- [ ] 1.3 The extension view
+- [x] 1.1 Extension API: off and once — 1b710009
+- [x] 1.2 The bus, core view — e8a37071
+- [x] 1.3 The extension view — e8a37071
 
 ### Phase 2: The extension service and cezar.extension.activated
 
