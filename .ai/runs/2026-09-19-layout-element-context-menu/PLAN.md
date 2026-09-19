@@ -23,6 +23,7 @@
 | 3 | 3.5-review-fix | Re-check the target and edit mode after an asynchronous delete confirmation. | inline | done | 88f5819e |
 | 3 | 3.6-review-fix | Return focus to the invoker on Escape and give the Delete description a per-menu id. | inline | done | 3f8f463f |
 | 3 | 3.7-review-fix | Keep the native-dialog name out of the context-menu test (design guardian). | inline | done | 2ed5fab9 |
+| 3 | 3.8 | Merge main after PR #12's squash-merge and retarget the PR to main. | inline | done | 5f04024e |
 
 Goal: Add a reusable, accessible context menu for registered layout widgets and groups in edit mode, with Delete delegated to the layout owner.
 
@@ -57,3 +58,4 @@ Engine: om-auto-create-pr (steps: 8, --loop: no)
 9. Merge the updated base branch and resolve the edit-mode conflicts to the base's version.
 10. Run the final gate on the synced branch.
 11. Authoritative review pass and fixes.
+12. Merge main after PR #12's squash-merge and retarget the PR to main.

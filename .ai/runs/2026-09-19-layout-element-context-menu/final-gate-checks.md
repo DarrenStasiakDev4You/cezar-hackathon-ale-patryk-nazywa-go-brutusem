@@ -21,3 +21,7 @@ Skipped: no route mounts `LayoutElementContextMenu` yet (spec step 7, integratin
 The repo's design guardian (`packages/web/src/design-guardian.test.ts`, part of `npm test`) passes on the full branch diff. The component uses token classes only (`bg-popover`, `text-popover-foreground`, `border-border`, `text-destructive`). No auto-fixes were needed.
 
 Style-compliance residual findings: none.
+
+## Re-run after merging `main` (2026-09-19T00:39:50Z)
+
+PR #12 was squash-merged into `main` (`96691516`), followed by #11 and #14. `main` merged cleanly into this branch (`5f04024e`), and the full gate re-ran on the combined head. **All green:** typecheck, `npm test` (412 files, 7569/7569), `npm run test:unit` (36/36; the launcher tests passed this time), build, and test:package. No waiver is needed for this head.
