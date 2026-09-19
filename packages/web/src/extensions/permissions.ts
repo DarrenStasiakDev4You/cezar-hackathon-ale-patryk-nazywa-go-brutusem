@@ -83,7 +83,7 @@ export function guardServices(
   const rejected = (permission: ExtensionPermission, api: string) => async (..._args: unknown[]): Promise<never> =>
     denied(permission, api)
 
-  const commands = {
+  const commands = Object.freeze({
     register: (...args: unknown[]) => {
       scope.assertLive()
       return services.commands.register(
@@ -105,7 +105,7 @@ export function guardServices(
       if (!effective.has('commands.execute') && !isOwnCommand(scope.extension.id, command)) return false
       return services.commands.has(command as never)
     },
-  }
+  })
 
   const events = effective.has('events')
     ? services.events
