@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { LayoutElement } from './layout-element'
 import { LayoutRegistryProvider } from './layout-registry'
-import { LayoutSortableSurface, resolveLayoutMove } from './layout-sortable-surface'
+import { LayoutSortableSurface, resolveLayoutMove, resolveLayoutOverlayScale, resolveLayoutPlaceholderState } from './layout-sortable-surface'
+import type { LayoutPlaceholderState } from './layout-sortable-surface'
 import { LayoutRegistry } from '@/lib/layout-elements'
 
 function renderSurface(enabled: boolean, dragMode: 'sortable' | 'container' = 'sortable') {
@@ -67,12 +68,62 @@ describe('LayoutSortableSurface', () => {
     expect(first.dataset.layoutDragging).toBe('true')
     expect(first.style.transform).toBe('')
     expect(second.style.transform).toBe('')
-    expect(first.style.visibility).toBe('hidden')
+    expect(first.style.visibility).toBe('visible')
+    expect(first.dataset.layoutPlaceholder).toBe('true')
+    expect(document.querySelector('[data-layout-overlay-preview]')?.getAttribute('data-layout-overlay-state')).toBe('anchored')
 
     fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' })
 
     expect(first.dataset.layoutDragging).toBe('false')
     expect(first.style.visibility).toBe('')
+    expect(first.dataset.layoutPlaceholder).toBeUndefined()
+  })
+
+  it('detaches the placeholder outside its slot and restores it at the edge', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'first', kind: 'widget' })
+    registry.register({ id: 'second', kind: 'widget' })
+    const geometry = { top: 0, left: 0, width: 100, height: 400 }
+    const boundary = { top: 0, left: 0, right: 400, bottom: 400, width: 400, height: 400 }
+
+    let state: LayoutPlaceholderState = { visible: true, placement: null, order: null }
+    state = resolveLayoutPlaceholderState({
+      current: state,
+      geometry,
+      boundary,
+      deltaX: 140,
+      deltaY: 0,
+      previousDeltaX: 0,
+      originId: 'first',
+      registry,
+    })!
+    expect(state).toEqual({ visible: false, placement: null, order: null })
+    expect(resolveLayoutOverlayScale(state)).toBe(0.92)
+
+    state = resolveLayoutPlaceholderState({
+      current: state,
+      geometry,
+      boundary,
+      deltaX: 350,
+      deltaY: 0,
+      previousDeltaX: 140,
+      originId: 'first',
+      registry,
+    })!
+    expect(state).toEqual({ visible: true, placement: 'after', order: 2 })
+    expect(resolveLayoutOverlayScale(state)).toBe(1)
+
+    state = resolveLayoutPlaceholderState({
+      current: state,
+      geometry,
+      boundary,
+      deltaX: 0,
+      deltaY: 0,
+      previousDeltaX: 350,
+      originId: 'first',
+      registry,
+    })!
+    expect(state).toEqual({ visible: true, placement: null, order: null })
   })
 
   it('resolves same-parent targets and limits cross-parent movement to groups', () => {

@@ -574,6 +574,19 @@
 [data-slot='layout-sortable-surface'] [data-layout-dragging='true'] {
   opacity: 0.42;
 }
+[data-slot='layout-sortable-surface'] [data-layout-placeholder='true'] {
+  filter: grayscale(1);
+  opacity: 0.28 !important;
+  pointer-events: none;
+}
+[data-slot='layout-sortable-surface'] [data-layout-placeholder='true']::after {
+  position: absolute;
+  inset: 0.5rem;
+  content: '';
+  pointer-events: none;
+  border: 1px dashed color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+  border-radius: var(--radius);
+}
 [data-slot='layout-drop-indicator'] {
   position: fixed;
   z-index: 50;

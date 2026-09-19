@@ -373,11 +373,6 @@ export const AppShell = React.memo(function AppShell({
           ids={['shell-sidebar', 'shell-main']}
           dragMode="container"
           onLayoutChange={handleShellLayoutChange}
-          renderOverlay={(element) => (
-            <div className="rounded-lg border border-primary bg-card px-4 py-3 shadow-lg">
-              {element.id === 'shell-sidebar' ? 'Navigation' : 'Main content'}
-            </div>
-          )}
         >
           {shellLayout.root?.map(renderShellBlock)}
         </LayoutSortableSurface>

@@ -19,7 +19,7 @@ export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
 /** Declares a dashboard widget/group and projects the declaration onto its DOM representative. */
 export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: requestedDragMode, children, ...props }: LayoutElementProps) {
   const registry = useLayoutRegistry()
-  const { enabled, dragMode: surfaceDragMode } = useLayoutSortableContext()
+  const { enabled, activeId, dragMode: surfaceDragMode, placeholder } = useLayoutSortableContext()
   const dragMode = requestedDragMode ?? surfaceDragMode
   const sortable = useSortable({ id, disabled: !enabled || dragMode !== 'sortable' })
   const draggable = useDraggable({ id, disabled: !enabled || dragMode !== 'container' })
@@ -37,6 +37,9 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
 
   const interaction = dragMode === 'container' ? draggable : sortable
   const isDragging = dragMode === 'container' ? draggable.isDragging : sortable.isDragging
+  const activePlaceholder = dragMode === 'container' && activeId === id && draggable.isDragging
+    ? placeholder ?? { visible: true, placement: null, order: null }
+    : null
 
   React.useEffect(() => {
     const unregister = registry.registerDeferred({ id, kind, ...(parentId === undefined ? {} : { parentId }) })
@@ -56,10 +59,15 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
       ref: setNodeRef,
       style: {
         ...props.style,
-        ...(order >= 0 ? { order } : {}),
+        ...(activePlaceholder?.visible && activePlaceholder.order !== null
+          ? { order: activePlaceholder.order }
+          : order >= 0
+            ? { order }
+            : {}),
         ...(dragMode === 'sortable' && sortable.transform ? { transform: CSS.Transform.toString(sortable.transform) } : {}),
         transition: dragMode === 'sortable' ? sortable.transition : undefined,
-        ...(dragMode === 'container' && draggable.isDragging ? { visibility: 'hidden' } : {}),
+        ...(activePlaceholder?.visible ? { visibility: 'visible' } : {}),
+        ...(activePlaceholder && !activePlaceholder.visible ? { display: 'none' } : {}),
       },
       'data-layout-element': 'true',
       'data-layout-id': id,
@@ -67,6 +75,7 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
       'data-layout-sortable': enabled && dragMode === 'sortable' ? 'true' : 'false',
       'data-layout-drag-mode': dragMode,
       'data-layout-dragging': isDragging ? 'true' : 'false',
+      'data-layout-placeholder': activePlaceholder?.visible ? 'true' : undefined,
       ...(parentId === undefined ? {} : { 'data-layout-parent-id': parentId }),
     },
     enabled ? (
