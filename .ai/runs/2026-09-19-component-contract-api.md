@@ -58,3 +58,4 @@ A component contract declares its required and optional capabilities and optiona
 - [x] Post-review fix: bound capability lists in the check (a lying `length` hung or OOM'd it), one `malformed` per list, generic `implementation` for inline literals — dbc86615
 - [x] Post-review fix: contract capability issues name the author's exact entry; a list over 32 names is one issue — 70435826
 - [x] Post-review fix: README states what `issues` holds; the drift test pins quoted runs unbroken — a58bcc9a
+- [x] Post-review fix: a non-generic implementation parameter that still rejects a misspelled key — ef6b6ca5
