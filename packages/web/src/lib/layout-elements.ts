@@ -2,18 +2,28 @@ export const LAYOUT_ELEMENT_KINDS = ['widget', 'group'] as const
 
 export type LayoutElementKind = (typeof LAYOUT_ELEMENT_KINDS)[number]
 
+/** The canonical node stored by the layout tree. */
+export type LayoutNode = {
+  id: string
+  parentId: string | null
+  children: string[]
+  kind: LayoutElementKind
+}
+
+/** Component registration input. Root nodes may omit parentId for compatibility. */
 export type LayoutElementDescriptor = {
   id: string
   kind: LayoutElementKind
-  parentId?: string
+  parentId?: string | null
 }
 
-export type RegisteredLayoutElement = LayoutElementDescriptor & {
-  children: string[]
+/** A node plus the projection metadata needed by the React layout surface. */
+export type RegisteredLayoutElement = LayoutNode & {
   order: number
   domNode?: Element
 }
 
+/** Legacy move shape retained for the dnd surface while it migrates to index operations. */
 export type LayoutMove = {
   id: string
   targetId: string | null
@@ -25,9 +35,12 @@ export type LayoutMove = {
 export type LayoutRegistryListener = () => void
 
 type PendingLayoutElement = { descriptor: LayoutElementDescriptor; unregister?: () => void }
+type CreateNodeInput = LayoutElementDescriptor | LayoutNode
 
 const isLayoutElementKind = (value: unknown): value is LayoutElementKind =>
   typeof value === 'string' && (LAYOUT_ELEMENT_KINDS as readonly string[]).includes(value)
+
+const normalizeParentId = (parentId: string | null | undefined): string | null => parentId ?? null
 
 const assertDescriptor = (descriptor: LayoutElementDescriptor): void => {
   if (!descriptor || typeof descriptor !== 'object') {
@@ -39,7 +52,8 @@ const assertDescriptor = (descriptor: LayoutElementDescriptor): void => {
   if (!isLayoutElementKind(descriptor.kind)) {
     throw new Error(`Unknown layout element kind: ${String(descriptor.kind)}`)
   }
-  if (descriptor.parentId !== undefined && (typeof descriptor.parentId !== 'string' || descriptor.parentId.trim() === '')) {
+  if (descriptor.parentId !== undefined && descriptor.parentId !== null &&
+      (typeof descriptor.parentId !== 'string' || descriptor.parentId.trim() === '')) {
     throw new Error('Layout element parentId must be a non-empty string when provided')
   }
   if (descriptor.parentId === descriptor.id) {
@@ -53,58 +67,63 @@ const cloneElement = (element: RegisteredLayoutElement): RegisteredLayoutElement
 })
 
 /**
- * In-memory source of truth for one dashboard layout.
+ * In-memory source of truth for one editable layout.
  *
- * DOM nodes are deliberately optional metadata: the tree remains useful while a visual
- * representation is temporarily unmounted, and consumers never need to scan the document.
+ * Every registered element is one node. Parent/child links and sibling order are kept in that
+ * node graph; the DOM is optional projection metadata and is never used to discover identity.
  */
 export class LayoutRegistry {
-  private readonly elements = new Map<string, LayoutElementDescriptor>()
+  private readonly nodes = new Map<string, LayoutNode>()
   private readonly pendingElements = new Map<string, PendingLayoutElement>()
   private readonly pendingRemovals = new Set<string>()
+  private readonly removedIds = new Set<string>()
   private readonly domNodes = new Map<string, Element>()
-  private readonly siblingOrder = new Map<string | undefined, string[]>()
+  private rootChildren: string[] = []
   private readonly listeners = new Set<LayoutRegistryListener>()
   private snapshotCache: RegisteredLayoutElement[] = []
 
+  /** Create and register one node at the end of its destination sibling list. */
+  createNode(input: CreateNodeInput): LayoutNode
+  createNode(id: string, kind: LayoutElementKind, parentId?: string | null): LayoutNode
+  createNode(
+    inputOrId: CreateNodeInput | string,
+    kind?: LayoutElementKind,
+    parentId?: string | null,
+  ): LayoutNode {
+    const descriptor: LayoutElementDescriptor = typeof inputOrId === 'string'
+      ? { id: inputOrId, kind: kind as LayoutElementKind, parentId }
+      : inputOrId
+    this.addNode(descriptor)
+    this.promotePendingChildren(descriptor.id)
+    this.rebuildSnapshot()
+    return this.getNode(descriptor.id)!
+  }
+
   register(descriptor: LayoutElementDescriptor): () => void {
     assertDescriptor(descriptor)
-    if (this.elements.has(descriptor.id)) {
+    if (this.nodes.has(descriptor.id)) {
       throw new Error(`Layout element "${descriptor.id}" is already registered`)
     }
-    if (descriptor.parentId !== undefined && !this.elements.has(descriptor.parentId)) {
+    if (descriptor.parentId !== undefined && descriptor.parentId !== null && !this.nodes.has(descriptor.parentId)) {
       throw new Error(`Layout element parent "${descriptor.parentId}" is not registered`)
     }
 
-    this.elements.set(descriptor.id, { ...descriptor })
-    const siblings = this.siblingOrder.get(descriptor.parentId) ?? []
-    this.siblingOrder.set(descriptor.parentId, [...siblings, descriptor.id])
-    this.rebuildSnapshot()
+    this.addNode(descriptor)
     this.promotePendingChildren(descriptor.id)
-    let active = true
-    return () => {
-      if (!active) return
-      // Check before spending the handle: a refused unregister must stay retryable.
-      if (this.getChildren(descriptor.id).length > 0) {
-        throw new Error(`Cannot unregister layout element "${descriptor.id}" while it has children`)
-      }
-      active = false
-      this.removeRegistered(descriptor.id)
-    }
+    this.rebuildSnapshot()
+    return this.createUnregisterHandle(descriptor.id)
   }
 
   /**
-   * React effects mount children before parents in some trees. Components use this lifecycle-safe
-   * variant so declaration order does not become a runtime failure; unresolved entries stay out of
-   * snapshots until their parent is registered. Direct registry callers still get strict validation
-   * from register().
+   * React effects can mount a child before its parent. Such entries are promoted into the same
+   * tree as soon as their parent appears, without making declaration order part of the API.
    */
   registerDeferred(descriptor: LayoutElementDescriptor): () => void {
     assertDescriptor(descriptor)
-    if (this.elements.has(descriptor.id) || this.pendingElements.has(descriptor.id)) {
+    if (this.nodes.has(descriptor.id) || this.pendingElements.has(descriptor.id)) {
       throw new Error(`Layout element "${descriptor.id}" is already registered`)
     }
-    if (descriptor.parentId === undefined || this.elements.has(descriptor.parentId)) {
+    if (descriptor.parentId === undefined || descriptor.parentId === null || this.nodes.has(descriptor.parentId)) {
       return this.registerForComponent(descriptor)
     }
     const entry: PendingLayoutElement = { descriptor: { ...descriptor } }
@@ -116,7 +135,7 @@ export class LayoutRegistry {
   }
 
   attachDomNode(id: string, node: Element): () => void {
-    if (!this.elements.has(id) && !this.pendingElements.has(id)) {
+    if (!this.nodes.has(id) && !this.pendingElements.has(id)) {
       throw new Error(`Cannot attach a DOM node to unknown layout element "${id}"`)
     }
     this.domNodes.set(id, node)
@@ -137,83 +156,131 @@ export class LayoutRegistry {
     return element ? cloneElement(element) : undefined
   }
 
-  getChildren(id?: string): RegisteredLayoutElement[] {
-    return this.snapshotCache.filter((element) => element.parentId === id).map(cloneElement)
+  /** Read the canonical tree node without exposing mutable registry state. */
+  getNode(id: string): LayoutNode | undefined {
+    const node = this.nodes.get(id)
+    return node ? { ...node, children: [...node.children] } : undefined
   }
 
-  getSiblingIds(parentId?: string): string[] {
-    return [...(this.siblingOrder.get(parentId) ?? [])]
+  /** Returns true after an explicit delete until the same id is mounted again. */
+  isRemoved(id: string): boolean {
+    return this.removedIds.has(id)
   }
 
-  /**
-   * Moves one entry within its current parent without mutating the caller's move or snapshot.
-   * Children never become targets across parent boundaries, and a group cannot be moved into
-   * its own subtree.
-   */
-  moveWithinParent(move: LayoutMove): boolean {
-    const source = this.elements.get(move.id)
-    if (!source || move.parentId !== undefined && (move.parentId ?? undefined) !== source.parentId) return false
-    const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
-    if (move.targetId !== null && (!target || target.parentId !== source.parentId)) return false
-    return this.move(move)
-  }
+  /** Remove the selected node and its complete registered subtree in one notification. */
+  removeNode(id: string): boolean {
+    if (!this.nodes.has(id) && !this.pendingElements.has(id)) return false
 
-  /** Moves an element between sibling lists, preserving the tree invariants atomically. */
-  moveToParent(move: LayoutMove): boolean {
-    return this.move(move)
-  }
+    const ids = this.getSubtreeIds(id)
+    for (const removedId of ids) this.removedIds.add(removedId)
 
-  private move(move: LayoutMove): boolean {
-    const source = this.elements.get(move.id)
-    if (!source || (move.targetId !== null && move.targetId === move.id)) return false
-
-    const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
-    const destinationParentId = move.parentId !== undefined
-      ? (move.parentId ?? undefined)
-      : target
-        ? target.parentId
-        : source.parentId
-    if (destinationParentId !== undefined && !this.elements.has(destinationParentId)) return false
-    if (move.targetId !== null && (!target || target.parentId !== destinationParentId)) return false
-    if (destinationParentId !== undefined && this.getSubtreeIds(move.id).has(destinationParentId)) return false
-    if (target && this.getSubtreeIds(move.id).has(target.id)) return false
-
-    const sourceSiblings = this.siblingOrder.get(source.parentId)
-    const destinationSiblings = this.siblingOrder.get(destinationParentId) ?? []
-    if (!sourceSiblings) return false
-    const next = destinationParentId === source.parentId
-      ? sourceSiblings.filter((id) => id !== move.id)
-      : [...destinationSiblings]
-    const targetIndex = move.targetId === null ? next.length : next.indexOf(move.targetId)
-    if (targetIndex < 0) return false
-    const insertionIndex = move.targetId === null
-      ? next.length
-      : targetIndex + (move.position === 'after' ? 1 : 0)
-    const currentIndex = sourceSiblings.indexOf(move.id)
-    if (currentIndex < 0) return false
-
-    next.splice(insertionIndex, 0, move.id)
-    if (destinationParentId === source.parentId && next.every((id, index) => id === sourceSiblings[index])) return false
-    if (destinationParentId !== source.parentId) {
-      const remaining = sourceSiblings.filter((id) => id !== move.id)
-      if (remaining.length > 0) this.siblingOrder.set(source.parentId, remaining)
-      else this.siblingOrder.delete(source.parentId)
+    const root = this.nodes.get(id)
+    if (root) this.detachFromParent(root.parentId, id)
+    for (const removedId of ids) {
+      this.nodes.delete(removedId)
+      this.pendingElements.delete(removedId)
+      this.domNodes.delete(removedId)
+      this.pendingRemovals.delete(removedId)
     }
-    this.siblingOrder.set(destinationParentId, next)
-    this.elements.set(move.id, { ...source, ...(destinationParentId === undefined ? { parentId: undefined } : { parentId: destinationParentId }) })
     this.rebuildSnapshot()
     return true
   }
 
-  getSubtree(id: string): RegisteredLayoutElement[] {
-    const root = this.get(id)
-    if (!root) return []
-    const result: RegisteredLayoutElement[] = []
-    const visit = (element: RegisteredLayoutElement) => {
-      result.push(element)
-      for (const child of this.getChildren(element.id)) visit(child)
+  /** Compatibility alias for callers that used the earlier subtree-specific name. */
+  removeSubtree(id: string): boolean {
+    return this.removeNode(id)
+  }
+
+  /** Move a node to an exact sibling index under a new parent (or at the root for null). */
+  moveNode(id: string, newParentId: string | null, index: number): boolean {
+    const source = this.nodes.get(id)
+    const parent = newParentId === null ? undefined : this.nodes.get(newParentId)
+    if (!source || (newParentId !== null && !parent)) return false
+    if (!Number.isInteger(index) || index < 0) return false
+    if (newParentId !== null && this.getSubtreeIds(id).has(newParentId)) return false
+
+    const sourceSiblings = this.siblingsFor(source.parentId)
+    const destinationSiblings = this.siblingsFor(newParentId)
+    const nextDestination = source.parentId === newParentId
+      ? sourceSiblings.filter((siblingId) => siblingId !== id)
+      : [...destinationSiblings]
+    if (index > nextDestination.length) return false
+    nextDestination.splice(index, 0, id)
+
+    const unchanged = source.parentId === newParentId && nextDestination.every((siblingId, position) => siblingId === sourceSiblings[position])
+    if (unchanged) return false
+
+    if (source.parentId !== newParentId) {
+      this.setSiblings(source.parentId, sourceSiblings.filter((siblingId) => siblingId !== id))
     }
-    visit(root)
+    this.setSiblings(newParentId, nextDestination)
+    this.nodes.set(id, { ...source, parentId: newParentId })
+    this.rebuildSnapshot()
+    return true
+  }
+
+  /** Reorder a node within its existing parent. */
+  reorderNode(id: string, index: number): boolean {
+    const source = this.nodes.get(id)
+    return source ? this.moveNode(id, source.parentId, index) : false
+  }
+
+  getChildren(parentId?: string | null): RegisteredLayoutElement[] {
+    return this.siblingsFor(normalizeParentId(parentId)).map((id) => this.get(id)).filter((item): item is RegisteredLayoutElement => Boolean(item))
+  }
+
+  getSiblingIds(parentId?: string | null): string[] {
+    return [...this.siblingsFor(normalizeParentId(parentId))]
+  }
+
+  /** Compatibility adapter for the old before/after drag operation. */
+  moveWithinParent(move: LayoutMove): boolean {
+    const source = this.nodes.get(move.id)
+    const destinationParent = move.parentId === undefined ? source?.parentId : normalizeParentId(move.parentId)
+    return Boolean(source) && destinationParent === source?.parentId ? this.moveLegacy(move, destinationParent!) : false
+  }
+
+  /** Compatibility adapter for cross-parent drag callers. */
+  moveToParent(move: LayoutMove): boolean {
+    const source = this.nodes.get(move.id)
+    if (!source) return false
+    const destinationParent = move.parentId === undefined
+      ? this.nodes.get(move.targetId ?? '')?.parentId ?? source.parentId
+      : normalizeParentId(move.parentId)
+    return this.moveLegacy(move, destinationParent)
+  }
+
+  private moveLegacy(move: LayoutMove, destinationParent: string | null): boolean {
+    const source = this.nodes.get(move.id)
+    if (!source || move.targetId === move.id) return false
+    if (destinationParent !== null && !this.nodes.has(destinationParent)) return false
+    if (destinationParent !== null && this.getSubtreeIds(move.id).has(destinationParent)) return false
+
+    const destinationSiblings = this.siblingsFor(destinationParent)
+    const targetIndex = move.targetId === null ? destinationSiblings.length : destinationSiblings.indexOf(move.targetId)
+    if (targetIndex < 0) return false
+    if (move.targetId !== null && this.nodes.get(move.targetId)?.parentId !== destinationParent) return false
+
+    const sourceSiblings = this.siblingsFor(source.parentId)
+    const withoutSource = source.parentId === destinationParent
+      ? sourceSiblings.filter((id) => id !== source.id)
+      : destinationSiblings
+    const adjustedTargetIndex = move.targetId === null
+      ? withoutSource.length
+      : withoutSource.indexOf(move.targetId) + (move.position === 'after' ? 1 : 0)
+    if (adjustedTargetIndex < 0) return false
+    return this.moveNode(source.id, destinationParent, adjustedTargetIndex)
+  }
+
+  getSubtree(id: string): RegisteredLayoutElement[] {
+    const result: RegisteredLayoutElement[] = []
+    const visit = (currentId: string) => {
+      const current = this.get(currentId)
+      if (!current) return
+      result.push(current)
+      for (const childId of current.children) visit(childId)
+    }
+    visit(id)
     return result
   }
 
@@ -230,67 +297,73 @@ export class LayoutRegistry {
     return () => this.listeners.delete(listener)
   }
 
-  private rebuildSnapshot(): void {
-    const childrenByParent = new Map<string | undefined, string[]>()
-    for (const [parentId, ids] of this.siblingOrder) {
-      childrenByParent.set(parentId, [...ids])
+  private addNode(descriptor: LayoutElementDescriptor): void {
+    assertDescriptor(descriptor)
+    const parentId = normalizeParentId(descriptor.parentId)
+    if (this.nodes.has(descriptor.id)) throw new Error(`Layout element "${descriptor.id}" is already registered`)
+    if (parentId !== null && !this.nodes.has(parentId)) {
+      throw new Error(`Layout element parent "${parentId}" is not registered`)
     }
-    const descriptors = [...this.elements.values()].sort((left, right) => {
-      if (left.parentId !== right.parentId) return 0
-      const siblings = this.siblingOrder.get(left.parentId) ?? []
-      return siblings.indexOf(left.id) - siblings.indexOf(right.id)
-    })
-    this.snapshotCache = descriptors.map((descriptor) => ({
-      ...descriptor,
-      children: [...(childrenByParent.get(descriptor.id) ?? [])],
-      order: this.siblingOrder.get(descriptor.parentId)?.indexOf(descriptor.id) ?? -1,
-      ...(this.domNodes.has(descriptor.id) ? { domNode: this.domNodes.get(descriptor.id) } : {}),
-    }))
-    for (const listener of this.listeners) listener()
-  }
-
-  private promotePendingChildren(parentId: string): void {
-    for (const entry of [...this.pendingElements.values()]) {
-      if (entry.descriptor.parentId !== parentId) continue
-      this.pendingElements.delete(entry.descriptor.id)
-      entry.unregister = this.registerForComponent(entry.descriptor)
-      this.promotePendingChildren(entry.descriptor.id)
-    }
+    const node: LayoutNode = { id: descriptor.id, parentId, children: [], kind: descriptor.kind }
+    this.nodes.set(node.id, node)
+    this.setSiblings(parentId, [...this.siblingsFor(parentId), node.id])
+    this.removedIds.delete(node.id)
   }
 
   private registerForComponent(descriptor: LayoutElementDescriptor): () => void {
     this.register(descriptor)
+    return this.createUnregisterHandle(descriptor.id, true)
+  }
+
+  private createUnregisterHandle(id: string, deferWhenChildren = false): () => void {
     let active = true
     return () => {
       if (!active) return
+      if (this.nodes.has(id) && this.nodes.get(id)!.children.length > 0) {
+        if (!deferWhenChildren) throw new Error(`Cannot unregister layout element "${id}" while it has children`)
+        this.pendingRemovals.add(id)
+        this.flushPendingRemovals()
+        return
+      }
       active = false
-      this.pendingRemovals.add(descriptor.id)
-      this.flushPendingRemovals()
+      if (this.nodes.has(id)) this.removeRegistered(id)
     }
   }
 
   private flushPendingRemovals(): void {
-    for (const id of [...this.pendingRemovals]) {
-      if (this.getChildren(id).length > 0) continue
-      this.pendingRemovals.delete(id)
-      if (this.elements.has(id)) this.removeRegistered(id)
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const id of [...this.pendingRemovals]) {
+        const node = this.nodes.get(id)
+        if (node?.children.length) continue
+        this.pendingRemovals.delete(id)
+        if (node) {
+          this.removeRegistered(id)
+          changed = true
+        }
+      }
     }
   }
 
   private removeRegistered(id: string): void {
-    const descriptor = this.elements.get(id)
-    this.elements.delete(id)
+    const node = this.nodes.get(id)
+    if (!node) return
+    this.detachFromParent(node.parentId, id)
+    this.nodes.delete(id)
     this.domNodes.delete(id)
-    if (descriptor) {
-      const siblings = this.siblingOrder.get(descriptor.parentId)
-      if (siblings) {
-        const next = siblings.filter((siblingId) => siblingId !== id)
-        if (next.length > 0) this.siblingOrder.set(descriptor.parentId, next)
-        else this.siblingOrder.delete(descriptor.parentId)
-      }
-    }
     this.rebuildSnapshot()
     this.flushPendingRemovals()
+  }
+
+  private promotePendingChildren(parentId: string): void {
+    for (const entry of [...this.pendingElements.values()]) {
+      if (normalizeParentId(entry.descriptor.parentId) !== parentId) continue
+      this.pendingElements.delete(entry.descriptor.id)
+      this.addNode(entry.descriptor)
+      entry.unregister = this.createUnregisterHandle(entry.descriptor.id, true)
+      this.promotePendingChildren(entry.descriptor.id)
+    }
   }
 
   private getSubtreeIds(id: string): Set<string> {
@@ -298,10 +371,47 @@ export class LayoutRegistry {
     const visit = (currentId: string) => {
       if (result.has(currentId)) return
       result.add(currentId)
-      for (const childId of this.siblingOrder.get(currentId) ?? []) visit(childId)
+      for (const childId of this.nodes.get(currentId)?.children ?? []) visit(childId)
+      for (const [pendingId, entry] of this.pendingElements) {
+        if (normalizeParentId(entry.descriptor.parentId) === currentId) visit(pendingId)
+      }
     }
     visit(id)
     return result
+  }
+
+  private siblingsFor(parentId: string | null): string[] {
+    return parentId === null ? this.rootChildren : this.nodes.get(parentId)?.children ?? []
+  }
+
+  private setSiblings(parentId: string | null, children: string[]): void {
+    if (parentId === null) this.rootChildren = children
+    else {
+      const parent = this.nodes.get(parentId)
+      if (parent) this.nodes.set(parentId, { ...parent, children })
+    }
+  }
+
+  private detachFromParent(parentId: string | null, id: string): void {
+    this.setSiblings(parentId, this.siblingsFor(parentId).filter((childId) => childId !== id))
+  }
+
+  private rebuildSnapshot(): void {
+    const next: RegisteredLayoutElement[] = []
+    const visit = (id: string) => {
+      const node = this.nodes.get(id)
+      if (!node) return
+      next.push({
+        ...node,
+        children: [...node.children],
+        order: this.siblingsFor(node.parentId).indexOf(id),
+        ...(this.domNodes.has(id) ? { domNode: this.domNodes.get(id) } : {}),
+      })
+      for (const childId of node.children) visit(childId)
+    }
+    for (const rootId of this.rootChildren) visit(rootId)
+    this.snapshotCache = next
+    for (const listener of this.listeners) listener()
   }
 }
 
