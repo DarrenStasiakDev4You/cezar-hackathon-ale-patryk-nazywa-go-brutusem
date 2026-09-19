@@ -426,6 +426,9 @@ describe('GET /api/v1/workspace/events', () => {
     });
     expect(del.status).toBe(200);
     await ws.readUntil('event: project-removed');
+    // Every listener the stream held on the removed store is gone, the transition feed included.
+    expect(other.store.listenerCount('run')).toBe(0);
+    expect(other.store.listenerCount('transition')).toBe(0);
 
     // …so that the SAME slug, re-registered and rebuilt, attaches its NEW
     // store (regression: the attach guard kept the stale entry, and the

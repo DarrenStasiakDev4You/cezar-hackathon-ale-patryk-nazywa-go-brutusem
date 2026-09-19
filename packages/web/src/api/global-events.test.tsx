@@ -1177,7 +1177,7 @@ describe('useGlobalEvents — task transitions to the extension bus (spec 2026-0
     expect(log).toHaveBeenCalledTimes(1)
   })
 
-  it('treats a frame as liveness only when no bus is provided', () => {
+  it('still counts a frame as proof of liveness without a bus', () => {
     vi.useFakeTimers()
     const { source } = mount()
 

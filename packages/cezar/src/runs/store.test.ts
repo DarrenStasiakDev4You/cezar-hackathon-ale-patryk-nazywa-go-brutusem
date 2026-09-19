@@ -2013,13 +2013,23 @@ describe('RunStore — task transitions (spec 2026-09-19-extension-event-api)', 
     store.flush();
   });
 
-  it('emits nothing for creation or for a change that keeps the status and archive state', () => {
+  it('emits nothing for creation, for token and step updates, or for a change that keeps the state', () => {
     const store = RunStore.open(dataDir);
     const seen = recordTransitions(store);
-    const run = createTask(store);
+    const run = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 't',
+      steps: [{ id: 'task', name: 'Do the task', kind: 'agent' }],
+    });
+    store.updateRun(run.id, { status: 'running' });
+    seen.length = 0;
 
-    store.updateRun(run.id, { tokensUsed: 1200, title: 'renamed' });
-    store.updateRun(run.id, { status: 'queued' });
+    // The per-token path: a step update recomputes the run's totals and touches it.
+    store.updateStep(run.id, 'task', { tokensUsed: 500 });
+    store.updateStep(run.id, 'task', { tokensUsed: 900, status: 'running' });
+    store.updateRun(run.id, { title: 'renamed' });
+    store.updateRun(run.id, { status: 'running' });
 
     expect(seen).toEqual([]);
     store.flush();
@@ -2043,7 +2053,7 @@ describe('RunStore — task transitions (spec 2026-09-19-extension-event-api)', 
     store.flush();
   });
 
-  it('folds several changes between two broadcasts into one transition from the last broadcast state', () => {
+  it('makes one transition of a status and an archive change written together', () => {
     const store = RunStore.open(dataDir);
     const seen = recordTransitions(store);
     const run = createTask(store);
@@ -2069,6 +2079,26 @@ describe('RunStore — task transitions (spec 2026-09-19-extension-event-api)', 
     reopened.updateRun(run.id, { status: 'running' });
 
     expect(seen).toEqual([`${run.id}: failed → running`]);
+    reopened.flush();
+  });
+
+  it('with keepLive (how the server opens stores), emits recovery rewrites as transitions', () => {
+    // Boot recovery (`manager.recover()`) rewrites through the store, so its transitions DO fire.
+    // They reach no client only because recovery runs before any stream attaches (index.ts,
+    // project-context.ts) — this test pins the store half of that contract.
+    const first = RunStore.open(dataDir);
+    const run = createTask(first);
+    first.updateRun(run.id, { status: 'running' });
+    first.flush();
+
+    const reopened = RunStore.open(dataDir, { keepLive: true });
+    const seen = recordTransitions(reopened);
+    expect(reopened.getRun(run.id)?.status).toBe('running');
+    expect(seen).toEqual([]);
+
+    reopened.updateRun(run.id, { status: 'failed' });
+
+    expect(seen).toEqual([`${run.id}: running → failed`]);
     reopened.flush();
   });
 

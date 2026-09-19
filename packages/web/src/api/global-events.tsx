@@ -620,8 +620,9 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
 
       // Task transitions (spec 2026-09-19-extension-event-api) feed the extension bus for EVERY
       // project: extensions hear every project's tasks, so this listener applies no
-      // active-project filter. It never patches a cache: the `run` frame written just before it
-      // already did.
+      // active-project filter. It never patches a cache. The `run` frame written just before it
+      // feeds the caches through the run batch a moment later (and never another project's), so a
+      // bus listener may run before the caches show the new status.
       current.addEventListener('task-transition', (event) => {
         if (disposed || source !== current) return
         lastFrameAt = Date.now()

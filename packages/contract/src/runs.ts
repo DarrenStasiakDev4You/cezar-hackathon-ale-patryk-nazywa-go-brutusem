@@ -50,9 +50,9 @@ export type RunStatus = z.infer<typeof runStatusSchema>;
  *
  * Neutral on purpose: the wire says THAT a task changed state, and the cockpit's extension layer
  * names what it means (`cezar.task.started`, …). The server builds the frame as this type and the
- * cockpit parses it with this schema, so the two cannot drift. Not emitted at boot nor on a run's
- * creation, and the per-project streams never carry it (widening them is breaking,
- * BACKWARD_COMPATIBILITY.md § 2).
+ * cockpit parses it with this schema, so the two cannot drift. Never sent for boot recovery (it
+ * runs before any stream is attached) nor for a run's creation, and the per-project streams never
+ * carry it (widening them is breaking, BACKWARD_COMPATIBILITY.md § 2).
  */
 export const taskTransitionEventSchema = z.object({
   /** The registered project, as on every stamped workspace event. */

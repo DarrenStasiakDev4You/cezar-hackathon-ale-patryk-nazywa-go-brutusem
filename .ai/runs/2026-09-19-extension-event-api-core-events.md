@@ -39,7 +39,9 @@ This is **PR 2 of 2** (spec Q1): Phase 3. PR 1 (#23, `feat/extension-event-api`)
   - `packages/web/src/api/global-events.tsx`: parses `task-transition` and relays it to the bus
     before the active-project filter. It never patches a cache and never throws into the
     message loop.
-  - `packages/web/src/events/project-change-reporter.tsx` (new), mounted once in `routes.tsx`.
+  - `packages/web/src/events/project-change-reporter.tsx` (new). It is mounted once inside the
+    router in `app.tsx`, beside `LastLocationController`. The spec said `routes.tsx`, but mounting
+    it there meant wrapping the whole route table in a fragment, a 512-line re-indent.
 - Docs:
   - the README core events table, with the disconnect-gap and once-per-cockpit notes and the
     auto-archive example;
@@ -73,8 +75,8 @@ This is **PR 2 of 2** (spec Q1): Phase 3. PR 1 (#23, `feat/extension-event-api`)
    - `task-events.ts`, with a table-driven test;
    - `EventBusProvider` / `useEventBus` and the `App`/`main.tsx` wiring;
    - the relay in `useGlobalEvents`, covered by `global-events.test.tsx` cases (spec Step 7).
-3. **Project reporter.** `ProjectChanged`/`ProjectChange`, and `ProjectChangeReporter` in
-   `routes.tsx` with its tests (spec Step 8).
+3. **Project reporter.** `ProjectChanged`/`ProjectChange`, and `ProjectChangeReporter` inside
+   the router with its tests (spec Step 8).
 4. **PR 2 docs.** The README core events table and notes, and the AGENTS.md rows (spec Step 9).
 
 ## Progress

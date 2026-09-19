@@ -196,7 +196,7 @@ your listeners may still be called. Afterwards `on`, `once`, `off` and `emit` th
 | Token | Id | Payload | When |
 | --- | --- | --- | --- |
 | `TaskStatusChanged` | `cezar.task.status-changed` | `TaskTransition` | Every status change of any task, in any registered project. Always first for its change. |
-| `TaskStarted` | `cezar.task.started` | `TaskTransition` | Into `running` from anything but `running`/`waiting`: a start, a Continue, a send-back, an auto-resume. Answering an agent's question is not a start. |
+| `TaskStarted` | `cezar.task.started` | `TaskTransition` | Into `running` from anything but `running`/`waiting`: a start, a Continue, a send-back, an auto-resume. A deferred resume (an auto-resume, or one that waits for capacity) re-queues first, so its start comes from `queued`. Answering an agent's question is not a start. |
 | `TaskCompleted` | `cezar.task.completed` | `TaskTransition` | Into `done` or `review` from outside that pair: a successful finish. Accepting a review (`review → done`) is not a second one. |
 | `TaskFailed` | `cezar.task.failed` | `TaskTransition` | Into `failed`, a usage-limit parking included. |
 | `TaskCancelled` | `cezar.task.cancelled` | `TaskTransition` | Into `cancelled`. |

@@ -362,6 +362,9 @@ export type RunRecord = z.infer<typeof runRecordSchema>;
  * see.
  */
 export interface RunTransition {
+  /** The LIVE record, mutated in place by later updates: read what you need synchronously in the
+   *  listener (the server builds its SSE frame there). `previousStatus`/`previousArchived` are
+   *  snapshots and stay true. */
   readonly run: RunRecord;
   readonly previousStatus: RunStatus;
   readonly previousArchived: boolean;
@@ -1435,8 +1438,8 @@ export class RunStore extends EventEmitter {
     this.detectTransition(run);
   }
 
-  /** Runs on every `touch` — once per token update — so it is one Map lookup and two comparisons,
-   *  and it writes the baseline only when something changed. Several changes between two
+  /** Runs on every `touch` — once per token update — so it is two Map lookups and a few
+   *  comparisons, and it writes the baseline only when something changed. Several changes between two
    *  `touch` calls make one transition, from the last broadcast state to the current one. */
   private detectTransition(run: RunRecord): void {
     // A record that is no longer in the index (deleted or pruned while a caller held it) must

@@ -61,6 +61,8 @@ export function taskEventsFor(transition: TaskTransitionEvent): readonly TaskBus
 /** Emits a wire transition's events on `bus`, in order. Throws what `bus.emit` throws. */
 export function emitTaskEvents(bus: EventBus, transition: TaskTransitionEvent): void {
   for (const event of taskEventsFor(transition)) {
+    // The two calls read the same, but each branch narrows the token and its payload to ONE
+    // member of the union; a single `bus.emit` of the union does not type-check.
     if (isTaskEventOnly(event)) bus.emit(event.token, event.payload)
     else bus.emit(event.token, event.payload)
   }

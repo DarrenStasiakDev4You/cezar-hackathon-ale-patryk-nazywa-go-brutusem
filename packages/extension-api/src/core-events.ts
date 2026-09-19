@@ -54,7 +54,11 @@ export const ExtensionActivated = defineEvent<ExtensionActivation>('cezar.extens
  * ones below refine. It fires first; a semantic event for the same change follows it.
  */
 export const TaskStatusChanged = defineEvent<TaskTransition>('cezar.task.status-changed')
-/** Into `running` from anything but `running` and `waiting`: a start, a Continue, a send-back or an auto-resume — not an answered question. */
+/**
+ * Into `running` from anything but `running` and `waiting`: a start, a Continue, a send-back or an
+ * auto-resume — not an answered question. A deferred resume (an auto-resume, or one that waits for
+ * capacity) re-queues first, so its `previousStatus` is `queued`, not the finished status.
+ */
 export const TaskStarted = defineEvent<TaskTransition>('cezar.task.started')
 /** Into `done` or `review` from outside that pair: a successful finish. Accepting a review (`review → done`) is not a second one. */
 export const TaskCompleted = defineEvent<TaskTransition>('cezar.task.completed')

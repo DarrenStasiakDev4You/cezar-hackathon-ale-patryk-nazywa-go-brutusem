@@ -22,6 +22,8 @@ import { useEventBus } from './provider'
 export function ProjectChangeReporter(): null {
   const bus = useEventBus()
   const { pathname } = useLocation()
+  // The registry query the sidebar and `ProjectScopeRoute` already share: mounted on every page,
+  // this adds at most one cached request, on a page that had no other reader of it.
   const projects = useProjects()
   const shown = shownProject(pathname, projects)
   const last = useRef<string | null>(null)
