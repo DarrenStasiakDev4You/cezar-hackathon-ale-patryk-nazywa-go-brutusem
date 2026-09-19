@@ -143,7 +143,6 @@ const MAX_DECLARED_CAPABILITIES = 256
 
 /** The host's catalog entry for one contract id. */
 interface ServedContract {
-  readonly id: ContributionId
   readonly version: number
   /** The host's own token, passed to `checkComponentCompatibility` as the contract. */
   readonly token: AnyComponentContract
@@ -449,7 +448,7 @@ function catalogOf(contracts: readonly AnyComponentContract[]): ReadonlyMap<Cont
         `Component contract "${id}" is served twice (@${first.version} and @${version}): one major per id`,
       )
     }
-    served.set(id, { id, version, token })
+    served.set(id, { version, token })
   }
   return served
 }
