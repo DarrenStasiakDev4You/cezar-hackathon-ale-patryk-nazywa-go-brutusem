@@ -18,28 +18,32 @@ this implementation fit this contract?" beyond comparing two numbers by hand, so
 extensions have no shared way to prove they implement the same thing.
 
 The proposal extends the same helper, without breaking its callers. A contract will also declare
-**required capabilities**: named behaviours that every implementation must say it honours. It can
-also carry **optional layout metadata** describing the box the host gives every implementation.
-An implementation lists the capabilities it honours. A new pure function,
+**required capabilities**: named behaviours that every implementation must say it honours. It
+will also declare **optional capabilities**: behaviours an implementation may offer, which the
+host relies on only when the implementation declares them. It can also carry **optional layout
+metadata** describing the box the host gives every implementation. An implementation lists the
+capabilities it honours. A new pure function,
 `checkComponentCompatibility(contract, implementation, implemented?)`, returns
-`{ compatible, issues }` from data alone. It never touches React, so core's default
+`{ compatible, issues, capabilities }` from data alone. It never touches React, so core's default
 implementation and an extension's replacement go through the same check. The contract version
 stays a public major number, written `id@version` (`cezar.task.header@1`), with its bump rules
 documented beside it.
 
 ## Resolved assumptions (autonomous defaults)
 
-The brief left these open. Each default is the most reversible choice. The package is private
-and experimental, and nothing outside this repository can depend on it yet.
+The brief left these open. Each default was the most reversible choice. The package is private
+and experimental, and nothing outside this repository can depend on it yet. **The owner reviewed
+all six on 2026-09-19**: Q1–Q3, Q5 and Q6 are confirmed as written, and Q4 was changed to
+required **and** optional capabilities. The last column records each decision.
 
-| # | Question | Applied default | Why |
-|---|---|---|---|
-| Q1 | Ship the three task contracts (`task.header@1`, `task.timeline@1`, `task.composer@1`) in this item, or only the mechanism? | **Mechanism only.** The three appear below as illustrative declarations under their core ids (`cezar.task.header`, …) and land with the slot item that renders them. | AGENTS.md (Task routing → Extensions): "Core tokens (`cezar.*`) are added in the same PR as the host code that honours them." Item 1 (Q6) made the same call. Designing three prop models is three separate reviews. |
-| Q2 | Evolve the merged `defineComponentContract`, or replace it? | **Evolve it additively.** Same name, same `(id, options)` call; `requiredCapabilities` and `layout` are new optional options. `ComponentImplementation` gains an optional `capabilities`. `provide(contract, implementation)` is unchanged. | The example extension and every existing call keep compiling. A second helper would leave two ways to declare the same thing. |
-| Q3 | What are "required capabilities"? | **Behaviours of the contract** that types cannot prove (for example "restores the draft when `onSubmit` rejects"). Each implementation declares the capabilities it honours, and the check requires every required one. Host features and permissions an implementation needs are **not** in this item. | This reading is what makes an implementation checkable against a contract. Host-granted permissions belong to the loading and trust-model item and can be added later as a separate, optional field. |
-| Q4 | Optional capabilities in v1? | **No, required only.** Extra capabilities an implementation declares are ignored, so an `optionalCapabilities` list can be added later without breaking anything. | Least surface. Nothing would read optional capabilities before the picker exists. |
-| Q5 | Layout metadata: an open record, or a small typed vocabulary? | **A typed vocabulary of three optional fields**: `sizing`, `sticky`, `minBlockSize`. They are advisory until the slot item applies them, and the host keeps control of breakpoints. The helper rejects unknown keys, and hosts ignore them. | The brief makes layout metadata part of the contract. An open record gives no shared meaning to validate or document. Three fields describe the main shape of the task view's header, timeline and composer. Responsive rules, such as the header pinning only from `md` up, stay the host's. New fields can be added later. |
-| Q6 | How does compatibility get checked, and how strictly? | **A pure, total function** that never throws and returns `{ compatible, issues }`. The major version must match exactly: no ranges, and a host serves one major per contract id. | It matches `validateManifest` (data in, issues out). The host decides what an issue means (for example `contract-version-mismatch`). Ranges and multi-major hosting need adapters that nobody has asked for. |
+| # | Question | Decision | Why | Owner (2026-09-19) |
+|---|---|---|---|---|
+| Q1 | Ship the three task contracts (`task.header@1`, `task.timeline@1`, `task.composer@1`) in this item, or only the mechanism? | **Mechanism only.** The three appear below as illustrative declarations under their core ids (`cezar.task.header`, …) and land with the slot item that renders them. | AGENTS.md (Task routing → Extensions): "Core tokens (`cezar.*`) are added in the same PR as the host code that honours them." Item 1 (Q6) made the same call. Designing three prop models is three separate reviews. | ✅ confirmed |
+| Q2 | Evolve the merged `defineComponentContract`, or replace it? | **Evolve it additively.** Same name, same `(id, options)` call; `requiredCapabilities` and `layout` are new optional options. `ComponentImplementation` gains an optional `capabilities`. `provide(contract, implementation)` is unchanged. | The example extension and every existing call keep compiling. A second helper would leave two ways to declare the same thing. Binding stays explicit in `provide(contract, implementation)`. A separate implementation helper earns its place only once implementations carry metadata of their own (see § Alternatives considered). | ✅ confirmed |
+| Q3 | What are "required capabilities"? | **Behaviours of the contract** that types cannot prove (for example "restores the draft when `onSubmit` rejects"). Each implementation declares the capabilities it honours, and the check requires every required one. Host features and permissions an implementation needs are **not** in this item. | This reading is what makes an implementation checkable against a contract. Host-granted permissions belong to the loading and trust-model item and can be added later as a separate, optional field. | ✅ confirmed |
+| Q4 | Optional capabilities in v1? | **Yes: required and optional.** A contract lists `optionalCapabilities` beside `requiredCapabilities`. The check returns `capabilities`: every required one plus the optional ones the implementation declares. The host relies on an optional capability only when it appears there. Names that are neither required nor optional are ignored. | The picker can show what each implementation supports, and the host knows which optional behaviours it may count on. The autonomous default was "required only" to keep surface small; the owner chose the fuller model. | 🔁 changed (was: required only) |
+| Q5 | Layout metadata: an open record, or a small typed vocabulary? | **A typed vocabulary of three optional fields**: `sizing`, `sticky`, `minBlockSize`. They are advisory until the slot item applies them, and the host keeps control of breakpoints. The helper rejects unknown keys, and hosts ignore them. | The brief makes layout metadata part of the contract. An open record gives no shared meaning to validate or document. Three fields describe the main shape of the task view's header, timeline and composer. Responsive rules, such as the header pinning only from `md` up, stay the host's. New fields can be added later. | ✅ confirmed |
+| Q6 | How does compatibility get checked, and how strictly? | **A pure, total function** that never throws and returns `{ compatible, issues }`. The major version must match exactly: no ranges, and a host serves one major per contract id. | It matches `validateManifest` (data in, issues out). The host decides what an issue means (for example `contract-version-mismatch`). Ranges and multi-major hosting need adapters that nobody has asked for. | ✅ confirmed |
 
 ## 📝 Problem Statement
 
@@ -76,10 +80,10 @@ That leaves four gaps. Each blocks a later Component Platform item:
 ## 📝 Proposed Solution
 
 1. **A richer contract, same helper.** `defineComponentContract<Props>(id, { version,
-   requiredCapabilities?, layout? })` validates everything at module load, as today, and returns
-   a deeply frozen token:
-   `{ kind: 'component', id, version, requiredCapabilities: [...], layout? }`. The helper always
-   sets `requiredCapabilities` (empty when none was given). The type keeps it optional, so a
+   requiredCapabilities?, optionalCapabilities?, layout? })` validates everything at module load,
+   as today, and returns a deeply frozen token:
+   `{ kind: 'component', id, version, requiredCapabilities: [...], optionalCapabilities: [...], layout? }`.
+   The helper always sets both capability lists (empty when none was given). The type keeps it optional, so a
    structurally built token, or one from an older copy of the package, still fits. The props
    type stays the contract's type parameter, and the token never references a React component.
 2. **Implementations declare their capabilities.** `ComponentImplementation` gains
@@ -96,8 +100,9 @@ That leaves four gaps. Each blocks a later Component Platform item:
      host always passes it.
 
    It reports the first blocking problem (malformed input, then a different contract id, then a
-   different major), or else every missing capability at once. It never throws, whatever it is
-   given.
+   different major), or else every missing capability at once. When the implementation is
+   compatible, it also returns `capabilities`: what the host may rely on (every required one plus
+   the declared optional ones). It never throws, whatever it is given.
 4. **Version rules are part of the API.** TSDoc on `version` and a README section state which
    changes bump the major. Contracts are named `id@version` in docs, messages and issues.
 
@@ -127,6 +132,11 @@ That leaves four gaps. Each blocks a later Component Platform item:
   would make a non-React implementation (an iframe or worker) possible, but no one needs one yet.
   Instead, a documented convention says that data props are JSON view models declared in this
   package, never service types.
+- **A `defineComponentImplementation(…)` helper, or a one-argument `provide(implementation)`.**
+  Not now (owner, Q2). `provide(contract, implementation)` already keeps the binding explicit,
+  and a new concept only to wrap an implementation would churn the example and tests. It becomes
+  worth adding once implementations carry metadata of their own, independent of the contract (for
+  example allowed zones or a settings schema). It can then arrive as an additive overload.
 - **Host permissions as capabilities** (the implementation asks for, say, `commands`). Deferred
   to the loading and trust-model item. It is the opposite direction (implementation → host) and
   needs the trust decision first.
@@ -157,8 +167,8 @@ running any of them.
 | Later item | What it takes from this one |
 |---|---|
 | Components service (`context.components.provide`) | Calls the check with the host's token, the implementation and the token `provide` received. It rejects version issues as `contract-version-mismatch` and chooses a code for the rest in its own PR. |
-| Slot rendering with fallback (`cezar.task.*` contracts) | Adds the core tokens and their default implementations, checks each default with the same function, and applies `layout` to the slot's box. |
-| Implementation picker (Settings) | Lists only compatible implementations and shows the issues for the rest. |
+| Slot rendering with fallback (`cezar.task.*` contracts) | Adds the core tokens and their default implementations, checks each default with the same function, and applies `layout` to the slot's box. Relies on an optional capability only when the check's `capabilities` lists it. |
+| Implementation picker (Settings) | Lists only compatible implementations, shows which optional capabilities each supports, and shows the issues for the rest. |
 
 ## 📝 API Contracts
 
@@ -169,9 +179,9 @@ carries TSDoc, since for extension authors the TSDoc is the documentation.
 
 ```ts
 /**
- * A named behaviour of a contract that its props' types cannot prove, e.g. `restores-draft`.
- * The contract's TSDoc defines each one. One segment of `[a-z0-9][a-z0-9-]*`, at most 64
- * characters, and local to its contract.
+ * A named behaviour of a contract that its props' types cannot prove, e.g. `restores-draft` or
+ * `task.continue`. The contract's TSDoc defines each one. One or more dot-separated segments of
+ * `[a-z0-9][a-z0-9-]*`, at most 64 characters, and local to its contract.
  */
 export type ComponentCapability = string
 
@@ -193,8 +203,12 @@ export interface ComponentLayout {
 export interface ComponentContractOptions {
   /** Major version of the functional contract. See "When `version` changes". */
   readonly version: number
-  /** Behaviours every implementation must declare. Unique; at most 32. Default `[]`. */
+  /** Behaviours every implementation must declare. Unique. Default `[]`. */
   readonly requiredCapabilities?: readonly ComponentCapability[]
+  /** Behaviours an implementation may declare. The host relies on one only for an implementation
+   *  that declares it; for the others it must not depend on that behaviour (e.g. it hides the
+   *  feature). Unique, and none may also be required. Default `[]`. */
+  readonly optionalCapabilities?: readonly ComponentCapability[]
   readonly layout?: ComponentLayout
 }
 
@@ -202,9 +216,10 @@ export interface ComponentContract<Props> {
   readonly kind: 'component'
   readonly id: ContributionId
   readonly version: number
-  /** Always set by the helper (`[]` when none). Optional in the type so a structurally built
-   *  token still fits; readers treat a missing list as `[]`. */
+  /** Both lists are always set by the helper (`[]` when none). Optional in the type so a
+   *  structurally built token still fits; readers treat a missing list as `[]`. */
   readonly requiredCapabilities?: readonly ComponentCapability[]
+  readonly optionalCapabilities?: readonly ComponentCapability[]
   readonly layout?: ComponentLayout
   readonly __props?: (props: Props) => Props
 }
@@ -219,14 +234,15 @@ The helper throws `ExtensionDefinitionError` with code `invalid-id`, listing eve
 of the following. This is the code a bad `version` already uses, so the union does not grow:
 
 - an invalid id or version (unchanged);
-- `requiredCapabilities` that is not an array;
-- a capability that breaks the grammar, or appears twice (`requiredCapabilities[2]`);
-- more than 32 capabilities;
+- `requiredCapabilities` or `optionalCapabilities` that is not an array;
+- a capability that breaks the grammar, or appears twice in its list (`requiredCapabilities[2]`);
+- an optional capability that is also required (`optionalCapabilities[0]`);
+- more than 32 capabilities in the two lists together;
 - `layout` that is not an object, or has an unknown key (`layout.align`);
 - a `sizing` or `sticky` value outside its union;
 - a `minBlockSize` that is not an integer from 0 to 2048.
 
-The returned token and its nested array and object are frozen.
+The returned token and its nested arrays and object are frozen.
 
 ### Implementation
 
@@ -235,8 +251,8 @@ export interface ComponentImplementation<Props> {
   readonly id: ContributionId          // core: `cezar.…`; an extension: `${extension.id}.…`
   readonly title: string
   readonly description?: string
-  /** The capabilities this implementation honours. Must include every one its contract requires;
-   *  names the contract does not require are ignored. */
+  /** The capabilities this implementation honours. Must include every one its contract requires,
+   *  may include any of its optional ones; other names are ignored. */
   readonly capabilities?: readonly ComponentCapability[]
   readonly component: ComponentType<Props>
 }
@@ -255,6 +271,10 @@ export interface ComponentCompatibility {
   /** `true` exactly when `issues` is empty. */
   readonly compatible: boolean
   readonly issues: readonly ComponentCompatibilityIssue[]
+  /** What the host may rely on for this implementation: every required capability, then the
+   *  contract's optional ones the implementation declares, in the contract's order. `[]` when
+   *  not compatible. */
+  readonly capabilities: readonly ComponentCapability[]
 }
 
 /**
@@ -269,7 +289,12 @@ export interface ComponentCompatibility {
  *                       the id and version rules cannot fire.
  */
 export function checkComponentCompatibility(
-  contract: { readonly id: ContributionId; readonly version: number; readonly requiredCapabilities?: readonly ComponentCapability[] },
+  contract: {
+    readonly id: ContributionId
+    readonly version: number
+    readonly requiredCapabilities?: readonly ComponentCapability[]
+    readonly optionalCapabilities?: readonly ComponentCapability[]
+  },
   implementation: { readonly id: ContributionId; readonly capabilities?: readonly ComponentCapability[] },
   implemented?: { readonly id: ContributionId; readonly version: number },
 ): ComponentCompatibility
@@ -287,7 +312,8 @@ required set. Without the gate, a single mismatch would bury the one real issue 
 `missing-capability` entries.
 
 1. **Read.** Each field is read once, in its own `try`:
-   - `contract.id`, `contract.version` and `contract.requiredCapabilities`;
+   - `contract.id`, `contract.version`, `contract.requiredCapabilities` and
+     `contract.optionalCapabilities`;
    - `implementation.id` and `implementation.capabilities`;
    - `implemented.id` and `implemented.version`.
 
@@ -299,8 +325,11 @@ required set. Without the gate, a single mismatch would bury the one real issue 
 3. `implemented.version !== contract.version` → `contract-version-mismatch` with both numbers,
    and stop.
 4. Each name in `contract.requiredCapabilities` that is missing from
-   `implementation.capabilities` → one `missing-capability`. A missing
-   `requiredCapabilities` counts as `[]`, and a missing `capabilities` counts as `[]`.
+   `implementation.capabilities` → one `missing-capability`. A missing capability list, on
+   either side, counts as `[]`.
+5. No issues → `compatible: true` and `capabilities` = the required list, then each optional
+   capability the implementation declares, in the contract's order. Declared names that are
+   neither required nor optional are ignored, never an issue.
 
 `malformed` is deliberately not called `invalid-input`: that name is already an
 `ExtensionErrorCode` with another meaning. `contract-version-mismatch` deliberately *is* the
@@ -319,9 +348,9 @@ next to the token in `BACKWARD_COMPATIBILITY.md`. Until then, the release notes 
 |---|---|
 | Remove, rename or narrow a prop; make an optional prop required; add a required prop | **Yes** |
 | Change when a callback is called, or what it promises | **Yes** |
-| Add a required capability | **Yes**: existing implementations do not declare it |
+| Add a required capability, or promote an optional one to required | **Yes**: existing implementations may not declare it |
 | Change `layout.sizing` | **Yes**: an implementation built for its own size must now stretch, or the reverse |
-| Add an optional prop, remove a required capability, change `sticky` or `minBlockSize`, clarify TSDoc | No |
+| Add an optional prop; add or remove an optional capability; demote a required capability to optional; change `sticky` or `minBlockSize`; clarify TSDoc | No |
 
 ### Illustrative declarations (land with the slot item, not here)
 
@@ -338,16 +367,22 @@ export const TaskTimeline = defineComponentContract<TaskTimelineProps>('cezar.ta
   version: 1, requiredCapabilities: ['live-updates'], layout: { sizing: 'fill' },
 })
 export const TaskComposer = defineComponentContract<TaskComposerProps>('cezar.task.composer', {
-  version: 1, requiredCapabilities: ['restores-draft'], layout: { sticky: 'bottom', minBlockSize: 96 },
+  version: 1,
+  requiredCapabilities: ['restores-draft'],
+  optionalCapabilities: ['attachments', 'dictation'],
+  layout: { sticky: 'bottom', minBlockSize: 96 },
 })
 
 // Core's default and an extension's replacement implement the same contract, the same way:
-const coreDefault = { id: 'cezar.task.composer.default', title: 'Cezar', capabilities: ['restores-draft'], component: ComposerAdapter }
+const coreDefault = { id: 'cezar.task.composer.default', title: 'Cezar', capabilities: ['restores-draft', 'attachments', 'dictation'], component: ComposerAdapter }
 const zen = { id: 'acme.zen.composer', title: 'Zen', capabilities: ['restores-draft'], component: ZenComposer }
 checkComponentCompatibility(TaskComposer, coreDefault).compatible // true: core checks its default
 checkComponentCompatibility(TaskComposer, zen).compatible         // true: zen's author, in their tests
 // The host, when an extension calls provide(zenToken, zen): its own token, then the one it received.
 checkComponentCompatibility(TaskComposer, zen, zenToken).compatible
+// What the host may count on: Zen honours no optional capability, so the host must not rely on
+// attachments or dictation while Zen is the chosen composer (the picker says so too).
+checkComponentCompatibility(TaskComposer, zen, zenToken).capabilities // ['restores-draft']
 ```
 
 The props are view models declared in `packages/extension-api`. The package must not import the
@@ -362,13 +397,17 @@ only when the slot item applies it.
 
 ## 📝 Edge Cases & Failure Scenarios
 
-- **Token from an older copy of the package** (no `requiredCapabilities`). As `contract`, it
-  requires nothing. As `implemented`, only its id and version are read. Nothing throws.
+- **Token from an older copy of the package** (no capability lists). As `contract`, it
+  requires nothing and offers no optional capabilities. As `implemented`, only its id and version are read. Nothing throws.
 - **Implementation from an older copy** (no `capabilities`) against a contract that requires some.
   The check reports `missing-capability` for each, so the host never renders it. Every core token
   with required capabilities ships after this item, so no real extension is in this state.
-- **Implementation that over-declares.** Names the contract does not require are ignored and are
-  not an issue. That is also what keeps a later `optionalCapabilities` list non-breaking.
+- **Implementation that over-declares.** Names that are neither required nor optional are
+  ignored and are not an issue. This is also what lets an implementation built against a newer
+  revision of the same major (one more optional capability) run on an older host: the older host
+  simply does not know that name.
+- **Implementation that declares an optional capability it does not honour.** Same as a false
+  required claim below: the check trusts declarations, and the host relies on the behaviour.
 - **Newer layout keys reaching an older host.** A token built by a newer copy may carry a layout
   key this copy does not know. The host reads only the keys it knows. The strictness is at
   definition time, where the helper and the data are the same version.
@@ -384,15 +423,15 @@ only when the slot item applies it.
 ## 📝 Risks & Impact Review
 
 - **Compatibility.** The only observable change to existing code: tokens made by
-  `defineComponentContract` gain a `requiredCapabilities: []` key. `components-storage.test.ts`
+  `defineComponentContract` gain `requiredCapabilities: []` and `optionalCapabilities: []` keys. `components-storage.test.ts`
   asserts `toEqual({ kind, id, version })` and is updated. `example.test.ts:65` compares the
   example's recorded contract with the test's own copy of `Greeting`, so step 7 changes both
   copies together. The example extension and `provide` compile unchanged. The package is private and not in `BACKWARD_COMPATIBILITY.md` (it gains a
   section only at publication, per item 1).
 - **Freezing the wrong vocabulary.** "Required capability" is fixed here, before any host reads
   it. The mitigation is item 1's: the package is private, `0.x` and marked experimental, and the
-  components-service item may revise these types in the PR that implements them. This is the one
-  direction call to confirm (Q3).
+  components-service item may revise these types in the PR that implements them. The owner
+  confirmed this reading (Q3) on 2026-09-19.
 - **Layout metadata ships before its reader.** The brief puts layout in the contract, but no host
   applies it until the slot item. That is the same position as the rest of this mechanism. The
   cost is a vocabulary the slot item might want to reshape (for example, responsive pinning). It
@@ -408,7 +447,8 @@ only when the slot item applies it.
 ## 📋 Phasing
 
 1. **Phase 1 — The richer contract.** `ComponentCapability`, `ComponentLayout`,
-   `ComponentContractOptions`, the new token fields and their validation. The package works on its
+   `ComponentContractOptions`, the new token fields (both capability lists and `layout`) and
+   their validation. The package works on its
    own, and existing callers are unchanged.
 2. **Phase 2 — Implementations and the check.** `ComponentImplementation.capabilities`,
    `checkComponentCompatibility` and its result types, with the core-and-extension proof.
@@ -427,8 +467,10 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    § Contract. Collect capability and layout issues next to the existing version issue, so one
    throw names everything. Freeze copies of the capability array and the layout object.
    *Test* (`components-storage.test.ts`):
-   - a token with and without the new options, deeply frozen, with `requiredCapabilities: []`
+   - a token with and without the new options, deeply frozen, with both capability lists `[]`
      by default;
+   - dotted capability names (`task.continue`) are accepted; an optional capability that is also
+     required is rejected at `optionalCapabilities[i]`;
    - each invalid case from § Contract throws `invalid-id` at the exact issue path;
    - a bad id, a bad version and a bad capability are reported together in one message.
 2. **Type tests.**
@@ -447,12 +489,15 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - compatible: the full set declared; over-declared names; no requirements and no declarations;
    - each issue code, with its fields and its `id@version` message;
    - several `missing-capability` issues returned together;
+   - `capabilities` on a compatible result: required ones first, then only the declared optional
+     ones in contract order; unknown declared names left out; `[]` on every incompatible result;
    - gating: an id mismatch returns exactly one issue, a version mismatch returns exactly one issue
      (no `missing-capability` alongside it), and a `malformed` field ends the check;
    - an implementation typed without `capabilities` compiles as the `implementation` argument
      (type test);
    - `implemented` defaults to `contract`;
-   - older-copy shapes: no `requiredCapabilities`, no `capabilities`;
+   - older-copy shapes: no capability lists on the contract, no `capabilities` on the
+     implementation;
    - hostile inputs (`null`, a number, a throwing getter, a revoked proxy, a non-string
      capability), each returning `malformed` at the field's own path and never throwing.
 5. **Core and extension on one contract** (the definition-of-done proof). *Test:*
@@ -480,7 +525,7 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
      and the recorded token. Then assert that it fails with `missing-capability` once its
      `capabilities` are removed, so the check is not vacuous.
 8. **Docs.**
-   - README "Replacing a component": required capabilities, layout metadata, and the "When
+   - README "Replacing a component": required and optional capabilities, layout metadata, and the "When
      `version` changes" table. The check's example is quoted from the checked-in example
      extension, not written separately, so the gate compiles it;
    - update the status paragraph to say contracts are checkable while `context.components` is
