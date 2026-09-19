@@ -51,3 +51,11 @@ Every Task UI path that continues or archives a task goes through the command re
 - [x] Gate fix: the cross-project navigation harness renders global Tasks and needs CommandsProvider — eec7ea04
 - [x] 3.2 The boundary scan and the extension continue check — 7428e5dd
 - [x] 3.3 Docs: extension API README and AGENTS.md — 068072ee
+
+### Post-review fixes
+
+- [x] Post-review fix: pin the cross-project Resolve conflicts continue on global Tasks — 56d5b482
+- [x] Post-review fix: join the 409 refetch and name every attachment rule — 102fc63d
+- [x] Post-review fix: close the gaps in the boundary scan — cf21a2d3
+- [x] Post-review fix: memoize the composer's continueWith — 35e12916
+- [x] Post-review fix: record implementation status and timing notes in the spec — 76a00c69
