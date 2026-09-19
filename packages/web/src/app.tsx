@@ -15,6 +15,7 @@ import { ReferenceStatusRegistry } from './components/reference-status'
 import { RunNotifications } from './components/run-notifications'
 import { ThemeProvider } from './components/theme-provider'
 import { Toaster } from './components/ui/toaster'
+import { ProjectChangeReporter } from './events/project-change-reporter'
 import { AppRoutes } from './routes'
 
 /** Real URLs, no basename: the cockpit is always mounted at the origin root, and the server
@@ -67,6 +68,10 @@ export function App(props: {
               <AppearanceProvider>
                 <BrowserRouter>
                   <LastLocationController />
+                  {/* Inside the router and above every route, project-scoped and workspace alike:
+                      reports the project the URL shows as `cezar.project.changed` (spec
+                      2026-09-19-extension-event-api). Renders nothing. */}
+                  <ProjectChangeReporter />
                   {/* At the root for the same reason the event stream is: the sidebar, the task table
                       and an open run header all paint PR/issue chips, often the SAME ones, and each
                       asking for itself was several round trips and a staggered wave of colour. They

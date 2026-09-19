@@ -7,11 +7,15 @@ import { createQueryClient } from './api/query-client'
 import { CommandsProvider } from './commands/provider'
 import { queryKeys, workspaceQueryKeys } from './api/queries'
 import type { ProjectsResponse, WorkspaceUiState } from '@open-mercato/cezar-api-client'
+import { ProjectChanged, type ProjectChange } from '@open-mercato/cezar-extension-api'
 import { AppearanceProvider } from './components/appearance-provider'
 import { ListViewProvider } from './components/list-view'
 import { ThemeProvider } from './components/theme-provider'
 import { LAST_LOCATION_STORAGE_KEY } from './lib/last-location'
 import { AppRoutes, pageTitleContext } from './routes'
+import { createEventBus, type EventBus } from './events/bus'
+import { ProjectChangeReporter } from './events/project-change-reporter'
+import { EventBusProvider } from './events/provider'
 import { resetDraft } from './routes/new-task-draft'
 
 // The `/` overview fetches `/api/v1/runs` on mount. A never-answering fetch keeps every route
@@ -113,11 +117,14 @@ function renderAt(
     health = HEALTH,
     registry = REGISTRY,
     uiState = {},
+    bus,
   }: {
     seed?: boolean
     health?: typeof HEALTH | null
     registry?: ProjectsResponse | null
     uiState?: WorkspaceUiState | Record<string, unknown> | null
+    /** Mounts the page's event bus and the `ProjectChangeReporter` beside the routes, as `App` does. */
+    bus?: EventBus
   } = {},
 ) {
   const client = createQueryClient()
@@ -131,16 +138,19 @@ function renderAt(
   render(
     <QueryClientProvider client={client}>
       <CommandsProvider>
-        <ThemeProvider>
-          <AppearanceProvider>
-            <MemoryRouter initialEntries={[entry]}>
-              <ListViewProvider>
-                <AppRoutes />
-                <LocationProbe />
-              </ListViewProvider>
-            </MemoryRouter>
-          </AppearanceProvider>
-        </ThemeProvider>
+        <EventBusProvider bus={bus}>
+          <ThemeProvider>
+            <AppearanceProvider>
+              <MemoryRouter initialEntries={[entry]}>
+                {bus !== undefined && <ProjectChangeReporter />}
+                <ListViewProvider>
+                  <AppRoutes />
+                  <LocationProbe />
+                </ListViewProvider>
+              </MemoryRouter>
+            </AppearanceProvider>
+          </ThemeProvider>
+        </EventBusProvider>
       </CommandsProvider>
     </QueryClientProvider>,
   )
@@ -772,5 +782,32 @@ describe('/new query params', () => {
     expect(routeName()).toBe('new')
     expect(document.body.textContent).not.toContain('s3cret')
     expect(textarea().value).toBe('')
+  })
+})
+
+describe('cezar.project.changed through the real route map (spec 2026-09-19-extension-event-api)', () => {
+  function listen(bus: EventBus): ProjectChange[] {
+    const heard: ProjectChange[] = []
+    bus.on(ProjectChanged, (change) => heard.push(change))
+    return heard
+  }
+
+  it('reports only the boot slug for a /p/default link, never the alias', async () => {
+    const bus = createEventBus()
+    const heard = listen(bus)
+
+    renderAt('/p/default/tasks/r1', { bus })
+
+    await waitFor(() => expect(currentPathname()).toBe(`/p/${BOOT}/tasks/r1`))
+    await waitFor(() => expect(heard).toEqual([{ projectId: BOOT, previousProjectId: null }]))
+  })
+
+  it('reports a legacy flat URL as the boot project it redirects to', async () => {
+    const bus = createEventBus()
+    const heard = listen(bus)
+
+    renderAt('/settings/skills', { bus })
+
+    await waitFor(() => expect(heard).toEqual([{ projectId: BOOT, previousProjectId: null }]))
   })
 })

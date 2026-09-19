@@ -11,7 +11,8 @@ import { useEventBus } from './provider'
 /**
  * Emits `cezar.project.changed` (spec `.ai/specs/2026-09-19-extension-event-api.md`, Q6) whenever
  * the registered project the URL shows changes. Renders nothing; mounted once inside the router
- * (`routes.tsx`), above both the `/p/:projectId` tree and the workspace pages.
+ * (`app.tsx`, beside `LastLocationController`), above both the `/p/:projectId` tree and the
+ * workspace pages.
  *
  * The value starts at `null`, so a page that loads on a workspace route emits nothing until the
  * user opens a project, and the last emitted value is held in a ref, so StrictMode's double
