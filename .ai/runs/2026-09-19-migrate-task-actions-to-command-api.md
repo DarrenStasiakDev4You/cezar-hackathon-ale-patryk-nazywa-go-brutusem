@@ -41,9 +41,9 @@ Every Task UI path that continues or archives a task goes through the command re
 
 ### Phase 2: The task thread and the Ask delivery
 
-- [ ] 2.1 The composer and its pickers run TaskContinue
-- [ ] 2.2 The review panel's send-back runs TaskContinue
-- [ ] 2.3 The Ask delivery runs TaskContinue and useContinueRun is deleted
+- [x] 2.1 The composer and its pickers run TaskContinue — f2e67972, 85b74cba
+- [x] 2.2 The review panel's send-back runs TaskContinue — 309b4f61
+- [x] 2.3 The Ask delivery runs TaskContinue and useContinueRun is deleted — c9269491
 
 ### Phase 3: Global Tasks, the boundary scan and docs
 
