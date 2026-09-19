@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import type { ComponentType } from 'react'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
@@ -807,5 +811,171 @@ describe('forExtension(scope).provide', () => {
     expect(
       thrown(() => components.provide(Header, { ...jiraHeader, capabilities: revoked() as readonly string[] })).code,
     ).toBe('invalid-input')
+  })
+})
+
+describe('change notification', () => {
+  const jiraHeader: ComponentImplementation<HeaderProps> = {
+    id: 'acme.jira.task-header',
+    title: 'Jira header',
+    capabilities: ['shows-title'],
+    component: CoreHeader,
+  }
+
+  /** A registry with one subscribed listener, and the revisions it saw on each call. */
+  function watched() {
+    const registry = servedRegistry({ onDiagnostic: () => {} })
+    const seen: number[] = []
+    const listener = vi.fn(() => {
+      seen.push(registry.revision())
+    })
+    const unsubscribe = registry.subscribe(listener)
+    return { registry, listener, seen, unsubscribe }
+  }
+
+  it('calls a listener once after a core register, with the revision already grown', () => {
+    const { registry, listener, seen } = watched()
+    const before = registry.revision()
+
+    registry.register(Header, coreDefault)
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(seen).toEqual([before + 1])
+    expect(registry.revision()).toBe(before + 1)
+  })
+
+  it('calls a listener once after an extension provide, compatible or not', () => {
+    const { registry, listener } = watched()
+
+    registry.forExtension(fakeScope('acme.jira').scope).provide(Header, jiraHeader)
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    registry.forExtension(fakeScope('acme.old').scope).provide(HeaderV2, { ...jiraHeader, id: 'acme.old.task-header' })
+    expect(registry.get('acme.old.task-header')?.compatible).toBe(false)
+    expect(listener).toHaveBeenCalledTimes(2)
+  })
+
+  it('calls a listener once after a dispose that removed a registration, and after a scope ends', () => {
+    const { registry, listener } = watched()
+    const handle = registry.register(Header, coreDefault)
+    const jira = fakeScope('acme.jira')
+    registry.forExtension(jira.scope).provide(Header, jiraHeader)
+    listener.mockClear()
+
+    handle.dispose()
+    expect(listener).toHaveBeenCalledTimes(1)
+
+    jira.end()
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(registry.list(Header.id)).toEqual([])
+  })
+
+  it('stays quiet after a second dispose, and after a dispose whose id was taken again', () => {
+    const { registry, listener } = watched()
+    const first = registry.register(Header, coreDefault)
+    first.dispose()
+    registry.register(Header, coreDefault)
+    const revision = registry.revision()
+    listener.mockClear()
+
+    first.dispose()
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(registry.revision()).toBe(revision)
+    expect(registry.get(coreDefault.id)).toBeDefined()
+  })
+
+  it('stays quiet on a refused call: nothing was recorded', () => {
+    const { registry, listener } = watched()
+    registry.register(Header, coreDefault)
+    listener.mockClear()
+
+    expect(() => registry.register(Header, coreDefault)).toThrow()
+    const ended = fakeScope('acme.jira')
+    ended.end()
+    expect(() => registry.forExtension(ended.scope).provide(Header, jiraHeader)).toThrow()
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('grows the revision with every reported change, and keeps it between reads', () => {
+    const registry = servedRegistry()
+    const revisions = [registry.revision()]
+
+    const handle = registry.register(Header, coreDefault)
+    revisions.push(registry.revision())
+    registry.register(Header, coreCompact)
+    revisions.push(registry.revision())
+    handle.dispose()
+    revisions.push(registry.revision())
+
+    expect(revisions).toEqual([...revisions].sort((a, b) => a - b))
+    expect(new Set(revisions).size).toBe(4)
+    expect(registry.revision()).toBe(revisions[3])
+  })
+
+  it('makes unsubscribing idempotent, and keeps the other listeners', () => {
+    const { registry, listener, unsubscribe } = watched()
+    const other = vi.fn()
+    registry.subscribe(other)
+
+    unsubscribe()
+    unsubscribe()
+    registry.register(Header, coreDefault)
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(other).toHaveBeenCalledTimes(1)
+  })
+
+  it('counts the same function subscribed twice as two subscriptions', () => {
+    const registry = servedRegistry()
+    const listener = vi.fn()
+    const first = registry.subscribe(listener)
+    registry.subscribe(listener)
+
+    registry.register(Header, coreDefault)
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    first()
+    registry.register(Header, coreCompact)
+    expect(listener).toHaveBeenCalledTimes(3)
+  })
+
+  it('swallows a throwing listener: the next one still runs and the change stands', () => {
+    const registry = servedRegistry()
+    registry.subscribe(() => {
+      throw new Error('listener bug')
+    })
+    const next = vi.fn()
+    registry.subscribe(next)
+
+    expect(() => registry.register(Header, coreDefault)).not.toThrow()
+
+    expect(next).toHaveBeenCalledTimes(1)
+    expect(registry.get(coreDefault.id)).toBeDefined()
+  })
+
+  it('works unbound, as useSyncExternalStore calls it', () => {
+    const registry = servedRegistry()
+    const { subscribe, revision } = registry
+    const listener = vi.fn()
+
+    const unsubscribe = subscribe(listener)
+    registry.register(Header, coreDefault)
+    unsubscribe()
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(revision()).toBe(registry.revision())
+  })
+
+  it('still imports nothing at run time except the extension API', () => {
+    const source = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'registry.ts'), 'utf8')
+    const runtime = [...source.matchAll(/^import[ \t]+(?!type[ \t])[\s\S]*?\bfrom[ \t]*'([^']+)'/gm)].map(
+      ([, specifier]) => specifier,
+    )
+
+    expect(runtime).toEqual(['@open-mercato/cezar-extension-api'])
+    // A dynamic import names its module in quotes; a comment's "import (" does not.
+    expect(source).not.toMatch(/\bimport[ \t]*\([ \t]*['"`]/)
   })
 })
