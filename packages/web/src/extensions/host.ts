@@ -11,8 +11,8 @@ import {
 } from './registry'
 
 /**
- * Placeholder services until the commands, events, storage and components items land, each one
- * replacing its placeholder behind the same `services(scope)` seam.
+ * Placeholder services until each service's item lands and replaces its placeholder behind the
+ * same `services(scope)` seam (commands and events have; storage and components have not).
  *
  * Every method first calls `scope.assertLive()` (so a call after deactivation fails with
  * `disposed`, as the contract says), then fails with
@@ -43,11 +43,19 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
 
 /**
  * The services the cockpit gives each activation: the real `commands` — the command registry's
- * extension view (spec `2026-09-19-command-api`) — with events, storage and components still the
+ * extension view (spec `2026-09-19-command-api`) — and the real `events` — the event bus's
+ * extension view (spec `2026-09-19-extension-event-api`), with storage and components still the
  * {@link unavailableServices} placeholders until their items land.
  */
-export function cockpitServices(deps: { readonly commands: CommandRegistry }): ExtensionRegistryOptions['services'] {
-  return (scope) => ({ ...unavailableServices(scope), commands: deps.commands.forExtension(scope) })
+export function cockpitServices(deps: {
+  readonly commands: CommandRegistry
+  readonly events: EventBus
+}): ExtensionRegistryOptions['services'] {
+  return (scope) => ({
+    ...unavailableServices(scope),
+    commands: deps.commands.forExtension(scope),
+    events: deps.events.forExtension(scope),
+  })
 }
 
 /**
@@ -72,11 +80,14 @@ export function startExtensionHost(options: {
   readonly extensions: readonly Extension[]
   readonly services?: ExtensionRegistryOptions['services']
   readonly onError?: ExtensionRegistryOptions['onError']
+  /** The cockpit passes {@link extensionLifecycleEvents} for its bus. */
+  readonly onStatusChange?: ExtensionRegistryOptions['onStatusChange']
 }): { readonly registry: ExtensionRegistry; readonly ready: Promise<readonly ExtensionRecord[]> } {
   const onError = options.onError ?? logExtensionError
   const registry = createExtensionRegistry({
     services: options.services ?? unavailableServices,
     onError,
+    ...(options.onStatusChange === undefined ? {} : { onStatusChange: options.onStatusChange }),
   })
 
   for (const extension of options.extensions) {
