@@ -30,16 +30,17 @@ yet: slot rendering and the picker are separate items.
 
 ## Resolved assumptions (autonomous defaults)
 
-The brief left these open. Each default is the most reversible choice. The extension API is
+The brief left these open. Each default was the most reversible choice. The extension API is
 private and experimental, `BUILTIN_EXTENSIONS` is empty, and no extension exists outside this
-repository, so every default can change before an extension depends on it.
+repository. **The owner reviewed all four on 2026-09-19 and confirmed each as written.** The last
+column records each decision.
 
-| # | Question | Applied default | Why |
-|---|---|---|---|
-| Q1 | Ship the real `cezar.task.header@1` contract with core's default implementation (the brief's example), or only the registry? | **Only the registry.** The brief's example is the definition-of-done test, run on a fixture contract (`cezar.fixture.task-header@1`) with one core and two extension implementations. The production registry serves no contract yet. | AGENTS.md (Task routing → Extensions): "Core tokens (`cezar.*`) are added in the same PR as the host code that honours them." Nothing renders a contract until the slot item. Item 7 (Q1) made the same call. |
-| Q2 | "metadata": a new open `metadata` field on `ComponentImplementation`, or the fields it already has? | **The existing fields.** The registration's `metadata` is `{ title, description? }`, copied from the implementation. The public `ComponentImplementation` type does not change. | This adds no public surface. An open record would have no documented meaning, and nothing reads it yet. A typed field (an icon, allowed zones, a settings schema) can be added later without breaking anything, which item 7 also anticipated (§ Alternatives considered). |
-| Q3 | An implementation that does not fit (another major, a missing required capability, or a contract this Cezar does not serve): should `provide` throw, or record it as unusable? | **Record it, never render it.** `provide` returns normally. The registration is listed with `compatible: false` and its issues, and the host reports one diagnostic. Mistakes the author controls (a malformed token, a bad or foreign id, a taken `componentId`, a field of the wrong type) still throw, as `context.commands.register` does. | This is what the package already promises: the host "ignores it with a `contract-version-mismatch` diagnostic instead of rendering it" (`components.ts`, `ComponentRegistry`). Item 7's planned-consumers row says the service "rejects" version issues, and this default reads that as not rendering them. A mismatch comes from Cezar and the extension drifting apart, which the author cannot prevent. Throwing would fail the whole activation, commands included, for one outdated component. The picker needs the issues to explain why an implementation is missing (item 7). |
-| Q4 | Should readers get change notifications (`subscribe`) in this item? | **No, defer it** to the slot and picker item, its first reader. `list`, `listUsable` and `get` are plain reads. | No code reads the registry reactively yet. The reader that needs it will design the notification together with its React binding. Adding it later is additive. |
+| # | Question | Decision | Why | Owner (2026-09-19) |
+|---|---|---|---|---|
+| Q1 | Ship the real `cezar.task.header@1` contract with core's default implementation (the brief's example), or only the registry? | **Only the registry.** The brief's example is the definition-of-done test, run on a fixture contract (`cezar.fixture.task-header@1`) with one core and two extension implementations. The production registry serves no contract yet. | AGENTS.md (Task routing → Extensions): "Core tokens (`cezar.*`) are added in the same PR as the host code that honours them." Nothing renders a contract until the slot item. Item 7 (Q1) made the same call. | ✅ confirmed |
+| Q2 | "metadata": a new open `metadata` field on `ComponentImplementation`, or the fields it already has? | **The existing fields.** The registration's `metadata` is `{ title, description? }`, copied from the implementation. The public `ComponentImplementation` type does not change. | This adds no public surface. An open record would have no documented meaning, and nothing reads it yet. A typed field (an icon, allowed zones, a settings schema) can be added later without breaking anything, which item 7 also anticipated (§ Alternatives considered). | ✅ confirmed |
+| Q3 | An implementation that does not fit (another major, a missing required capability, or a contract this Cezar does not serve): should `provide` throw, or record it as unusable? | **Record it, never render it.** `provide` returns normally. The registration is listed with `compatible: false` and its issues, and the host reports one diagnostic. Mistakes the author controls (a malformed token, a bad or foreign id, a taken `componentId`, a field of the wrong type) still throw, as `context.commands.register` does. | This is what the package already promises: the host "ignores it with a `contract-version-mismatch` diagnostic instead of rendering it" (`components.ts`, `ComponentRegistry`). Item 7's planned-consumers row says the service "rejects" version issues, and this default reads that as not rendering them. A mismatch comes from Cezar and the extension drifting apart, which the author cannot prevent. Throwing would fail the whole activation, commands included, for one outdated component. The picker needs the issues to explain why an implementation is missing (item 7). | ✅ confirmed |
+| Q4 | Should readers get change notifications (`subscribe`) in this item? | **No, defer it** to the slot and picker item, its first reader. `list`, `listUsable` and `get` are plain reads. | No code reads the registry reactively yet. The reader that needs it will design the notification together with its React binding. Adding it later is additive. | ✅ confirmed |
 
 ## 📝 Problem Statement
 
@@ -397,7 +398,7 @@ picker, which is a later item.
 - **Behavior promised to extensions (Q3).** "Record, don't throw" for a non-fitting implementation
   becomes extension-facing behavior. Changing it to throwing later would break extensions that do
   not catch. That is acceptable while the package is private and experimental. It matches the
-  TSDoc the package already ships, and it is flagged for override in the assumptions table.
+  TSDoc the package already ships, and the owner confirmed it on 2026-09-19 (Q3).
 - **A registry with an empty production catalog.** Until the slot item, every real `provide`
   records `unknown-contract`. Users see nothing, because `BUILTIN_EXTENSIONS` is empty. The
   mechanism is proven by tests with a fixture catalog, as items 1 and 7 were.
