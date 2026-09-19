@@ -1,19 +1,19 @@
 # Custom Task Header Extension — a header part with its own state and logic, owning core's task actions
 
-> Slug: `custom-task-header-extension` · Status: **designed, owner's answers applied 2026-09-19** ·
+> Slug: `custom-task-header-extension` · Status: **designed; owner's answers applied, prerequisite met** ·
 > Epic 2 (Component Platform), item 13: "Create example custom Task Header extension". Builds on
 > `2026-09-19-task-header-contract.md` (item 11: `cezar.task.header.main@1`, the intents, the
 > `offers-*` capabilities), `2026-09-19-component-host.md`, `2026-09-19-component-resolver.md` and
 > `2026-09-18-extension-registry.md`. Sibling contracts, not touched here:
 > `2026-09-19-task-metadata-contract.md` (item 16) and `2026-09-19-task-composer-contract.md`
-> (item 17, on `main` since #47). **Starts from `main` (`d298b017`), and never from #38's branch**
-> (Q2, owner). #38's mechanism — the `offers-*` capabilities, `useHostedComponent`, the shell code
-> that honours them and the examples' `react` rule — is on no branch that reaches `main`, so this
-> item lands it itself, as a small prerequisite PR to `main`. Delivery: **two PRs to `main`, never
-> stacked**. Phase 1 is that prerequisite (the mechanism, recovered from #38's reviewed diff).
-> Phase 2 is the example, branched from `main` after phase 1 merges: `packages/extension-api` (a new
-> example and its tests, README) plus one cockpit test in `packages/web`, with no runtime change of
-> its own.
+> (item 17, on `main` since #47). **Starts from `main` at `33a64fea` (#49)**, which carried #38's
+> diff — the `offers-*` capabilities, `useHostedComponent`, the shell code that honours them, the
+> examples' `react` rule and `examples/compact-task-header/` — onto `main` on 2026-09-19, one minute
+> after this spec first merged (#45). The prerequisite this spec was written around is therefore
+> **done**, and the owner's rule behind it holds: nothing here depends on a branch `main` does not
+> contain (Q2). Delivery: **one PR to `main`** — `packages/extension-api` (a new example and its
+> tests, README) plus one cockpit test in `packages/web`. **No runtime change.** *Revised
+> 2026-09-20, after #49.*
 
 ## 📝 TLDR
 
@@ -23,9 +23,11 @@ but no implementation has ever taken the actions over there, and none has had be
 So nothing shows yet that an override can **add** something core does not have while every core
 action keeps working.
 
-The proposal lands the takeover mechanism on `main` (phase 1) and adds a worked example,
-`packages/extension-api/examples/jira-task-header/`, written against
-`@open-mercato/cezar-extension-api` and `react` alone (phase 2). The example implements
+Since #49 the mechanism is on `main`, and `examples/compact-task-header/` shows a header from
+another package owning all three actions. What it does not show is a header that **adds** anything:
+it holds no state, runs no logic of its own, and never fails. The proposal adds a second, richer
+worked example, `packages/extension-api/examples/jira-task-header/`, written against
+`@open-mercato/cezar-extension-api` and `react` alone. The example implements
 `cezar.task.header.main@1` (the brief's `task.header@1`) and takes over **the whole action set** —
 Continue, Stop and Archive (`offers-continue`, `offers-stop`, `offers-archive`) — plus the **Choose
 engine** intent. Core's `cezar.task.continue`, `cezar.task.stop` and `cezar.task.archive` still do
@@ -47,65 +49,54 @@ implementation starts.
 
 | # | Question | Answer | Why | Status |
 |---|---|---|---|---|
-| Q1 | The brief bundles an example extension, its custom feature and the proof on the task page. Split into several specs? | **One spec, two PRs to `main`** (Q2 makes the first one this item's own). They do not stand apart: the example is the proof, its custom feature is what the brief asks the proof to show, and a test without the example proves nothing. | default, reversible |
-| Q2 | #38 (item 11's phase 2) was merged into `feat/task-header-contract` after #37 had been squash-merged into `main`, so `offers-*`, `useHostedComponent`, the shell code that honours them and the examples' `react` rule are on no branch that reaches `main`. Build on #38, or stand alone? | **Never build on #38's branch.** This item lands the mechanism itself, as **a small prerequisite PR to `main`** (the owner's first option), and the example follows on a second PR **branched from `main` after the first one merges**. The two are never stacked, and neither depends on a branch `main` does not contain. Phase 1 carries only what the example needs: the three `offers-*` capabilities, `useHostedComponent`, the shell code honouring them, and `react` for examples (the boundary rule and the devDependency). It is recovered from #38's reviewed diff rather than written again. Whatever else #38 held (its compact example) is not this item's concern; if someone re-lands #38 wholesale first, phase 1 shrinks to a check. | Owner, 2026-09-19: "nie traktowałbym #38 jako podstawy, jeśli zmiany z niego nie znajdują się na żadnej ścieżce prowadzącej do obecnego main", with the two acceptable shapes — a small prerequisite PR, or the minimal subset inside item 13 — and the explicit worry about testing the extension system "wobec architektury, której faktycznie nie ma w produkcyjnym drzewie". The prerequisite PR is the first of those, and it keeps a runtime change reviewable on its own instead of hidden inside an example PR. Stacking is what lost #33 and #38 in the first place. | ✅ owner, 2026-09-19 |
+| Q1 | The brief bundles an example extension, its custom feature and the proof on the task page. Split into several specs? | **One spec, one PR.** They do not stand apart: the example is the proof, its custom feature is what the brief asks the proof to show, and a test without the example proves nothing. (Until #49 this was two PRs, the first one being the prerequisite — Q2.) | default, reversible |
+| Q2 | #38 (item 11's phase 2) was merged into `feat/task-header-contract` after #37 had been squash-merged into `main`, so `offers-*`, `useHostedComponent`, the shell code that honours them and the examples' `react` rule are on no branch that reaches `main`. Build on #38, or stand alone? | **Never build on #38's branch — and since #49 there is nothing left to do.** The owner's rule was satisfied on 2026-09-19 by a separate PR: #49 carried #38's diff onto `main` (`33a64fea`), verified equal to it by `git patch-id`. So this item lands no mechanism, opens no prerequisite PR and stacks nothing. It is one PR of example, tests and README, starting from `main` as #49 left it. Step 0 is now a check that the three `offers-*`, `useHostedComponent`, the shell code and the examples' `react` rule are really there. | Owner, 2026-09-19: "nie traktowałbym #38 jako podstawy, jeśli zmiany z niego nie znajdują się na żadnej ścieżce prowadzącej do obecnego main", with the two acceptable shapes — a small prerequisite PR, or the minimal subset inside item 13 — and the explicit worry about testing the extension system "wobec architektury, której faktycznie nie ma w produkcyjnym drzewie". #49 is the first of those, opened and merged independently of this item, so a runtime change stayed reviewable on its own instead of hidden inside an example PR. Stacking is what lost #33 and #38 in the first place. | ✅ owner, 2026-09-19 · **done by #49** |
 | Q3 | The brief names `task.header@1`. Which contract? | **`cezar.task.header.main@1`**, unchanged, because it already is what the owner describes: the **functional** contract of the replaceable task header — a view model, action state and intents — and nothing React- or core-specific. The mapping of names: the owner's `task` is `task` + `attention` + `engine` + `meta`; his `intents.continue/stop/archive/chooseEngine` are `onContinue`, `onStop`, `onArchive` and `onChooseEngine`; his `state.canContinue/canStop/canArchive` are `actions.continue/stop/archive`, each `{ available, enabled, pending, reason? }` — `canX` is `available && enabled`, with the reason in words and a `pending` flag the owner's booleans do not carry. `onRename`, `onResolveConflicts` and `onNavigate` are part of the same @1. | Owner, 2026-09-19: the contract is "kontrakt funkcjonalny całego replaceable Task Headera, nie konkretnego komponentu React", holding "wszystko, czego implementacja potrzebuje, żeby być poprawnym Task Headerem", and never a `QueryClient`, mutations, the router, internal hooks or core's DOM refs. That is exactly what #37 shipped (item 11, Q4–Q6): data props are JSON and the only functions are `void` intents. No new contract, and no change to `@1`. | ✅ owner, 2026-09-19 |
 | Q4 | "Still use core's `task.continue` command": does the example execute `cezar.task.continue` itself through `context.commands`, or call the `onContinue()` intent? | **The intent.** The example declares `offers-continue` and calls `onContinue()`. Core executes `cezar.task.continue` with `{ taskId }`, plus `runner` when the task's own runner is not connected, and shows the server's words on failure. The same goes for Stop: `onStop()` opens core's confirmation, and only **Cancel the run** executes `cezar.task.stop`. The example never holds a command token. | Item 11 (Q4) routed header actions through intents so that no header can skip Stop's confirmation or Continue's provider check. An example that executed `TaskContinue` itself would teach the path that decision closed. The cockpit test spies on the command registry, so "core's command ran" is asserted, not assumed. | default, reversible |
 | Q5 | Which of core's actions does the example take over? | **The whole set: Continue, Stop and Archive** (`offers-continue`, `offers-stop`, `offers-archive`), plus the **Choose engine** intent when it is available. Core's bar then shows none of the three, the example renders them, every one still works, and **after the example throws, core's default returns and core's bar shows all three again** — which this item's test proves, on the real page, with the real example. | Owner, 2026-09-19: "przykładowy header powinien przejąć cały sensowny zestaw: Continue, Stop, Archive", because an example that takes Continue and leaves Stop "nie testujesz faktycznie mechanizmu »header przejmuje actions«", and the crash-and-fallback path is what makes the proof strong. The granular capabilities (item 11, Q3, owner) stay as they are: this example simply declares all three. | ✅ owner, 2026-09-19 |
-| Q6 | Does **Create Jira Issue** create an issue in Jira? | **No. It drafts one.** The button reads **Draft Jira issue** and opens a draft panel. There the example builds a summary and a plain-text description from the header's props, the user can edit both, and **Copy summary** and **Copy description** put them on the clipboard for Jira's own Create dialog. No request leaves the page, and nothing needs configuring. The owner's reply to this row ("już jest merge zrobione") answers a different question, so the default stands and is still open for one word from him. | A real issue needs a Jira site, a project and a credential. Extensions have nowhere to keep them: `context.storage` is still a placeholder that rejects (`extensions/host.ts`, `unavailableServices`), and there is no secret store or permission model yet (#40 is an open spec). A browser call to Jira's REST API would need a token in the page and a CORS exception. Jira's prefilled create URL needs numeric project and issue-type ids, which is configuration. Each of these breaks "zero config" (AGENTS.md) for an example. The label does not promise a ticket the example does not create. A real integration is its own item, once storage and permissions exist. | default, reversible |
+| Q6 | Does **Create Jira Issue** create an issue in Jira? | **No. It drafts one.** The button reads **Draft Jira issue** and opens a draft panel. There the example builds a summary and a plain-text description from the header's props, the user can edit both, and **Copy summary** and **Copy description** put them on the clipboard for Jira's own Create dialog. No request leaves the page, and nothing needs configuring. The owner's reply on this row ("już jest merge zrobione") turned out to be about #49, the merge that put the mechanism on `main` (Q2), not about Jira. So this one is still the autonomous default, and one word from him changes it. | A real issue needs a Jira site, a project and a credential. Extensions have nowhere to keep them: `context.storage` is still a placeholder that rejects (`extensions/host.ts`, `unavailableServices`), and there is no secret store or permission model yet (#40 is an open spec). A browser call to Jira's REST API would need a token in the page and a CORS exception. Jira's prefilled create URL needs numeric project and issue-type ids, which is configuration. Each of these breaks "zero config" (AGENTS.md) for an example. The label does not promise a ticket the example does not create. A real integration is its own item, once storage and permissions exist. | default, reversible |
 | Q7 | Where does the example's own state live? | **In React state inside its component** (`useState`, `useRef`, `useEffect`), keyed by `task.taskId`. The state holds whether the draft panel is open, the two edited fields and the copy feedback. Nothing is persisted. | The brief asks for "its own React state". `context.storage` does not work yet (Q6). The host does not remount a healthy implementation when the user moves to another task (`component-host.tsx`, `resetKey`), so keying by task is what keeps task A's draft off task B's header. | default, reversible |
 | Q8a | Does the example touch the task's reply box? | **No. It replaces the header and nothing else.** The page composes independent hosts — the header, the thread and the reply box — and the reply box is its own contract, `cezar.task.composer@1` (item 17, on `main` since #47). An implementation of the header contract cannot reach it, and this example does not provide one. The one link between them stays the intent: while `actions.chooseEngine` is available the example offers **Choose engine**, and core moves focus to the reply box's engine picker (item 11, Q7, owner). The word "composer" is reserved for that reply box in this spec; the example's own UI is the **Jira draft panel**. | Owner, 2026-09-19: "Example Task Header nie powinien renderować composera… Override task.header nie powinien zmieniać task.composer. To jest właśnie jedna z głównych zalet całego systemu", with `onChooseEngine()` as the sanctioned way in. | ✅ owner, 2026-09-19 |
 | Q8b | How does the Jira draft panel render, given the example may import only the package and `react`? | **As a panel inside the example's own box**, absolutely positioned under the row and never wider than the row, with inline styles. While it is open it covers what lies under it, core's tabs and action bar included, so it closes on **Close**, Escape, its button, and a press anywhere outside it. It is not a portal (`react-dom` is outside the examples' boundary), not core's UI kit (a private import) and not a native `<dialog>` (jsdom 29 has no `showModal`). Colours come from CSS system colours (`Canvas`, `CanvasText`, `ButtonFace`, `GrayText`), which follow the cockpit's `color-scheme` in light and dark. | An absolutely positioned panel does not change the header's height. That height matters because the Changes and Files tabs pin their panes under it (item 11 § Edge Cases). The shell is `relative z-20`, and nothing between it and the host's box clips, so the panel overlays what is below. Bounding it by the row keeps it on screen at 375 px, where core's ⋮ menu sits to the right of the row. Tailwind classes would not exist for a file outside the cockpit's sources, and the cockpit's `--*` tokens are undocumented internals. | default, reversible |
-| Q9 | Must the example be reachable in the shipped cockpit? | **No.** It is not added to `BUILTIN_EXTENSIONS`. The proof is a cockpit test that activates it through the real extension host and prefers it through `ComponentsProvider`, the seam the picker item will use. | `BUILTIN_EXTENSIONS` ships to every user, and production has no preference yet (`app.tsx` passes none), so a built-in example would render nowhere and only grow the bundle. #38 set this precedent. The picker item makes any provided header selectable. | default, reversible |
+| Q9 | Must the example be reachable in the shipped cockpit? | **No.** It is not added to `BUILTIN_EXTENSIONS`. The proof is a cockpit test that activates it through the real extension host and prefers it through `ComponentsProvider`, the seam the picker item will use. | `BUILTIN_EXTENSIONS` ships to every user, and production has no preference yet (`app.tsx` passes none), so a built-in example would render nowhere and only grow the bundle. #49's compact example set this precedent. The picker item makes any provided header selectable. | default, reversible |
 | Q10 | Which core actions are "the required core actions" the Definition of Done says must still work? | **The ones the contract names, not a list in this ticket: `continue`, `stop`, `archive` and the `chooseEngine` intent**, each offered exactly while its own state allows it. The test does not settle for "the button exists". For each action it follows the chain the owner drew — extension control → core intent → core command → the same behaviour core's own button produces — and asserts every link: the executed command token and input, the request the service receives, and Stop's confirmation before any of it. The example also keeps **Rename** (`onRename()` → core's title editor), one button beyond the required set, because rename lives only inside the part and would otherwise leave the page. **The meta row's controls are not required:** the example does not declare `shows-meta`, so the branch chip's copy, the reference chips (with **Resolve conflicts**), the automation link, the agent badge, the diff, usage and the plan mirror do not render while it does. § UI/UX lists each one and where it is still reachable. | Owner, 2026-09-19: "To powinno zostać zdefiniowane przez contract, nie przez prose ticketu" — Continue, Stop, Archive and the Choose Engine intent, gated by `canContinue`/`canStop`/`canArchive` (Q3 maps those onto `actions.*`) — and the test must prove "same core intent → same core command → same behavior". The meta stays optional by the contract's own design (`shows-meta`). | ✅ owner, 2026-09-19 |
 
 ## 📝 Problem Statement
 
-The brief's goal: prove that the system supports a real override with additional logic. What `main`
-has at `d298b017`:
+The brief's goal: prove that the system supports a real override with additional logic. Since #49,
+`main` has the mechanism and one worked example. `examples/compact-task-header/` is a header from
+another package that declares all three `offers-*`, renders the task's actions and runs them through
+core's intents, and `external-task-header.test.tsx` drives it on the task page. That answers "can a
+header live outside the cockpit and still work". It leaves the brief's actual question open:
 
-- **The takeover mechanism is not there at all.** `cezar.task.header.main@1` carries the three
-  actions and their intents, and core's own bar renders from them — but its `optionalCapabilities`
-  are `['shows-meta']`, `useHostedComponent` does not exist, and `run-header.tsx` has no code that
-  leaves an action out for an implementation that offers it. An implementation declaring
-  `offers-continue` today is declaring a name the contract does not know, which the registry
-  ignores, so core's bar would render Continue beside the implementation's own. All of it was
-  written and reviewed in #38 and then lost to a squash-merge (Q2). Phase 1 brings it back.
-- **No override adds anything.** The only implementations that have ever rendered are core's
-  default and the test fixtures. Nothing shows that a part can carry state and behaviour of its
-  own, rather than being restyled.
-- **No hook has come from outside `packages/web`.** The fixtures that use hooks live in the
-  cockpit's own test files, so they share the cockpit's React by construction. Hooks in a component
-  from another package only work when that package resolves the same React instance. Phase 1 pins
-  `react` for the examples (one copy, 19.2.7), but nothing exercises it, and the README does not
-  tell an extension author about it.
-- **Nothing shows what happens after a replacement fails.** The host falls back to core's default,
-  and with the mechanism in place core's bar must show the actions again. That path decides whether
-  a user can still stop a task when an extension is broken, so the example proves it rather than a
-  fixture (Q5, owner).
-- **Rename disappears under a replacement without a pencil.** Core's pencil lives inside core's
-  default, and the compact example has none. Item 12's spec (`core-task-header-registration`, in
-  review) proves that core's editor opens over a fixture extension's part. No real extension has
-  offered rename yet.
+- **The example adds nothing of its own.** The compact header is a row of props: no state, no
+  logic, nothing core does not already do. Its whole body is `createElement` over its props, so
+  "obsługuje rzeczywisty override z dodatkową logiką" is still unproven.
+- **No hook has ever come from outside `packages/web`.** The compact example uses none, and the
+  fixtures that do live in the cockpit's own test files, where they share React by construction.
+  Hooks in a component from another package work only when that package resolves the same React
+  instance. #49 pins `react` for the examples (one copy, 19.2.7), but nothing exercises it, and the
+  README does not tell an extension author about it.
+- **Nothing shows what happens after a replacement fails.** `run-header.test.tsx` covers it with a
+  throwing fixture, but no real extension has ever failed on the page. That path decides whether a
+  user can still stop a task when an extension is broken, so the owner asked for the example itself
+  to prove it (Q5).
+- **Two of the contract's actions have no real implementation behind them.** Nothing outside the
+  cockpit has ever called `onChooseEngine()` or `onRename()`. Rename matters most: it lives only
+  inside the part, and the compact example has no pencil, so under it the page loses renaming
+  altogether.
 
 The brief's Definition of Done, and where this item proves each point:
 
 | Definition of Done | How this item meets it | Proven by |
 |---|---|---|
-| The extension header can replace core's header. | Activated through the real extension host and preferred for `cezar.task.header.main`, the example renders in the host's box on `ThreadView`, in place of core's title and meta rows. Core's bar drops Continue, Cancel and Archive, because the example offers all three. | `routes/task-thread/jira-task-header.test.tsx` (`data-component="example.jira-header.row"`) |
+| The extension header can replace core's header. | Activated through the real extension host and preferred for `cezar.task.header.main`, the example renders in the host's box on `ThreadView`, in place of core's title and meta rows. Core's bar drops Continue, Cancel and Archive, because the example offers all three. (`external-task-header.test.tsx` already shows this for the compact example; this test is where the rest of the table is proven.) | `routes/task-thread/jira-task-header.test.tsx` (`data-component="example.jira-header.row"`) |
 | It has functionality core does not have. | **Draft Jira issue**: a draft panel, held in the example's React state, that drafts a Jira summary and description from the header's model and copies them. Core has nothing like it. | `test/jira-task-header.test.ts` (the draft rules), `jira-task-header.test.tsx` (the panel on the page) |
 | The required core actions still work (Q10). | Each of the contract's actions is followed through the whole chain: the example's control → the intent → the core command with its input → the request the service receives. Continue runs `cezar.task.continue`; Stop opens core's confirmation first and only **Cancel the run** runs `cezar.task.stop`; Archive runs `cezar.task.archive` with `archived: true`; **Choose engine** moves focus to the reply box's engine picker. Each is offered exactly while its own state allows it. The pencil opens core's title editor. When the example throws, core's default returns and core's bar shows all three actions again. | `jira-task-header.test.tsx` |
-| It uses no private Cezar imports. | The example imports only `@open-mercato/cezar-extension-api`, `react` and its own files. | `test/boundary.test.ts` (#38's examples rule, unchanged) |
+| It uses no private Cezar imports. | The example imports only `@open-mercato/cezar-extension-api`, `react` and its own files. | `test/boundary.test.ts` (the examples rule #49 landed, unchanged) |
 
 ## 📝 Proposed Solution
 
-0. **The mechanism, on `main`** (phase 1, its own PR: `core-components.ts`, `component-host.tsx`,
-   `run-header.tsx`, `boundary.test.ts`, `package.json`). The token gains `offers-continue`,
-   `offers-stop` and `offers-archive`; `useHostedComponent(contract, subject)` tells the shell which
-   implementation the host renders now; the shell leaves out each action the hosted implementation
-   offers and keeps its **Run actions** menu visible at every width; examples may import `react`.
-   This is item 11's steps 7 and 8 and the boundary half of its step 9, recovered from #38's
-   reviewed diff (Q2).
 1. **The draft logic, as a pure function** (`examples/jira-task-header/draft.ts`).
    `draftJiraIssue(model)` takes the header's `task`, `attention`, `engine` and `meta` and returns
    `{ summary, description }`. It is total, deterministic (no clock, no randomness) and needs no
@@ -127,7 +118,7 @@ The brief's Definition of Done, and where this item proves each point:
    component registry, `startExtensionHost` with the example, and a `ComponentsProvider` that
    prefers `example.jira-header.row`. It then drives every Definition of Done point on `ThreadView`.
 5. **The README** names the example in its list of worked examples (under "Writing an extension"
-   once #38 lands) as the case for a part with its own state and logic. "Replacing a component"
+   since #49) as the case for a part with its own state and logic. "Replacing a component"
    gains the one rule the example makes visible: React is the cockpit's. An extension imports
    `react` and never bundles its own copy, because a second React makes every hook throw. The host
    then renders core's default in place of that part.
@@ -170,7 +161,7 @@ The brief's Definition of Done, and where this item proves each point:
 flowchart LR
   ex["examples/jira-task-header<br/>(new: row + draft panel + draftJiraIssue)"] -.->|"context.components.provide"| reg["component registry<br/>(existing)"]
   test["jira-task-header.test.tsx<br/>(new: host + preference)"] -->|"startExtensionHost, preferenceOf"| reg
-  reg -->|"resolveComponent"| host["ComponentHost in RunHeader's shell<br/>(existing, #37 + #38)"]
+  reg -->|"resolveComponent"| host["ComponentHost in RunHeader's shell<br/>(existing, #37 + #49)"]
   host -->|"TaskHeaderMainProps"| ex
   ex -->|"onContinue / onStop / onRename"| model["useTaskHeaderModel<br/>(existing)"]
   model -->|"useCommand"| cmds["cezar.task.continue / .stop<br/>(existing)"]
@@ -181,28 +172,22 @@ flowchart LR
 The example reaches the cockpit only through the registry, and reaches core's behaviour only
 through the intents. Its own feature ends at the browser's clipboard.
 
-**Phase 1 (the prerequisite PR, Q2).** Changed in `packages/extension-api`:
-`src/core-components.ts` (the three `offers-*` in `optionalCapabilities`; no version bump, because
-adding an optional capability needs none), `test/boundary.test.ts` (examples may import `react`),
-`package.json` (`react` as a devDependency pinned to `packages/web`'s range) and `README.md`.
-Changed in `packages/web`: `component-registry/component-host.tsx` (`useHostedComponent`, with
-`ComponentHost` calling it so the host and the shell cannot disagree) and
-`routes/task-thread/run-header.tsx` (the bar leaves out each offered action; the Run actions menu
-loses its `md:hidden` while any is offered). Its tests are item 11's steps 7 and 8. **Nothing in
-phase 1 depends on this item's example**, which is why it is reviewable on its own.
+**Already on `main` (#49), and used as it is:** the three `offers-*` capabilities on the token,
+`useHostedComponent`, the shell code that leaves out each offered action and keeps the **Run
+actions** menu visible, the examples' `react` rule and its devDependency.
 
-**Phase 2 (the example).** New in `packages/extension-api`:
+**This item.** New in `packages/extension-api`:
 `examples/jira-task-header/draft.ts` (`draftJiraIssue`), `examples/jira-task-header/index.ts` (the
 extension and its component), and `test/jira-task-header.test.ts`.
 - **Changed in `packages/extension-api`:** `README.md`. "Writing an extension" lists the example
   with the other two, and "Replacing a component" gains the React-is-the-cockpit's rule.
 - **New in `packages/web`:** `src/routes/task-thread/jira-task-header.test.tsx`. It imports the
-  example through a test-only relative path, as #38's `external-task-header.test.tsx` does
+  example through a test-only relative path, as `external-task-header.test.tsx` does
   (AGENTS.md: "ugly on purpose").
-- **Not touched, in either phase:** the contract's props and version, the registry, the resolver,
-  the provider, `useTaskHeaderModel`, the commands, `cezar.task.composer@1` and the reply box,
-  `BUILTIN_EXTENSIONS`, the service, the HTTP contract and the api-client. No
-  `BACKWARD_COMPATIBILITY.md` surface moves. **Phase 2 makes no runtime change at all.** If its
+- **Not touched:** the contract's props and version, the registry, the resolver, the host, the
+  provider, the shell, `useTaskHeaderModel`, the commands, `cezar.task.composer@1` and the reply
+  box, `BUILTIN_EXTENSIONS`, the service, the HTTP contract and the api-client. No
+  `BACKWARD_COMPATIBILITY.md` surface moves. **This item makes no runtime change at all.** If its
   implementation finds it must edit cockpit code to make the example work, that edit is a finding
   about the platform: it is reported in the PR body and belongs in a change of its own.
 
@@ -232,7 +217,7 @@ the page only when the user presses a **Copy** button, and only to the clipboard
 
 ## 📝 API Contracts
 
-No public contract changes: the example uses `cezar.task.header.main@1` exactly as #37 and #38
+No public contract changes: the example uses `cezar.task.header.main@1` exactly as #37 and #49
 define it. The example's own module surface is shown below. It is not part of the package's public
 API, because `src/index.ts` does not re-export `examples/`.
 
@@ -457,7 +442,7 @@ illustrations, not the implementation's pixels.
   notice (README), and the unsent draft is gone. Nothing was persisted, so nothing is left behind.
 - **A second copy of React.** An extension that bundles its own React breaks on its first hook
   call. The host catches the render error and falls back to core's default. In this repository the
-  example resolves the cockpit's single `react` (#38 pins the devDependency to `packages/web`'s
+  example resolves the cockpit's single `react` (#49 pins the devDependency to `packages/web`'s
   range), and the cockpit test proves it: the panel only opens if `useState` works. The README
   states the rule for authors outside the repository.
 - **A long title or prompt.** The row cuts the title with an ellipsis. The summary is cut at 255
@@ -466,9 +451,10 @@ illustrations, not the implementation's pixels.
   status it does not know, and the dot reads neutral, as the contract asks.
 - **Rename while the panel is open.** The pencil closes the panel first, so core's editor never
   hides an open panel it cannot reach.
-- **Before #38 is on `main`.** `offers-continue` and `offers-stop` are unknown to the token, and the
-  registry ignores unknown capability names (README), so core's bar would show Continue and Cancel
-  beside the example's. Step 0 stops the implementation there (Q2).
+- **A `main` without #49's mechanism** (a revert, or an older checkout). The `offers-*` names are
+  then unknown to the token, and the registry ignores unknown capability names (README), so core's
+  bar would render Continue, Cancel and Archive beside the example's own. Step 0 catches that
+  before any code is written (Q2).
 - **The intents the example does not use** (`onResolveConflicts`, `onNavigate`). It shows no
   reference chips and no automation link, so it never calls them, and § UI/UX lists where those
   controls stay reachable.
@@ -482,16 +468,14 @@ illustrations, not the implementation's pixels.
 - **No runtime change to the cockpit.** The example is not in `BUILTIN_EXTENSIONS` (Q9), so no user
   runs it. The whole change is a new example, its tests and a README paragraph. Rollback is deleting
   them.
-- **Phase 1 is a runtime change to the shell (Q2).** Recovering #38's mechanism edits
-  `run-header.tsx`, the component that renders every task's controls, so AGENTS.md § Changing a
-  mechanism that already works applies: with no implementation offering anything — which is every
-  page in production, since nothing selects an implementation yet (Q9) — the bar and the menu must
-  behave exactly as they do today, and item 11's step-8 tests pin that. The diff is reviewed code
-  from #38, not a rewrite, which is the cheapest way to get it right. If someone re-lands #38
-  wholesale first, phase 1 becomes a check.
-- **The two PRs must not be stacked.** Phase 2 branches from `main` only after phase 1 has merged.
-  Stacking on a branch that is then squash-merged is exactly how #33 and #38 were lost, and it is
-  the failure the owner named.
+- **No runtime change, and no prerequisite left.** #49 put the mechanism on `main`, so this item is
+  an example, its tests and a README paragraph. What it can still break is the test suite, not the
+  product.
+- **The example lands beside a very similar one.** `compact-task-header` already owns the three
+  actions, so a reviewer should be able to say why both exist: the compact one is the minimal
+  "a header can live in another package", this one is "a header can think for itself". The README
+  step says exactly that, and the test file asserts only what `external-task-header.test.tsx` does
+  not.
 - **The meta row leaves the page under this header (Q10).** That is what `shows-meta` being
   optional means, and § UI/UX says where each control stays reachable. The branch copy is the one
   control with no other place. Nobody meets this before the picker item, because nothing in
@@ -508,42 +492,26 @@ illustrations, not the implementation's pixels.
 - **Task content on the clipboard.** The prompt can hold anything the user typed. It reaches the
   clipboard only when the user presses **Copy description**, after seeing it in the textarea. No
   request, event or log carries it.
-- **Test weight.** One new cockpit test file boots the page as #38's does (about 200 lines). It adds
+- **Test weight.** One new cockpit test file boots the page as `external-task-header.test.tsx` does (about 200 lines). It adds
   no new wrapper or fixture to other tests.
 
 ## 📋 Phasing
 
-**Phase 1 — the mechanism (its own PR to `main`).** Step 0 lands `offers-continue`, `offers-stop`
-and `offers-archive`, `useHostedComponent`, the shell code that honours them, and `react` for
-examples. It merges before phase 2 starts.
-
-**Phase 2 — the example (a second PR, branched from `main` after phase 1 merges).** Steps 1 to 4
-each leave the gate green, and step 5 is visual evidence that is never committed.
+One phase, one PR from `main` at `33a64fea` or later. Step 0 is a check that #49's mechanism is
+there, steps 1 to 4 each leave the gate green, and step 5 is visual evidence that is never
+committed.
 
 ## 📋 Implementation Plan
 
 Every step keeps the validation gate in `.ai/agentic.config.json` green: typecheck, `npm test`,
 `test:unit`, `build` and `test:package`.
 
-0. **The mechanism, as its own PR to `main`** (phase 1, Q2). First check `main`: when
-   `TaskHeaderMain.optionalCapabilities` already holds the three `offers-*`, `useHostedComponent`
-   exists in `component-host.tsx`, and `boundary.test.ts` lets examples import `react`, someone has
-   re-landed #38 and this step is done. Otherwise recover it from #38's diff (`a9850026`) onto
-   `main`, keeping its tests and dropping anything this item does not need:
-   - the token gains `offers-continue`, `offers-stop` and `offers-archive` (an optional capability
-     needs no version bump), and the README's capability list follows;
-   - `useHostedComponent(contract, subject)` moves `ComponentHost`'s subscribe-resolve-choose steps
-     into a hook the shell calls too, so the host and the shell cannot disagree;
-   - `run-header.tsx` leaves out each action the hosted implementation offers, and keeps the **Run
-     actions** menu visible at every width (no `md:hidden`) while any is offered;
-   - `examples/` may import `react` as a value (`boundary.test.ts`), and `react` becomes an
-     extension-api devDependency pinned to `packages/web`'s range, so one React is installed.
-
-   *Tests:* item 11's steps 7 and 8 — `useHostedComponent` names what the host renders (preferred,
-   failed for one subject, disposed, unresolved); fixture implementations declaring all three, only
-   `offers-continue`, and none (the bar and the menu unchanged, which is the production default);
-   and one that throws, after which the bar shows the three actions again. Merge this PR before
-   starting phase 2, and branch phase 2 from `main` afterwards — never from this branch.
+0. **Check what #49 left on `main`** (no work, just a gate). `TaskHeaderMain.optionalCapabilities`
+   is `['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive']`, `useHostedComponent`
+   exists in `component-host.tsx`, `run-header.tsx` drops each offered action and keeps the **Run
+   actions** menu visible, `boundary.test.ts` lets `examples/` import `react`, and
+   `packages/extension-api/package.json` has the `react` devDependency. If any of it is missing,
+   `main` is not what this spec assumes: stop and say so rather than bringing it back here (Q2).
 
 1. **The draft** (`examples/jira-task-header/draft.ts`).
    *Tests* (`packages/extension-api/test/jira-task-header.test.ts`, node):
@@ -585,7 +553,7 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
    - **Core's bar gives the actions up:** with the example preferred, core's action bar holds no
      Continue, no Cancel and no Archive at either render, and the **Run actions** menu is visible
      without `md:hidden` and still lists every task action;
-   - **Each action, the whole chain** (Q10, owner), over two renders as #38's test does. For each
+   - **Each action, the whole chain** (Q10, owner), over two renders as `external-task-header.test.tsx` does. For each
      one the test follows the example's control → the intent → the core command → the service
      request, so "the button exists" is never the assertion:
      - finished run, **Continue** → `execute(TaskContinue, { taskId: 'r1' })` → `POST
@@ -638,10 +606,10 @@ Every step keeps the validation gate in `.ai/agentic.config.json` green: typeche
 4. **The README** (`packages/extension-api/README.md`). "Writing an extension" names the worked
    examples and what each shows: `hello-extension` is the extension's lifecycle, and
    `jira-task-header` is a task header with its own React state and its own feature that takes over
-   the task's actions (plus `compact-task-header`, when phase 1 brought it along). "Replacing a
+   the task's actions, beside `compact-task-header`, the minimal one #49 landed. "Replacing a
    component" gains the rule: import `react`, never bundle a copy, because a second React breaks
    every hook and the host then renders core's default. AGENTS.md's extension-api row scopes "React
-   through `import type` only" to `src/`, which phase 1 already does.
+   through `import type` only" to `src/`, which #49 already did.
 
 5. **Visual evidence, never committed.** jsdom has no layout, so the height and on-screen claims
    are checked in a real browser. On a local, uncommitted patch, list the example in
