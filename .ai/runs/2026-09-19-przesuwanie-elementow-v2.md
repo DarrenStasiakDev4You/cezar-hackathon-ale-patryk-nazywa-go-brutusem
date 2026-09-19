@@ -34,7 +34,7 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 ### Phase 3: verification and handoff
 
 - [x] 3.1 Run the configured full validation gate and record any pre-existing or platform-specific failures. — e9a63039
-- [x] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow. — 25c62604
+- [ ] 3.2 Run authoritative review/autofix and browser QA for the user-facing edit-mode flow. — 25c62604
 - [x] Post-review regression coverage: prove moving a group preserves its children and their parent links. — 4b77649e
 
 ## Validation notes
@@ -96,6 +96,17 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - Browser evidence passed for readable edit mode, accessible handles, sidebar movement to the other
   side, and exit behavior. Context-menu deletion and populated keyboard/touch/mobile coverage remain
   unexercised; no QA approval is claimed. Evidence is posted on PR #27.
+
+### Review re-run — 2026-09-19
+
+- Focused layout regression tests passed — 4 files, 103 tests.
+- `npm run typecheck`, `npm run build`, and `npm run test:package` passed.
+- `npm test` remains blocked by unrelated parallel web/server timeouts (44 failures in the
+  repository-wide run; 7675/7719 tests passed).
+- `npm run test:unit` remains blocked by the existing test-environment reuse assertion
+  (`test-env-launcher.test.ts`, expected `TEST_ENV_REUSED=1`, received `0`).
+- Re-review found no additional code finding; approval is withheld until the configured gate is
+  green. Browser QA remains partial and has no QA approval.
 
 ### Container drag stability fix — 2026-09-19
 
