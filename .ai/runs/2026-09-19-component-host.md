@@ -79,5 +79,5 @@ event API.
 
 ### Phase 1: The host
 
-- [ ] 1.1 Registry change notification
-- [ ] 1.2 ComponentsProvider and ComponentHost
+- [x] 1.1 Registry change notification — 802489da
+- [x] 1.2 ComponentsProvider and ComponentHost — ff004d3d
