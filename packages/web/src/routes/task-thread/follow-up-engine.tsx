@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import { useConfig, useRunnerModels } from '@/api/queries'
@@ -106,27 +106,35 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const refetchTask = useTaskRefetch()
   const resume = useCommand(TaskContinue, { onSuccess: (_result, input) => refetchTask(input) })
 
-  const continueWith = (text: string, images: AttachmentInput[]): Promise<TaskContinueResult> => {
-    if (!canContinue) {
-      return Promise.reject(new Error(continuation.reason ?? 'Connect an agent provider to continue.'))
-    }
-    return resume.mutateAsync({
-      taskId: run.id,
-      // An empty draft sends no `text` at all, so the server's default opening prompt
-      // ("Continue.") still applies — one-click Continue, unchanged.
-      text: text.trim() ? text : undefined,
-      attachments: images.length ? images : undefined,
-      // Send an override only for a pill the user actually touched; otherwise omit it so the
-      // server keeps the run's current backend/model. If that backend disconnected, the
-      // connected fallback must be explicit even when the pills were untouched.
-      runner: continuation.runnerOverride,
-      model: !modelsLocked && pickedModel !== null ? model : undefined,
-      // Only a login the user actually picked rides the request. Omitted, the run keeps the
-      // account it is on — and the reopened session still resumes, which an explicit switch
-      // deliberately does not (a session id lives inside ONE account's config dir).
-      agentProfile: account ?? undefined,
-    })
-  }
+  // Memoized because `useDeliverPrompt` closes over it and a live thread re-renders on every
+  // streamed event: `mutateAsync` is stable, so this changes only when a pick or the gate does.
+  const { mutateAsync: continueTask } = resume
+  const { reason, runnerOverride } = continuation
+  const pinnedModel = !modelsLocked && pickedModel !== null ? model : undefined
+  const continueWith = useCallback(
+    (text: string, images: AttachmentInput[]): Promise<TaskContinueResult> => {
+      if (!canContinue) {
+        return Promise.reject(new Error(reason ?? 'Connect an agent provider to continue.'))
+      }
+      return continueTask({
+        taskId: run.id,
+        // An empty draft sends no `text` at all, so the server's default opening prompt
+        // ("Continue.") still applies — one-click Continue, unchanged.
+        text: text.trim() ? text : undefined,
+        attachments: images.length ? images : undefined,
+        // Send an override only for a pill the user actually touched; otherwise omit it so the
+        // server keeps the run's current backend/model. If that backend disconnected, the
+        // connected fallback must be explicit even when the pills were untouched.
+        runner: runnerOverride,
+        model: pinnedModel,
+        // Only a login the user actually picked rides the request. Omitted, the run keeps the
+        // account it is on — and the reopened session still resumes, which an explicit switch
+        // deliberately does not (a session id lives inside ONE account's config dir).
+        agentProfile: account ?? undefined,
+      })
+    },
+    [account, canContinue, continueTask, pinnedModel, reason, run.id, runnerOverride],
+  )
 
   return {
     available,
