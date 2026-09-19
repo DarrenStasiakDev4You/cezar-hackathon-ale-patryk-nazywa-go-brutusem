@@ -1,6 +1,7 @@
-import type { Extension } from '@open-mercato/cezar-extension-api'
+import { ExtensionActivated, type Extension } from '@open-mercato/cezar-extension-api'
 
 import type { CommandRegistry } from '../commands/registry'
+import type { EventBus } from '../events/bus'
 import {
   createExtensionRegistry,
   logExtensionError,
@@ -47,6 +48,18 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
  */
 export function cockpitServices(deps: { readonly commands: CommandRegistry }): ExtensionRegistryOptions['services'] {
   return (scope) => ({ ...unavailableServices(scope), commands: deps.commands.forExtension(scope) })
+}
+
+/**
+ * The registry's `onStatusChange` for the page's event bus: emits `cezar.extension.activated`
+ * each time an extension becomes `active`. The registry reports `active` after `activate()`
+ * settles, so the new extension's own listeners are live and it hears its own activation.
+ */
+export function extensionLifecycleEvents(events: EventBus): NonNullable<ExtensionRegistryOptions['onStatusChange']> {
+  return (record) => {
+    if (record.status !== 'active') return
+    events.emit(ExtensionActivated, { extensionId: record.id, version: record.manifest.version })
+  }
 }
 
 /**

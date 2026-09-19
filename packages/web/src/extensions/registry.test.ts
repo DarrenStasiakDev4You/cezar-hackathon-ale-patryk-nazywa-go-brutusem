@@ -698,3 +698,86 @@ describe('state machine', () => {
     expect(activate).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('onStatusChange', () => {
+  const transitions = (calls: [{ id: string; status: string }, { status: string }][]) =>
+    calls.map(([record, previous]) => `${record.id}: ${previous.status} → ${record.status}`)
+
+  it('sees registered → active, active → registered and registered → failed, and nothing else', async () => {
+    const seen: [{ id: string; status: string }, { status: string }][] = []
+    const registry = createExtensionRegistry({
+      ...recordingServices(),
+      onError: () => {},
+      onStatusChange: (record, previous) => seen.push([record, previous]),
+    })
+    registry.register(fixture('acme.alpha'))
+    registry.register(
+      fixture('acme.crash', {
+        activate() {
+          throw new Error('crash')
+        },
+      }),
+    )
+    registry.register(fixture('acme.off'), { enabled: false })
+    expect(seen).toEqual([])
+
+    await registry.activateAll()
+    await registry.deactivate('acme.alpha')
+    // A retried activation that fails again is not a status change.
+    await registry.activate('acme.crash')
+
+    expect(transitions(seen)).toEqual([
+      'acme.alpha: registered → active',
+      'acme.crash: registered → failed',
+      'acme.alpha: active → registered',
+    ])
+    // The record handed over is the one the registry now holds; `previous` is the one it replaced.
+    expect(seen[2]?.[0]).toBe(registry.get('acme.alpha'))
+    expect(seen[2]?.[1]).toBe(seen[0]?.[0])
+  })
+
+  it('reports active once the extension’s registrations are live and its record is current', async () => {
+    const log: string[] = []
+    const { services } = recordingServices(log)
+    let atCallback: { status: string | undefined; registered: boolean } | undefined
+    const registry = createExtensionRegistry({
+      services,
+      onStatusChange: (record) => {
+        atCallback = { status: registry.get(record.id)?.status, registered: log.length === 0 }
+      },
+    })
+    let registration: Disposable | undefined
+    registry.register(
+      fixture('acme.alpha', {
+        activate(context) {
+          registration = context.commands.register(pingCommand('acme.alpha'), () => {})
+        },
+      }),
+    )
+
+    await registry.activate('acme.alpha')
+
+    expect(atCallback).toEqual({ status: 'active', registered: true })
+    registration?.dispose()
+    expect(log).toEqual(['dispose command acme.alpha.ping'])
+  })
+
+  it('swallows a throwing callback: the status and the other extensions are untouched', async () => {
+    const registry = createExtensionRegistry({
+      ...recordingServices(),
+      onStatusChange: () => {
+        throw new Error('callback is down')
+      },
+    })
+    registry.register(fixture('acme.alpha'))
+    registry.register(fixture('acme.beta'))
+
+    const records = await registry.activateAll()
+
+    expect(records.map((record) => [record.id, record.status])).toEqual([
+      ['acme.alpha', 'active'],
+      ['acme.beta', 'active'],
+    ])
+    await expect(registry.deactivate('acme.alpha')).resolves.toMatchObject({ status: 'registered' })
+  })
+})
