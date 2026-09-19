@@ -48,6 +48,6 @@ A component contract declares its required and optional capabilities and optiona
 
 ### Phase 3: Public surface and documentation
 
-- [ ] 3.1 Export and pin the surface
-- [ ] 3.2 Example extension declares and passes the check
-- [ ] 3.3 Docs: README and AGENTS.md
+- [x] 3.1 Export and pin the surface — d6730151
+- [x] 3.2 Example extension declares and passes the check — 55463e73
+- [x] 3.3 Docs: README and AGENTS.md — 9892155f
