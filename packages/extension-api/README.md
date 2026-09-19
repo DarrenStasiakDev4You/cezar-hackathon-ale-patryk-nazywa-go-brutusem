@@ -300,9 +300,13 @@ through nine `void` intents. Every data prop is JSON; `onAttachFiles` accepts a 
 The model includes `draft`, `status`, `availability`, `actions`, `completions`, attachment
 `limits`, and an optional `engine` with runner and model choices. Its intents are
 `onTextChange`, `onSubmit`, attachment and engine selection, completion loading and usage, and
-navigation. Phase 1 requires `edits-draft`, `sends`, `shows-availability`, `attaches-files` and
-`chooses-engine` in the first release; the hosted contract now makes the last two optional and lets core render those fallbacks beside
-an implementation that does not provide them. Core reserves 88 px while the box loads or swaps.
+navigation. The required capabilities are `edits-draft`, `sends` and `shows-availability`.
+`attaches-files` and `chooses-engine` are optional: when an implementation does not declare one,
+core renders the corresponding attachment row or engine picker beside it. Core reserves 88 px while
+the box loads or swaps.
+
+See `examples/plain-task-composer/` for a minimal implementation that imports only this package
+and React; the cockpit test exercises it through the real extension registry.
 
 The contract intentionally does not expose a query client, draft store, router, command token or
 React node. A minimal implementation can render `draft.text` and call `onSubmit()` without

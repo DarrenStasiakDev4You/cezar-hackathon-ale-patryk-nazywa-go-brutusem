@@ -202,7 +202,10 @@ through `ComponentHost`; it must stay prop-only and may not import API/query, co
 draft-store or task-thread state. `onAttachFiles` is the one non-JSON intent argument: it receives
 the DOM-free structural file shape (`name`, `type`, `size`, `arrayBuffer()`). Quick replies belong
 to the controller and must not clear an unsent draft. New implementations declare the contract's
-capabilities and receive JSON view data plus void intents, never React nodes or private hooks.
+capabilities and receive JSON view data plus void intents, never React nodes or private hooks. The
+required capabilities are `edits-draft`, `sends` and `shows-availability`; `attaches-files` and
+`chooses-engine` are optional, with core fallbacks beside implementations that omit them. The
+minimal external example lives in `packages/extension-api/examples/plain-task-composer/`.
 
 ## Related documents
 

@@ -3,8 +3,8 @@
 **Last updated:** 2026-09-19T21:31:00Z
 **Branch:** `feat/task-composer-contract`
 **PR:** #48 — https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/48
-**Current phase/step:** Phase 2 Step 2.4
-**Last commit:** `6401ead5` — external task-page Task Composer proof
+**Current phase/step:** Phase 2 complete; final validation
+**Last commit:** `a2c54367` — checkpoint 2 verification and browser evidence
 
 ## What just happened
 
@@ -12,13 +12,13 @@
   browser evidence.
 - The task thread now renders `TaskComposer` through `ComponentHost`; core registration, optional
   capability fallbacks, the external example and the real registry proof are complete.
-- Final hardening is in the working tree: stable frozen controller props, validated engine intents,
-  byte-level attachment caps and core dictation error handling.
+- Final hardening is committed: stable frozen controller props, validated engine intents, byte-level
+  attachment caps and core dictation error handling.
 
 ## Next concrete action
 
-- Finish the final documentation/plan commit, run the configured validation gate, inspect the full
-  diff, update PR #48 to ready and hand off for review/QA.
+- Run the configured validation gate, inspect the full diff, update PR #48 to ready and hand off for
+  review/QA.
 
 ## Blockers / open questions
 
