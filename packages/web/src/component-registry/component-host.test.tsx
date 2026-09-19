@@ -270,6 +270,9 @@ describe('ComponentHost: an extension implementation that throws', () => {
     const { registry } = fixture()
     behaviour.jira = 'render'
     const stacks: string[] = []
+    // During render nothing is in the document yet; by componentDidCatch the commit has put core's
+    // default there. That is behaviour, not a React internal's name.
+    const committed: boolean[] = []
     const limit = Error.stackTraceLimit
     Error.stackTraceLimit = 100
     try {
@@ -279,6 +282,7 @@ describe('ComponentHost: an extension implementation that throws', () => {
           preferenceOf: prefer(JIRA_ID),
           onImplementationError: () => {
             stacks.push(new Error('where').stack ?? '')
+            committed.push(document.querySelector('[data-testid="core-header"]') !== null)
           },
         }),
       )
@@ -288,7 +292,7 @@ describe('ComponentHost: an extension implementation that throws', () => {
 
     expect(stacks).toHaveLength(1)
     expect(stacks[0]).toMatch(/componentDidCatch/)
-    expect(stacks[0]).not.toMatch(/getDerivedStateFromError|renderWithHooks|finishClassComponent/)
+    expect(committed).toEqual([true])
   })
 
   it('keeps the failed implementation set aside for its subject after a remount; another subject tries it again', () => {
@@ -342,6 +346,9 @@ describe('ComponentHost: an extension implementation that throws', () => {
     expect(hostBox(container).dataset.state).toBe('failed')
     expect(hostBox(container).dataset.component).toBe(DEFAULT_ID)
     expect(onImplementationError).toHaveBeenCalledTimes(1)
+    // One line for core's failure: the boundary that renders core's default at once reports
+    // nothing, and the host's own retry of it does.
+    expect(extensionLines(consoleError)).toEqual([`[cezar:extensions] core's ${DEFAULT_ID} failed while rendering`])
   })
 })
 
@@ -371,6 +378,36 @@ describe('ComponentHost: core’s default throws', () => {
 
     expect(screen.getByTestId('core-header')).toBeTruthy()
     expect(screen.queryByRole('alert')).toBeNull()
+    expect(hostBox(container).dataset.state).toBe('resolved')
+  })
+
+  it('tries core’s default again for another subject, without Try again', () => {
+    const { registry } = fixture()
+    behaviour.core = 'render'
+    const { container, rerender } = render(tree(header('task-1'), { registry }))
+    expect(hostBox(container).dataset.state).toBe('failed')
+
+    behaviour.core = 'ok'
+    // The same host, now showing another task: RunHeader stays mounted when the user switches tasks.
+    rerender(tree(header('task-2'), { registry }))
+
+    expect(screen.getByTestId('core-header')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(hostBox(container).dataset.state).toBe('resolved')
+  })
+
+  it('does not mark a healthy box failed when an earlier boundary with the same key failed', () => {
+    const { registry } = fixture()
+    behaviour.core = 'render'
+    const { container, rerender } = render(tree(header(), { registry, preferenceOf: prefer(null) }))
+    expect(hostBox(container).dataset.state).toBe('failed')
+
+    behaviour.core = 'ok'
+    rerender(tree(header(), { registry, preferenceOf: prefer(COMPACT_ID) }))
+    expect(screen.getByTestId('compact-header')).toBeTruthy()
+    rerender(tree(header(), { registry, preferenceOf: prefer(null) }))
+
+    expect(screen.getByTestId('core-header')).toBeTruthy()
     expect(hostBox(container).dataset.state).toBe('resolved')
   })
 
