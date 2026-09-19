@@ -759,6 +759,36 @@ describe('global tasks page', () => {
     })
   })
 
+  it('reopens a FINISHED task in its own project to resolve a conflict', async () => {
+    // A task parked after its session ended has no live session to message: the prompt goes
+    // through `cezar.task.continue`, and the explicit project is what keeps it off the boot one.
+    stubFetch({
+      runs: RUNS.map((run) =>
+        run.id === 'a1' ? { ...run, status: 'done' as const, finishedAt: '2026-07-14T11:00:00Z' } : run,
+      ),
+      refStatus: { api: { prs: { 42: 'ready', 40: 'ready' }, conflicts: [42] } },
+    })
+    renderPage()
+    await screen.findByText('Add checkout endpoint')
+
+    const chip = await waitFor(() => {
+      const found = document.querySelector('[data-slot="pr-chip"][data-conflicting="true"]')
+      if (!found) throw new Error('the chip has not learned about the conflict yet')
+      return found as HTMLElement
+    })
+    fireEvent.focus(chip)
+    const button = await waitFor(() => screen.getByRole('button', { name: 'Resolve conflicts' }))
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      const posted = sent.find((request) => request.method === 'POST' && request.path.endsWith('/continue'))
+      expect(posted?.path).toBe('/api/v1/p/api/runs/a1/continue')
+      expect(posted?.body).toEqual({ text: resolveConflictsPrompt(42) })
+    })
+    expect(sent.some((request) => request.path.endsWith('/messages'))).toBe(false)
+  })
+
   it('leaves every chip neutral when the forge cannot be reached', async () => {
     // "We could not ask" must never be paintable as "nothing is wrong".
     stubFetch()
