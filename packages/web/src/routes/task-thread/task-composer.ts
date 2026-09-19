@@ -33,7 +33,7 @@ export interface TaskComposerModelOptions {
   readonly continueAction: ContinueAction
   readonly thread: ThreadState
   /** Phase 2 supplies the hosted implementation's capability set. */
-  readonly hosted?: { readonly attachesFiles: boolean }
+  readonly hosted?: { readonly attachesFiles: boolean; readonly choosesEngine: boolean }
 }
 
 const attachmentKey = (attachment: PendingAttachment, index: number) =>
@@ -197,8 +197,8 @@ export function useTaskComposerModel(
     actions: {
       submit: { available: enabled, enabled: enabled && !pending && (continuable || draft.text.trim() !== '' || draft.images.length > 0), pending },
       attach: { available: enabled && hosted?.attachesFiles !== false, enabled: enabled && hosted?.attachesFiles !== false, pending: false },
-      chooseRunner: { available: continuable && continueAction.hasRunnerChoice, enabled: continuable && continueAction.hasRunnerChoice, pending: false },
-      chooseModel: { available: continuable && continueAction.engine.modelChoices.length > 0, enabled: continuable && !continueAction.modelsLocked, pending: false, ...(continueAction.modelsLocked ? { reason: 'Model selection is locked to native coding-agent settings.' } : {}) },
+      chooseRunner: { available: continuable && hosted?.choosesEngine !== false && continueAction.hasRunnerChoice, enabled: continuable && hosted?.choosesEngine !== false && continueAction.hasRunnerChoice, pending: false },
+      chooseModel: { available: continuable && hosted?.choosesEngine !== false && continueAction.engine.modelChoices.length > 0, enabled: continuable && hosted?.choosesEngine !== false && !continueAction.modelsLocked, pending: false, ...(continueAction.modelsLocked ? { reason: 'Model selection is locked to native coding-agent settings.' } : {}) },
     },
     ...(continuable ? { engine: continueAction.engine } : {}),
     completions: {

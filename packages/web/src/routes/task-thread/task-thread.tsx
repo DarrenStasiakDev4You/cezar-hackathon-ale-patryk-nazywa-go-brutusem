@@ -4,7 +4,8 @@ import { useLocation, useParams } from 'react-router'
 
 import { Link } from '@/lib/project-router'
 import { ComponentHost } from '@/component-registry/component-host'
-import { TaskComposer } from '@open-mercato/cezar-extension-api'
+import { useHostedComponent } from '@/component-registry/component-host'
+import { TaskComposer, type TaskComposerProps } from '@open-mercato/cezar-extension-api'
 
 import { ApiError } from '@/api/client'
 import {
@@ -29,7 +30,7 @@ import { cn, isHttpUrl } from '@/lib/utils'
 import { AutoResumeHint } from './auto-resume-hint'
 import { WorkingIndicator } from './thread-items'
 import { useContinueAction } from './follow-up-engine'
-import { focusEnginePicker } from './continuation-engine-picker'
+import { ContinuationEnginePicker, focusEnginePicker } from './continuation-engine-picker'
 import { useTaskComposerModel } from './task-composer'
 import { AgentsDock } from './agents-dock'
 import { PlanDock, planCounts } from './plan-dock'
@@ -200,6 +201,9 @@ export function ThreadView({
   // submitting an empty one is still the plain one-click Continue.
   const continueAction = useContinueAction(run)
   const continuable = !sessionOpen && !queued && continueAction.available && continueAction.canContinue
+  const hostedComposer = useHostedComponent(TaskComposer, run.id)
+  const hostedAttachesFiles = hostedComposer?.capabilities.includes('attaches-files') ?? true
+  const hostedChoosesEngine = hostedComposer?.capabilities.includes('chooses-engine') ?? true
   // A closed session can never settle its in-flight items — nothing in the reducer rewrites a
   // `running` item on `session.ended`, so an interrupted fan-out stays `running` in the
   // persisted stream forever. Without this, reopening it pulses `Agents · 0/1` above a dead
@@ -240,7 +244,11 @@ export function ThreadView({
   // a 409 refetches it and, when the truth names the other endpoint, delivers there instead
   // (deliver-prompt.ts). Without that, a lost record update meant every send bounced until the
   // page was reloaded.
-  const composerModel = useTaskComposerModel(run, { continueAction, thread })
+  const composerModel = useTaskComposerModel(run, {
+    continueAction,
+    thread,
+    hosted: { attachesFiles: hostedAttachesFiles, choosesEngine: hostedChoosesEngine },
+  })
   const composerSlotRef = useRef<HTMLDivElement>(null)
 
   // The queued-run affordances (#472), passed only while the run is queued — so the bubbles
@@ -311,7 +319,7 @@ export function ThreadView({
         // dock's picker for the next continuation (spec 2026-09-19-task-header-contract, Q7). The
         // picker itself lives in the dock only, so a header pick and the next composer submission
         // are one engine state. Offered exactly while the dock shows the pills.
-        onChooseEngine={continuable ? () => focusEnginePicker(composerSlotRef.current) : undefined}
+        onChooseEngine={continuable && hostedChoosesEngine ? () => focusEnginePicker(composerSlotRef.current) : undefined}
       />
 
       {/* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
@@ -462,10 +470,61 @@ export function ThreadView({
           ) : null}
 
           <div ref={composerSlotRef} data-slot="thread-composer">
+            {!hostedAttachesFiles || !hostedChoosesEngine ? (
+              <ComposerCapabilityFallbacks
+                props={composerModel.props}
+                showAttachments={!hostedAttachesFiles}
+                showEngine={!hostedChoosesEngine}
+              />
+            ) : null}
             <ComponentHost contract={TaskComposer} subject={run.id} props={composerModel.props} />
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ComposerCapabilityFallbacks({
+  props,
+  showAttachments,
+  showEngine,
+}: {
+  readonly props: TaskComposerProps
+  readonly showAttachments: boolean
+  readonly showEngine: boolean
+}) {
+  return (
+    <div data-slot="composer-capability-fallbacks" className="flex flex-col gap-1.5">
+      {showEngine && props.engine ? (
+        <div className="flex justify-end">
+          <ContinuationEnginePicker
+            engine={props.engine}
+            actions={{
+              ...props.actions,
+              chooseRunner: { ...props.actions.chooseRunner, available: true, enabled: true },
+              chooseModel: { ...props.actions.chooseModel, available: true },
+            }}
+            onSelectRunner={props.onSelectRunner}
+            onSelectModel={props.onSelectModel}
+          />
+        </div>
+      ) : null}
+      {showAttachments && props.draft.attachments.length > 0 ? (
+        <div data-slot="composer-attachments-fallback" className="flex flex-wrap justify-end gap-1.5">
+          {props.draft.attachments.map((attachment) => (
+            <button
+              key={attachment.key}
+              type="button"
+              className="rounded-md border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground"
+              onClick={() => props.onRemoveAttachment(attachment.key)}
+              aria-label={`Remove ${attachment.name}`}
+            >
+              {attachment.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

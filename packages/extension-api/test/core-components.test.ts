@@ -37,8 +37,8 @@ describe('core component contracts', () => {
       kind: 'component',
       id: 'cezar.task.composer',
       version: 1,
-      requiredCapabilities: ['edits-draft', 'sends', 'shows-availability', 'attaches-files', 'chooses-engine'],
-      optionalCapabilities: [],
+      requiredCapabilities: ['edits-draft', 'sends', 'shows-availability'],
+      optionalCapabilities: ['attaches-files', 'chooses-engine'],
       layout: { minBlockSize: 88 },
     })
     expect(Object.isFrozen(TaskComposer)).toBe(true)

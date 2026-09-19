@@ -290,12 +290,13 @@ export interface TaskComposerProps {
  * Data props are JSON. `onAttachFiles` is the one intent with a structural browser-file argument.
  *
  * - `edits-draft`, `sends` and `shows-availability` are always required.
- * - `attaches-files` and `chooses-engine` are required in phase 1 and become optional in phase 2.
+ * - `attaches-files` and `chooses-engine` are optional in phase 2; core renders safe fallbacks
+ *   beside an implementation that does not declare them.
  * - The host reserves 88 CSS pixels while an implementation loads, fails or is swapped.
  */
 export const TaskComposer = defineComponentContract<TaskComposerProps>('cezar.task.composer', {
   version: 1,
-  requiredCapabilities: ['edits-draft', 'sends', 'shows-availability', 'attaches-files', 'chooses-engine'],
-  optionalCapabilities: [],
+  requiredCapabilities: ['edits-draft', 'sends', 'shows-availability'],
+  optionalCapabilities: ['attaches-files', 'chooses-engine'],
   layout: { minBlockSize: 88 },
 })

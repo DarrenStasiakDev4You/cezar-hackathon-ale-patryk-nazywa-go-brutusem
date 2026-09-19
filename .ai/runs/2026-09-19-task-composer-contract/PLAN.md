@@ -17,7 +17,7 @@ Base: `origin/main` at `15d8a723`
 | 1 | 1.4 | Add core's prop-only Task Composer implementation | group:A | done | pending |
 | 1 | 1.5 | Mount the composer host slot and register core's default | group:A | done | pending |
 | 1 | 1.6 | Document the controller seam and verify the Phase 1 contract boundaries | dispatch:cheap | done | pending |
-| 2 | 2.1 | Make attachment and engine capabilities optional and render core fallbacks beside replacements | group:B | todo | — |
+| 2 | 2.1 | Make attachment and engine capabilities optional and render core fallbacks beside replacements | group:B | done | pending |
 | 2 | 2.2 | Add the plain external Task Composer example and boundary tests | group:B | todo | — |
 | 2 | 2.3 | Prove an external composer on the task page | group:B | todo | — |
 | 2 | 2.4 | Complete README and AGENTS documentation for the composer contract | dispatch:cheap | todo | — |
