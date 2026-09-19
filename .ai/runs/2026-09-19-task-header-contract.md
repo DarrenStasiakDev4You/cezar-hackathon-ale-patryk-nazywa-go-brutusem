@@ -101,6 +101,8 @@ and tracked by its own plan. Both are separate PRs by the spec's own decision, n
 
 ## Progress
 
+PR: #37
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: The slot, with the complete model
