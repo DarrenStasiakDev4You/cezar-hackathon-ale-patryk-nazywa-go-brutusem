@@ -5,6 +5,7 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -35,6 +36,35 @@ export type LayoutSortableSurfaceProps = {
   /** Limit this surface to one layout container; useful when a page and the shell share a registry. */
   ids?: string[]
   renderOverlay?: (element: RegisteredLayoutElement) => React.ReactNode
+  onLayoutChange?: (snapshot: RegisteredLayoutElement[]) => void
+}
+
+export const layoutZoneId = (id: string): string => `layout-zone:${id}`
+
+export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
+  id: string
+  children: React.ReactNode
+  className?: string
+  hitAreaClassName?: string
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: layoutZoneId(id) })
+  const { activeId } = useLayoutSortableContext()
+  return (
+    <div
+      className={className}
+    >
+      <div
+        ref={setNodeRef}
+        aria-hidden="true"
+        className={activeId
+          ? `pointer-events-auto ${hitAreaClassName ?? 'absolute inset-0 z-30 bg-primary/5'}`
+          : 'pointer-events-none absolute inset-0'}
+        data-layout-drop-zone={id}
+        data-layout-drop-active={isOver ? 'true' : 'false'}
+      />
+      {children}
+    </div>
+  )
 }
 
 const elementLabel = (element: LayoutElementDescriptor): string => `${element.kind === 'group' ? 'Grupa' : 'Element'} ${element.id}`
@@ -70,11 +100,11 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
     id: source.id,
     targetId: target.id,
     position: sameParent && sourceIndex < targetIndex ? 'after' : 'before',
-    ...(target.parentId === undefined ? {} : { parentId: target.parentId }),
+    ...(sameParent ? {} : { parentId: target.parentId ?? null }),
   }
 }
 
-export function LayoutSortableSurface({ children, enabled, className, ids, renderOverlay }: LayoutSortableSurfaceProps) {
+export function LayoutSortableSurface({ children, enabled, className, ids, renderOverlay, onLayoutChange }: LayoutSortableSurfaceProps) {
   const registry = useLayoutRegistry()
   const snapshot = useLayoutSnapshot()
   const detectedEditMode = useDetectedEditMode()
@@ -101,6 +131,10 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
     const nextOverId = event.over ? String(event.over.id) : null
     setOverId(nextOverId)
     if (!nextOverId || !activeId || nextOverId === activeId) return
+    if (nextOverId.startsWith('layout-zone:')) {
+      setLiveMessage(`Cel: ${nextOverId.slice('layout-zone:'.length)}`)
+      return
+    }
     const target = registry.get(nextOverId)
     if (target) setLiveMessage(`Cel: ${elementLabel(target)}`)
   }, [activeId, registry])
@@ -112,14 +146,26 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
     let moved = false
 
     if (targetId) {
-      const move = resolveLayoutMove(registry, sourceId, targetId)
-      if (move) moved = registry.moveToParent(move)
+      if (targetId.startsWith('layout-zone:')) {
+        const parentId = targetId.slice('layout-zone:'.length)
+        moved = registry.moveToParent({
+          id: sourceId,
+          targetId: null,
+          position: 'after',
+          parentId: parentId === 'root' ? null : parentId,
+        })
+      } else {
+        const move = resolveLayoutMove(registry, sourceId, targetId)
+        if (move) moved = registry.moveToParent(move)
+      }
     }
+
+    if (moved) onLayoutChange?.(registry.getSnapshot())
 
     setActiveId(null)
     setOverId(null)
     setLiveMessage(moved && source ? `Przeniesiono: ${elementLabel(source)}` : 'Przeciąganie anulowane')
-  }, [overId, registry])
+  }, [onLayoutChange, overId, registry])
 
   const handleDragCancel = React.useCallback(() => {
     setActiveId(null)

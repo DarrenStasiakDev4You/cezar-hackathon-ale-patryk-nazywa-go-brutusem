@@ -24,7 +24,7 @@ import {
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from '@/components/layout-context-menu'
 import { LayoutElement } from '@/components/layout-element'
 import { LayoutRegistryProvider } from '@/components/layout-registry'
-import { LayoutSortableSurface } from '@/components/layout-sortable-surface'
+import { LayoutDropZone, LayoutSortableSurface } from '@/components/layout-sortable-surface'
 import { commandShortcutHint } from '@/lib/use-command-shortcut'
 import { Link, stripProjectPrefix } from '@/lib/project-router'
 import { StatusDot } from '@/components/status-dot'
@@ -304,6 +304,64 @@ export const AppShell = React.memo(function AppShell({
     [editMode],
   )
 
+  const [shellLayout, setShellLayout] = React.useState<Record<string, string[]>>({
+    root: ['shell-sidebar', 'shell-main'],
+    'shell-main': [],
+  })
+  const handleShellLayoutChange = React.useCallback((snapshot: Array<{ id: string; parentId?: string; order: number }>) => {
+    const next: Record<string, string[]> = { root: [], 'shell-main': [] }
+    for (const element of snapshot) {
+      if (element.id !== 'shell-sidebar' && element.id !== 'shell-main') continue
+      const parent = element.parentId ?? 'root'
+      if (!next[parent]) next[parent] = []
+      next[parent]!.push(element.id)
+    }
+    setShellLayout(next)
+  }, [])
+
+  const renderShellBlock = (id: string): React.ReactNode => {
+    if (id === 'shell-sidebar') {
+      return (
+        <LayoutElement
+          key={id}
+          id="shell-sidebar"
+          kind="widget"
+          parentId={shellLayout['shell-main']?.includes('shell-sidebar') ? 'shell-main' : undefined}
+          as="section"
+          className="relative hidden shrink-0 md:flex"
+          style={{ width: sidebarWidth }}
+        >
+          <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
+        </LayoutElement>
+      )
+    }
+    if (id !== 'shell-main') return null
+    return (
+      <LayoutElement
+        key={id}
+        id="shell-main"
+        kind="widget"
+        as="section"
+        className="relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0"
+      >
+        <LayoutDropZone
+          id="shell-main"
+          className="contents"
+          hitAreaClassName="absolute inset-x-0 top-16 bottom-0 z-30 bg-primary/5"
+        >
+          {shellLayout['shell-main']?.map(renderShellBlock)}
+        </LayoutDropZone>
+        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <MobileTopBar title={current?.label ?? 'cezar'} />
+          <MobileNavDrawer {...nav} onNavigate={closeMenu} />
+        </Sheet>
+        {banner ? <div data-slot="banner-slot" className="row-start-2">{banner}</div> : null}
+        <AppShellMain mainRef={mainRef}>{children}</AppShellMain>
+        <div data-slot="composer" className="row-start-4 pb-[env(safe-area-inset-bottom)]" />
+      </LayoutElement>
+    )
+  }
+
   return (
     <LayoutRegistryProvider>
       <LayoutElementContextMenu enabled={editMode} allowAnyElement onDelete={handleLayoutElementDelete}>
@@ -323,51 +381,14 @@ export const AppShell = React.memo(function AppShell({
         <LayoutSortableSurface
           className="contents"
           ids={['shell-sidebar', 'shell-main']}
+          onLayoutChange={handleShellLayoutChange}
           renderOverlay={(element) => (
             <div className="rounded-lg border border-primary bg-card px-4 py-3 shadow-lg">
               {element.id === 'shell-sidebar' ? 'Navigation' : 'Main content'}
             </div>
           )}
         >
-          <LayoutElement
-            id="shell-sidebar"
-            kind="widget"
-            as="section"
-            className="relative hidden shrink-0 md:flex"
-            style={{ width: sidebarWidth }}
-          >
-            <Sidebar {...nav} width={sidebarWidth} onWidthChange={changeSidebarWidth} />
-          </LayoutElement>
-          <LayoutElement
-            id="shell-main"
-            kind="widget"
-            as="section"
-            className="relative grid min-w-0 flex-1 grid-rows-[auto_auto_1fr_auto] overflow-hidden pr-40 sm:pr-44 md:pr-48 max-[767px]:pr-0"
-          >
-        {/* The Sheet root renders no DOM of its own. Keep only the mobile controls inside its
-            context so a sidebar update cannot propagate through the routed view. */}
-        <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-          <MobileTopBar title={current?.label ?? 'cezar'} />
-          {/* The drawer keeps its fixed 264px: it is a full-height overlay on a phone, where
-              there is no second column to trade width with and no pointer to drag a border. */}
-          <MobileNavDrawer {...nav} onNavigate={closeMenu} />
-        </Sheet>
-
-        {banner ? (
-          <div data-slot="banner-slot" className="row-start-2">
-            {banner}
-          </div>
-        ) : null}
-
-          <AppShellMain mainRef={mainRef}>{children}</AppShellMain>
-
-        {/* Row 4: the composer dock (thread reply, Step R3). Empty today, but it still carries
-            the bottom safe-area gutter so the scroller never runs under the home indicator. */}
-          <div
-            data-slot="composer"
-            className="row-start-4 pb-[env(safe-area-inset-bottom)]"
-          />
-          </LayoutElement>
+          {shellLayout.root?.map(renderShellBlock)}
         </LayoutSortableSurface>
       </div>
       <EditModeControl enabled={editMode} onEnabledChange={setEditMode} />

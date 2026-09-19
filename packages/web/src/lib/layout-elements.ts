@@ -5,7 +5,7 @@ export type LayoutElementKind = (typeof LAYOUT_ELEMENT_KINDS)[number]
 export type LayoutElementDescriptor = {
   id: string
   kind: LayoutElementKind
-  parentId?: string
+  parentId?: string | null
 }
 
 export type RegisteredLayoutElement = LayoutElementDescriptor & {
@@ -152,7 +152,7 @@ export class LayoutRegistry {
    */
   moveWithinParent(move: LayoutMove): boolean {
     const source = this.elements.get(move.id)
-    if (!source || move.parentId !== undefined && move.parentId !== source.parentId) return false
+    if (!source || move.parentId !== undefined && (move.parentId ?? undefined) !== source.parentId) return false
     const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
     if (move.targetId !== null && (!target || target.parentId !== source.parentId)) return false
     return this.move(move)
@@ -168,9 +168,14 @@ export class LayoutRegistry {
     if (!source || (move.targetId !== null && move.targetId === move.id)) return false
 
     const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
-    const destinationParentId = move.parentId ?? target?.parentId ?? source.parentId
+    const destinationParentId = move.parentId !== undefined
+      ? (move.parentId ?? undefined)
+      : target
+        ? target.parentId
+        : source.parentId
     if (destinationParentId !== undefined && !this.elements.has(destinationParentId)) return false
     if (move.targetId !== null && (!target || target.parentId !== destinationParentId)) return false
+    if (destinationParentId !== undefined && this.getSubtreeIds(move.id).has(destinationParentId)) return false
     if (target && this.getSubtreeIds(move.id).has(target.id)) return false
 
     const sourceSiblings = this.siblingOrder.get(source.parentId)

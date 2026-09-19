@@ -129,5 +129,9 @@ describe('LayoutRegistry', () => {
     expect(registry.get('card')?.parentId).toBe('right')
     expect(registry.getSiblingIds('left')).toEqual([])
     expect(registry.getSiblingIds('right')).toEqual(['card', 'other'])
+
+    expect(registry.moveToParent({ id: 'card', targetId: 'right', position: 'before', parentId: null })).toBe(true)
+    expect(registry.get('card')?.parentId).toBeUndefined()
+    expect(registry.getSiblingIds()).toEqual(['left', 'card', 'right'])
   })
 })
