@@ -38,14 +38,28 @@ export interface CommandOptions {
  * Registering and executing commands. Host semantics:
  * - One handler per id — a second `register` fails with `duplicate-registration`.
  * - An extension registers only ids in its own namespace (`namespace-violation` otherwise).
- * - `execute` of an id nobody registered rejects with `command-not-found`.
+ * - A value that is not `{ kind: 'command', id: <valid ContributionId> }` is malformed:
+ *   `register` throws and `execute` rejects with `invalid-id`; `has` answers `false`.
+ * - `execute` never throws synchronously and only ever rejects with a coded error (see
+ *   `isExtensionError`): `command-not-found` for an id nobody registered — or one the caller may
+ *   not run, such as an internal core command — and, for a handler, `command-failed` (it threw
+ *   or rejected; the original is the error's `cause`) or `command-timeout` (an extension-provided
+ *   handler exceeded the host's limit). A core command may also refuse its input with
+ *   `invalid-input` before its handler runs.
  * - A throwing handler rejects the caller's promise and never takes down the host.
+ * - Handlers validate their own input: types do not exist at runtime, and any extension may call.
  */
 export interface Commands {
   register<A extends readonly unknown[], R>(
     command: CommandToken<A, R>,
-    handler: (...args: A) => R | Promise<R>,
+    handler: (...args: A) => NoInfer<R> | Promise<NoInfer<R>>,
     options?: CommandOptions,
   ): Disposable
   execute<A extends readonly unknown[], R>(command: CommandToken<A, R>, ...args: A): Promise<R>
+  /**
+   * `true` when `execute(command)` would reach a handler this caller may run right now. A
+   * snapshot: the provider may go away before the next call. Accepts a token or a bare id;
+   * returns `false` for a malformed one. Throws only `disposed`, after deactivation.
+   */
+  has<A extends readonly unknown[], R>(command: CommandToken<A, R> | ContributionId): boolean
 }

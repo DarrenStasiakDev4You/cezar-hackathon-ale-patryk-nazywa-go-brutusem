@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ApiRun, RunStatus } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
@@ -93,10 +94,12 @@ function renderWithProviders(ui: ReactElement) {
   const client = createQueryClient()
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
-        {ui}
-        <Toaster />
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter>
+          {ui}
+          <Toaster />
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
   return {
@@ -104,10 +107,12 @@ function renderWithProviders(ui: ReactElement) {
     rerenderWithProviders: (next: ReactElement) =>
       view.rerender(
         <QueryClientProvider client={client}>
-          <MemoryRouter>
-            {next}
-            <Toaster />
-          </MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter>
+              {next}
+              <Toaster />
+            </MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       ),
   }

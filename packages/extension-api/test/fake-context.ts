@@ -56,6 +56,9 @@ export function createFakeContext(manifest: ExtensionManifest): FakeContext {
         if (recorded === undefined) throw new Error(`no handler recorded for ${command.id}`)
         return (await (recorded.handler as (...a: typeof args) => unknown)(...args)) as never
       },
+      has(command) {
+        return commands.has(typeof command === 'string' ? command : command.id)
+      },
     },
     events: {
       on() {

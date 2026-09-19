@@ -58,7 +58,14 @@ export function recordingServices(log: string[] = []): RecordingServices {
       return undefined as never
     }
     return {
-      commands: { register: (command) => register(`command ${command.id}`), execute: live },
+      commands: {
+        register: (command) => register(`command ${command.id}`),
+        execute: live,
+        has: () => {
+          scope.assertLive()
+          return false
+        },
+      },
       events: { on: (event) => register(`listener ${event.id}`), emit: () => scope.assertLive() },
       storage: { get: live, set: live, delete: live, keys: live },
       components: { provide: (_contract, implementation) => register(`component ${implementation.id}`) },
