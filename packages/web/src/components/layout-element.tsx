@@ -3,7 +3,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-import { useLayoutRegistry } from '@/components/layout-registry'
+import { useOptionalLayoutRegistry } from '@/components/layout-registry'
 import { useLayoutSortableContext, type LayoutDragMode } from '@/components/layout-sortable-surface'
 import type { LayoutElementKind } from '@/lib/layout-elements'
 
@@ -18,14 +18,14 @@ export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
 
 /** Declares a dashboard widget/group and projects the declaration onto its DOM representative. */
 export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: requestedDragMode, children, ...props }: LayoutElementProps) {
-  const registry = useLayoutRegistry()
+  const registry = useOptionalLayoutRegistry()
   const { enabled, activeId, dragMode: surfaceDragMode, placeholder } = useLayoutSortableContext()
   const dragMode = requestedDragMode ?? surfaceDragMode
   const sortable = useSortable({ id, disabled: !enabled || dragMode !== 'sortable' })
   const draggable = useDraggable({ id, disabled: !enabled || dragMode !== 'container' })
   const droppable = useDroppable({ id, disabled: !enabled || dragMode !== 'container' })
-  const removed = registry.isRemoved(id)
-  const registered = registry.get(id)
+  const removed = registry?.isRemoved(id) ?? false
+  const registered = registry?.get(id)
   const order = registered?.order ?? -1
   const nodeRef = React.useRef<HTMLElement | null>(null)
 
@@ -43,13 +43,14 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
     : null
 
   React.useEffect(() => {
+    if (!registry) return
     const unregister = registry.registerDeferred({ id, kind, ...(parentId === undefined ? {} : { parentId }) })
     const detach = nodeRef.current ? registry.attachDomNode(id, nodeRef.current) : undefined
     return () => {
       detach?.()
       unregister()
     }
-  }, [id, kind, registry])
+  }, [id, kind, parentId, registry])
 
   if (removed) return null
 
