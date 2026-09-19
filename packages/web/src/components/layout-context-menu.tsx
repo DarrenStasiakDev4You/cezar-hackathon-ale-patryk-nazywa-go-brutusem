@@ -77,7 +77,8 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
   }, [])
 
   React.useEffect(() => {
-    if (!target || registry.get(target.id)?.domNode) return
+    if (!target) return
+    if (target.domNode?.isConnected || registry.get(target.id)?.domNode) return
     close()
   }, [close, registry, registrySnapshot, target])
 
