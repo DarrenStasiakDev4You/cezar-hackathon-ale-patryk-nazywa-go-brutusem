@@ -58,6 +58,9 @@ and fit. The spec's Q1–Q4 decisions are owner-confirmed and followed as writte
 - "Record, don't throw" becomes extension-facing behaviour (spec Q3, owner-confirmed).
 - The validation gate runs in Docker through the main checkout's untracked `in-docker.sh`,
   because host state breaks some server tests on WSL2.
+- Deviation from the spec's normative signature: `options.contracts` is typed
+  `readonly AnyComponentContract[]` (the token without its invariant props phantom), because a
+  typed token does not fit `ComponentContract<unknown>` without a cast.
 
 ## Progress
 
@@ -76,3 +79,8 @@ and fit. The spec's Q1–Q4 decisions are owner-confirmed and followed as writte
 ### Phase 3: Documentation
 
 - [x] 3.1 Extension API docs and routing — 890db1e3
+
+### Review follow-ups
+
+- [x] Pre-review cleanup: drop the unused `id` from the served-contract entry — 063f42e3
+- [x] Post-review fix: validate the served catalog's capability lists, map host misuse to `ComponentError`, test object components, README wording — 0e9ced8c
