@@ -76,8 +76,8 @@ spec's own decision, not a duplicate.
 
 ### Phase 2: Taking over the actions, and the proof
 
-- [ ] 2.1 useHostedComponent
-- [ ] 2.2 The offers-* capabilities, honoured by the shell
-- [ ] 2.3 The example
-- [ ] 2.4 The proof on the task page
-- [ ] 2.5 The README and AGENTS.md
+- [x] 2.1 useHostedComponent — e0621e94
+- [x] 2.2 The offers-* capabilities, honoured by the shell — f349bfc2
+- [x] 2.3 The example — e6922620
+- [x] 2.4 The proof on the task page — da9b353e
+- [x] 2.5 The README and AGENTS.md — 3376f544
