@@ -4,7 +4,10 @@ import {
   defineComponentContract,
   ExtensionDefinitionError,
   isExtensionError,
+  type ComponentCapability,
   type ComponentContract,
+  type ComponentContractOptions,
+  type ComponentLayout,
   type ComponentProps,
   type ComponentRegistry,
   type Disposable,
@@ -208,6 +211,40 @@ describe('types', () => {
   it('reads a contract’s props back', () => {
     expectTypeOf<ComponentProps<typeof Greeting>>().toEqualTypeOf<GreetingProps>()
     expectTypeOf<ComponentProps<string>>().toEqualTypeOf<never>()
+  })
+
+  it('reads the same props back from a contract with capabilities and layout', () => {
+    const Rich = defineComponentContract<GreetingProps>('acme.hello.rich', {
+      version: 1,
+      requiredCapabilities: ['greets-by-name'],
+      optionalCapabilities: ['waves'],
+      layout: { sizing: 'content', sticky: 'top', minBlockSize: 56 },
+    })
+    expectTypeOf<ComponentProps<typeof Rich>>().toEqualTypeOf<GreetingProps>()
+    expectTypeOf(Rich).toEqualTypeOf<ComponentContract<GreetingProps>>()
+    expectTypeOf(Rich.requiredCapabilities).toEqualTypeOf<readonly ComponentCapability[] | undefined>()
+    expectTypeOf(Rich.layout).toEqualTypeOf<ComponentLayout | undefined>()
+  })
+
+  it('rejects a layout value outside its type at compile time', () => {
+    const unused = (): void => {
+      // @ts-expect-error — `grow` is not a sizing
+      defineComponentContract<GreetingProps>('acme.hello.grow', { version: 1, layout: { sizing: 'grow' } })
+      // @ts-expect-error — `left` is not a sticky edge
+      defineComponentContract<GreetingProps>('acme.hello.left', { version: 1, layout: { sticky: 'left' } })
+      // @ts-expect-error — `align` is not a layout field
+      defineComponentContract<GreetingProps>('acme.hello.align', { version: 1, layout: { align: 'start' } })
+      // @ts-expect-error — capabilities are names, not objects
+      defineComponentContract<GreetingProps>('acme.hello.caps', { version: 1, requiredCapabilities: [{ name: 'x' }] })
+    }
+    expectTypeOf(unused).toBeFunction()
+  })
+
+  it('still fits a structurally built token, as an older copy of the package makes it', () => {
+    const structural = { kind: 'component', id: 'acme.hello.greeting', version: 1 } as const
+    expectTypeOf(structural).toExtend<ComponentContract<GreetingProps>>()
+    const options: ComponentContractOptions = { version: 1 }
+    expectTypeOf(options).toExtend<Parameters<typeof defineComponentContract>[1]>()
   })
 
   it('keeps contracts with different props distinct', () => {
