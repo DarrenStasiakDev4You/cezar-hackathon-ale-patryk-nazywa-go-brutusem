@@ -147,7 +147,11 @@ export function resolveLayoutPlaceholderState({
   }
   const nearLeft = translated.left <= boundary.left + origin.width
   const nearRight = translated.right >= boundary.right - origin.width
-  const overlapsOrigin = translated.left < origin.right && translated.right > origin.left
+  const overlapsOrigin =
+    translated.left < origin.right &&
+    translated.right > origin.left &&
+    translated.top < origin.bottom &&
+    translated.bottom > origin.top
   const originEdge: LayoutPlaceholderPlacement = origin.left + origin.width / 2 <= boundary.left + boundary.width / 2 ? 'before' : 'after'
   const deltaDirection = deltaX === previousDeltaX ? 0 : deltaX > previousDeltaX ? 1 : -1
 

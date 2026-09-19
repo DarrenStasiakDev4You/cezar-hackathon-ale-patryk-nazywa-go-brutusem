@@ -101,6 +101,18 @@ describe('LayoutSortableSurface', () => {
     expect(resolveLayoutOverlayScale(state)).toBe(0.92)
 
     state = resolveLayoutPlaceholderState({
+      current: { visible: true, placement: null, order: null },
+      geometry,
+      boundary,
+      deltaX: 0,
+      deltaY: 450,
+      previousDeltaX: 0,
+      originId: 'first',
+      registry,
+    })!
+    expect(state).toEqual({ visible: false, placement: null, order: null })
+
+    state = resolveLayoutPlaceholderState({
       current: state,
       geometry,
       boundary,
