@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
+import { ComponentsProvider } from '@/component-registry/provider'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
@@ -111,23 +112,25 @@ function renderHeader(
   return render(
     <QueryClientProvider client={createQueryClient()}>
       <CommandsProvider>
-        <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
-          <Routes>
-            <Route
-              path="/tasks/:id"
-              element={
-                <RunHeader
-                  run={record}
-                  onMarkedUnread={onMarkedUnread}
-                  planTally={planTally}
-                  continuationEngine={continuationEngine}
-                />
-              }
-            />
-            <Route path="/" element={<div data-slot="home-probe" />} />
-          </Routes>
-          <Toaster />
-        </MemoryRouter>
+        <ComponentsProvider>
+          <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>
+            <Routes>
+              <Route
+                path="/tasks/:id"
+                element={
+                  <RunHeader
+                    run={record}
+                    onMarkedUnread={onMarkedUnread}
+                    planTally={planTally}
+                    continuationEngine={continuationEngine}
+                  />
+                }
+              />
+              <Route path="/" element={<div data-slot="home-probe" />} />
+            </Routes>
+            <Toaster />
+          </MemoryRouter>
+        </ComponentsProvider>
       </CommandsProvider>
     </QueryClientProvider>,
   )
@@ -966,14 +969,16 @@ describe('meta line, tabs, pill and resume hint', () => {
     render(
       <QueryClientProvider client={createQueryClient()}>
         <CommandsProvider>
-          <MemoryRouter initialEntries={['/tasks/r1']}>
-            <Routes>
-              <Route
-                path="/tasks/:id"
-                element={<RunHeader run={run('running')} planTally={{ done: 2, total: 5 }} />}
-              />
-            </Routes>
-          </MemoryRouter>
+          <ComponentsProvider>
+            <MemoryRouter initialEntries={['/tasks/r1']}>
+              <Routes>
+                <Route
+                  path="/tasks/:id"
+                  element={<RunHeader run={run('running')} planTally={{ done: 2, total: 5 }} />}
+                />
+              </Routes>
+            </MemoryRouter>
+          </ComponentsProvider>
         </CommandsProvider>
       </QueryClientProvider>,
     )

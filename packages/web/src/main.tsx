@@ -5,8 +5,7 @@ import { App } from './app'
 import { createQueryClient } from './api/query-client'
 import { registerCoreCommands } from './commands/core-commands'
 import { createCommandRegistry } from './commands/registry'
-import { CORE_COMPONENT_CONTRACTS } from './component-registry/core-contracts'
-import { createComponentRegistry } from './component-registry/registry'
+import { createCoreComponentRegistry } from './component-registry/core-components'
 import { createEventBus } from './events/bus'
 import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost } from './extensions/host'
@@ -40,10 +39,10 @@ const commands = createCommandRegistry()
 registerCoreCommands(commands, { queryClient })
 const events = createEventBus()
 // The component registry (spec `2026-09-19-component-registry`) records every implementation of a
-// component contract with its provenance. Its catalog stays empty until the slot item adds the
-// core contracts and registers core's defaults here, before the host starts, so every extension
-// `provide` is recorded as `unknown-contract` for now.
-const components = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
+// component contract with its provenance. Core's defaults are registered here, before the host
+// starts, as the core commands are, so core always keeps its own ids and every served contract
+// has a default to render and to fall back to (spec `2026-09-19-component-host`).
+const components = createCoreComponentRegistry()
 
 // Extensions compiled into the cockpit (spec `2026-09-18-extension-registry`). Started outside the
 // React tree and never awaited: the host never throws and its `ready` never rejects, so no
@@ -60,6 +59,6 @@ if (!container) throw new Error('cezar: #root container is missing from index.ht
 
 createRoot(container).render(
   <StrictMode>
-    <App queryClient={queryClient} commands={commands} events={events} />
+    <App queryClient={queryClient} commands={commands} events={events} components={components} />
   </StrictMode>,
 )
