@@ -113,19 +113,18 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     return resume.mutateAsync({
       taskId: run.id,
       // An empty draft sends no `text` at all, so the server's default opening prompt
-      // ("Continue.") still applies — one-click Continue, unchanged. The command drops a blank
-      // prompt and an empty file list the same way.
-      ...(text.trim() ? { text } : {}),
-      ...(images.length ? { attachments: images } : {}),
+      // ("Continue.") still applies — one-click Continue, unchanged.
+      text: text.trim() ? text : undefined,
+      attachments: images.length ? images : undefined,
       // Send an override only for a pill the user actually touched; otherwise omit it so the
       // server keeps the run's current backend/model. If that backend disconnected, the
       // connected fallback must be explicit even when the pills were untouched.
-      ...(continuation.runnerOverride !== undefined ? { runner: continuation.runnerOverride } : {}),
-      ...(!modelsLocked && pickedModel !== null ? { model } : {}),
+      runner: continuation.runnerOverride,
+      model: !modelsLocked && pickedModel !== null ? model : undefined,
       // Only a login the user actually picked rides the request. Omitted, the run keeps the
       // account it is on — and the reopened session still resumes, which an explicit switch
       // deliberately does not (a session id lives inside ONE account's config dir).
-      ...(account !== null ? { agentProfile: account } : {}),
+      agentProfile: account ?? undefined,
     })
   }
 
