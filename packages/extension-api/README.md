@@ -239,10 +239,57 @@ contract, core's default always stays available, and a replacement that throws w
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
 goes through the same check.
 
-**Status.** `context.components` records implementations: the cockpit keeps every one per contract,
-with the id of the extension that provided it. Rendering and selection arrive with the slot and
-picker items, so nothing renders a provided implementation yet, and the cockpit serves no core
-contract yet.
+**Status.** The cockpit serves one core contract, the task header's main part (below). It keeps
+every implementation per contract with the id of the extension that provided it, and renders a
+contract through its component host. Choosing an implementation arrives with the picker item, so
+until then core's default renders everywhere.
+
+**The host.** A slot renders only what the resolver picks, inside its own error boundary and a box
+sized by the contract's `layout`. If your implementation throws while rendering, or in an effect or
+lifecycle method, the host shows core's default in its place for that subject (e.g. that task), and
+the user gets one notice naming your implementation. The rest of the page keeps working. A boundary
+is not a sandbox: an error in an event handler or a promise is not caught (React unmounts nothing
+for it, so it only reaches the console), and an infinite loop or a component that never stops
+suspending cannot be stopped. If your extension deactivates, core's default takes its place without
+a notice.
+
+**The task header's main part.** `TaskHeaderMain` (`cezar.task.header.main@1`) is the header's
+public model and its presentational part: the title, the status and the basic facts. Its props are
+all JSON except seven intents:
+
+- `task` (`taskId`, `projectId`, `title`, `prompt`, `status`, `archived`) and `attention` (the
+  status as the task list reads it: `label`, `tone`, `pulse`, `queuePosition?`);
+- `engine` (`runner`, `model`, `account?`, `identity?`);
+- `meta` (`workflow`, `branch?`, `diff?`, `references?` with each one's forge `status`, `lookup`
+  state and `conflicting` flag, `automation?`, `usage?`) and `plan?`;
+- `actions`: `continue`, `stop`, `archive`, `resolveConflicts` and `chooseEngine`, each
+  `{ available, enabled, pending, reason? }`.
+
+A string the union may grow (`status`, `tone`, a reference's `status` or `lookup`) is read as
+absent, or `neutral` for a tone, when you do not know it. A usage metric the server hides is
+absent. No query client, mutation, router or command token crosses the boundary: the actions are
+**intents** that return nothing, and core decides what each one does.
+
+| Intent | What core does |
+| --- | --- |
+| `onContinue()` | Runs `cezar.task.continue` for the task (on a connected runner when its own is not). A failure shows the server's words. |
+| `onStop()` | Opens core's "Cancel this task?" confirmation. Only **Cancel the run** stops the task. |
+| `onArchive()` | Runs `cezar.task.archive`, restoring the task when `task.archived`. |
+| `onResolveConflicts(n)` | Asks the task's agent to resolve conflicts in pull request `n`, a `conflicting` reference. |
+| `onRename()` | Opens core's title editor over your part, with the user's saved draft. |
+| `onNavigate(href)` | Navigates within the cockpit for an `href` core put in these props (`meta.automation.href`). Any other value does nothing. |
+| `onChooseEngine()` | Moves focus to core's engine picker for the next continuation. |
+
+Core checks the action's state again on every call, so a call does nothing unless the action is
+`available` and `enabled` (a repeat while one is `pending` included): an implementation can never
+do more than the user could with core's own buttons. Core keeps everything else around your part
+and renders it itself: Continue, Cancel and Archive in its action bar and its **Run actions** menu,
+Finish, Open in, Notes, Mark unread, Pin, Delete, the tabs, the monitoring and dispatch lines, the
+step rail and the resume hint. So a replacement restyles the header and can never take away control
+of a task. `shows-title` and `shows-status` are required, `shows-meta` (you show `meta` and
+`engine`) is optional, and the host reserves 30 px (one title row) while an implementation loads,
+fails or is swapped. Provide it like any contract, with an id under your prefix and at least the two
+required capabilities.
 
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a

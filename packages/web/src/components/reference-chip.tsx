@@ -87,11 +87,41 @@ const STATUS_ICON: Record<ReferenceStatus, LucideIcon | null> = {
  * alone: color is invisible to a colorblind reader, an icon is a rebus until you have learned it,
  * and a tooltip is not there until you go looking for it.
  */
+/**
+ * What a caller already knows about a chip's reference — the forge's status, the look-up's state
+ * and reason, and the conflict flag — as plain strings, so a surface that renders from JSON props
+ * (the task header's part, spec `2026-09-19-task-header-contract`) can hand it over without the
+ * query layer's types. A status or state this bundle does not know reads as none.
+ */
+export interface ReferenceChipLookup {
+  readonly status?: string
+  /** `loading`, `ready`, `unknown` or `unavailable`; absent (or unknown) is `idle`: nothing asked. */
+  readonly state?: string
+  /** Why the look-up is `unavailable`. */
+  readonly reason?: string
+  readonly conflicting?: boolean
+}
+
+const LOOKUP_STATES: ReadonlySet<string> = new Set(['loading', 'ready', 'unknown', 'unavailable'])
+
+/** An explicit look-up as the entry the chip paints from. */
+function entryOf(lookup: ReferenceChipLookup): ReferenceStatusEntry {
+  return {
+    state: lookup.state !== undefined && LOOKUP_STATES.has(lookup.state) ? (lookup.state as ReferenceStatusEntry['state']) : 'idle',
+    // Unknown values pass through as they would from the server: the presentation reads a status
+    // it has never heard of as none.
+    ...(lookup.status !== undefined ? { status: lookup.status as ReferenceStatus } : {}),
+    ...(lookup.reason !== undefined ? { reason: lookup.reason } : {}),
+    ...(lookup.conflicting !== undefined ? { conflicting: lookup.conflicting } : {}),
+  }
+}
+
 export function ReferenceChip({
   reference,
   taskTitle,
   status: explicitStatus,
   conflicting: explicitConflicting,
+  lookup: explicitLookup,
   conflictAction,
   projectId,
   className,
@@ -105,6 +135,10 @@ export function ReferenceChip({
   /** The mergeability axis, same escape hatch as `status` and the same rule: absent means nothing
    *  is known, never "merges cleanly". Only `true` paints. */
   conflicting?: boolean
+  /** Everything the caller knows about the reference: status, look-up state and reason, conflict
+   *  flag. When given it replaces the provider's answer WHOLE — nothing a `ReferenceStatusProvider`
+   *  above says can override it — so a surface that renders from props shows exactly its props. */
+  lookup?: ReferenceChipLookup
   /** What to offer the user about a conflict — rendered INSIDE the panel, and only when this
    *  chip is conflicting, so it is mounted only while the panel is open. Passed by the surfaces
    *  that have something to offer (the task page and the tasks tables, which can send the agent
@@ -129,7 +163,8 @@ export function ReferenceChip({
   // An explicit `status` wins — it is what a test or a one-off caller passes — and otherwise the
   // surface's provider answers. Outside a provider neither exists and this is the chip the cockpit
   // has always painted.
-  const entry = useReferenceStatus(kind, number, projectId)
+  const provided = useReferenceStatus(kind, number, projectId)
+  const entry = explicitLookup ? entryOf(explicitLookup) : provided
   const status = explicitStatus ?? entry.status
   // A status this bundle has never heard of resolves to `undefined` here and is then treated
   // exactly like no status at all — the neutral chip, no glyph, no claim in the accessible name.

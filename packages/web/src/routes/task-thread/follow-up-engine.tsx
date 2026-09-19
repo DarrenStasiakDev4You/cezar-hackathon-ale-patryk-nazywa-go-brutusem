@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode } from 'react'
 
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import { useConfig, useRunnerModels } from '@/api/queries'
@@ -36,6 +36,13 @@ export interface ContinueAction {
    * fresh, so the thread never shows the closed state after the session reopened.
    */
   continueWith: (text: string, images: AttachmentInput[]) => Promise<TaskContinueResult>
+  /**
+   * Moves focus to the pills' first control — the runner pill when there is a choice of runner or
+   * login, otherwise the model pill — and scrolls it into view. The task header's badge offers it
+   * as **Choose engine for the next continuation…** (spec 2026-09-19-task-header-contract, Q7), so
+   * the picker lives in the dock only. One identity for the life of the thread.
+   */
+  focusPicker: () => void
 }
 
 /**
@@ -136,13 +143,25 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     [account, canContinue, continueTask, pinnedModel, reason, run.id, runnerOverride],
   )
 
+  // The pills are rendered once, in the dock; the header reaches them only through `focusPicker`.
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const focusPicker = useCallback(() => {
+    const picker = pickerRef.current
+    if (!picker) return
+    const pill = picker.querySelector<HTMLElement>('button:not([disabled]), [tabindex]:not([tabindex="-1"])')
+    const target = pill ?? picker
+    // `?.`: jsdom implements no scrolling.
+    target.scrollIntoView?.({ block: 'nearest' })
+    pill?.focus()
+  }, [])
+
   return {
     available,
     canContinue,
     reason: continuation.reason,
     providerPending: continuation.providerPending,
     pills: (
-      <div data-slot="follow-up-engine" className="flex flex-wrap items-center gap-1.5">
+      <div ref={pickerRef} data-slot="follow-up-engine" className="flex flex-wrap items-center gap-1.5">
         {/* Shown when there is a choice to make: more than one runner, or more than one login for
             one of them. A host with neither sees no pill, exactly as before. */}
         {runners.length > 1 || runners.some((id) => hasAccountChoice(accounts, id)) ? (
@@ -180,5 +199,6 @@ export function useContinueAction(run: ApiRun): ContinueAction {
       </div>
     ),
     continueWith,
+    focusPicker,
   }
 }

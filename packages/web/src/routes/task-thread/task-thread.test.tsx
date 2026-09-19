@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,9 @@ import { ProjectScopeProvider } from '@/api/project-scope-context'
 import { queryKeys } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
+import { createCoreComponentRegistry } from '@/component-registry/core-components'
+import { ComponentsProvider } from '@/component-registry/provider'
+import { fakeScope } from '@/extensions/registry.fixtures'
 import type {
   ApiRun,
   HealthResponse,
@@ -15,6 +18,7 @@ import type {
   RunEvent,
   RunStatus,
 } from '@open-mercato/cezar-api-client'
+import { TaskHeaderMain } from '@open-mercato/cezar-extension-api'
 
 import { TaskThreadRoute, ThreadView } from './task-thread'
 import { buildTranscriptRows, mainTranscriptSections } from './session-transcript'
@@ -65,7 +69,9 @@ function renderView(
     ...render(
       <QueryClientProvider client={queryClient}>
         <CommandsProvider>
-          <MemoryRouter>{ui}</MemoryRouter>
+          <ComponentsProvider>
+            <MemoryRouter>{ui}</MemoryRouter>
+          </ComponentsProvider>
         </CommandsProvider>
       </QueryClientProvider>,
     ),
@@ -279,12 +285,14 @@ describe('ThreadView', () => {
     render(
       <QueryClientProvider client={createQueryClient()}>
         <CommandsProvider>
-          <MemoryRouter>
-            <ThreadView
-              run={run('failed', { autoResumeAt: '2026-08-03T17:00:30.000Z' })}
-              thread={reduceThread(EVENTS)}
-            />
-          </MemoryRouter>
+          <ComponentsProvider>
+            <MemoryRouter>
+              <ThreadView
+                run={run('failed', { autoResumeAt: '2026-08-03T17:00:30.000Z' })}
+                thread={reduceThread(EVENTS)}
+              />
+            </MemoryRouter>
+          </ComponentsProvider>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -386,25 +394,51 @@ describe('ThreadView', () => {
     // The engine pills ride along, so the prompt and the picked backend go in one request.
     expect(document.querySelector('[data-slot="follow-up-engine"]')).not.toBeNull()
 
-    // The header badge is now a second, discoverable entrance to that SAME picker. Exercise the
-    // real nested controls: a decorative test node would miss the Radix-menu interaction that
-    // matters here (opening the model catalog without dismissing the agent badge first).
-    fireEvent.pointerDown(screen.getByRole('button', { name: /^Agent:/ }))
-    const badgeMenu = await screen.findByRole('menu')
-    const headerModel = badgeMenu.querySelector(
-      '[data-slot="agent-badge-engine-picker"] [data-slot="follow-up-model-pill"]',
-    ) as HTMLElement
-    expect(headerModel).not.toBeNull()
-    fireEvent.pointerDown(headerModel)
+    // The dock's pills are the one picker (spec 2026-09-19-task-header-contract, Q7): what they
+    // pick is what the eventual /continue POST sends.
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Model' }))
     let opus: HTMLElement | undefined
     await waitFor(() => {
       opus = screen.getAllByRole('menuitemradio').find((option) => option.textContent?.includes('opus'))
       expect(opus).toBeDefined()
     })
     fireEvent.click(opus as HTMLElement)
-    // Both entrances are renderings of one hook state. Once the menus close, the dock's model
-    // pill reflects the header pick, which is therefore what its eventual /continue POST sends.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Model' }).textContent).toContain('opus'))
+    // …and the header's badge no longer carries a copy of it.
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Agent:/ }))
+    const badgeMenu = await screen.findByRole('menu')
+    expect(badgeMenu.querySelector('[data-slot="follow-up-model-pill"]')).toBeNull()
+  })
+
+  it('the badge’s Choose engine for the next continuation… moves focus to the dock’s first engine pill', async () => {
+    renderView(
+      <ThreadView
+        run={run('done', {
+          steps: [
+            { id: 'task', name: 'Do the task', kind: 'agent', status: 'done', iterations: 1, tokensUsed: 0, sessionId: 's-1' },
+          ],
+        })}
+        thread={reduceThread(EVENTS)}
+      />,
+    )
+    await waitFor(() => expect((screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement).disabled).toBe(false))
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Agent:/ }))
+    const badgeMenu = await screen.findByRole('menu')
+    fireEvent.click(within(badgeMenu).getByRole('menuitem', { name: 'Choose engine for the next continuation…' }))
+
+    // One runner and one login: the dock shows no runner pill, so the model pill is the first.
+    const pill = screen.getByRole('button', { name: 'Model' })
+    expect(pill.closest('[data-slot="follow-up-engine"]')).not.toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(pill))
+  })
+
+  it('offers no Choose engine item on a task that cannot be continued', async () => {
+    renderView(<ThreadView run={run('running')} thread={reduceThread(EVENTS)} />)
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: /^Agent:/ }))
+    const badgeMenu = await screen.findByRole('menu')
+    expect(within(badgeMenu).queryByRole('menuitem', { name: /Choose engine/ })).toBeNull()
   })
 
   /** #472 — stacked messages render as their own bubbles, after the task. */
@@ -497,9 +531,11 @@ describe('ThreadView', () => {
     rerender(
       <QueryClientProvider client={createQueryClient()}>
         <CommandsProvider>
-          <MemoryRouter>
-            <ThreadView run={fixture} thread={thread} />
-          </MemoryRouter>
+          <ComponentsProvider>
+            <MemoryRouter>
+              <ThreadView run={fixture} thread={thread} />
+            </MemoryRouter>
+          </ComponentsProvider>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -543,9 +579,11 @@ describe('ThreadView', () => {
       render(
         <QueryClientProvider client={queryClient}>
           <CommandsProvider>
-            <MemoryRouter>
-              <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
-            </MemoryRouter>
+            <ComponentsProvider>
+              <MemoryRouter>
+                <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
+              </MemoryRouter>
+            </ComponentsProvider>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -592,12 +630,14 @@ describe('ThreadView', () => {
       render(
         <QueryClientProvider client={createQueryClient()}>
           <CommandsProvider>
-            <MemoryRouter>
-              <ThreadView
-                run={run('done', { steps: [{ id: 'task', kind: 'agent', sessionId: 'sess-1' }] as ApiRun['steps'] })}
-                thread={reduceThread(EVENTS)}
-              />
-            </MemoryRouter>
+            <ComponentsProvider>
+              <MemoryRouter>
+                <ThreadView
+                  run={run('done', { steps: [{ id: 'task', kind: 'agent', sessionId: 'sess-1' }] as ApiRun['steps'] })}
+                  thread={reduceThread(EVENTS)}
+                />
+              </MemoryRouter>
+            </ComponentsProvider>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -660,17 +700,19 @@ describe('ThreadView', () => {
       render(
         <QueryClientProvider client={createQueryClient()}>
           <CommandsProvider>
-            <MemoryRouter>
-              <ThreadView
-                run={run('queued', {
-                  queuedMessages: [
-                    { id: 'm1', text: 'first', createdAt: '2026-07-21T10:00:00.000Z' },
-                    { id: 'm2', text: 'second', createdAt: '2026-07-21T10:01:00.000Z' },
-                  ],
-                })}
-                thread={reduceThread([])}
-              />
-            </MemoryRouter>
+            <ComponentsProvider>
+              <MemoryRouter>
+                <ThreadView
+                  run={run('queued', {
+                    queuedMessages: [
+                      { id: 'm1', text: 'first', createdAt: '2026-07-21T10:00:00.000Z' },
+                      { id: 'm2', text: 'second', createdAt: '2026-07-21T10:01:00.000Z' },
+                    ],
+                  })}
+                  thread={reduceThread([])}
+                />
+              </MemoryRouter>
+            </ComponentsProvider>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -722,7 +764,9 @@ describe('ThreadView', () => {
       const { rerender } = render(
         <QueryClientProvider client={queryClient}>
           <CommandsProvider>
-            <MemoryRouter>{view('r1')}</MemoryRouter>
+            <ComponentsProvider>
+              <MemoryRouter>{view('r1')}</MemoryRouter>
+            </ComponentsProvider>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -734,7 +778,9 @@ describe('ThreadView', () => {
       rerender(
         <QueryClientProvider client={queryClient}>
           <CommandsProvider>
-            <MemoryRouter>{view('r2')}</MemoryRouter>
+            <ComponentsProvider>
+              <MemoryRouter>{view('r2')}</MemoryRouter>
+            </ComponentsProvider>
           </CommandsProvider>
         </QueryClientProvider>,
       )
@@ -1156,11 +1202,13 @@ function renderRoute(id: string) {
   render(
     <QueryClientProvider client={createQueryClient()}>
       <CommandsProvider>
-        <MemoryRouter initialEntries={[`/tasks/${id}`]}>
-          <Routes>
-            <Route path="/tasks/:id" element={<TaskThreadRoute />} />
-          </Routes>
-        </MemoryRouter>
+        <ComponentsProvider>
+          <MemoryRouter initialEntries={[`/tasks/${id}`]}>
+            <Routes>
+              <Route path="/tasks/:id" element={<TaskThreadRoute />} />
+            </Routes>
+          </MemoryRouter>
+        </ComponentsProvider>
       </CommandsProvider>
     </QueryClientProvider>,
   )
@@ -1293,11 +1341,13 @@ describe('TaskThreadRoute — read receipts', () => {
     const view = render(
       <QueryClientProvider client={queryClient}>
         <CommandsProvider>
-          <MemoryRouter initialEntries={[`/tasks/${id}`]}>
-            <Routes>
-              <Route path="/tasks/:id" element={<TaskThreadRoute />} />
-            </Routes>
-          </MemoryRouter>
+          <ComponentsProvider>
+            <MemoryRouter initialEntries={[`/tasks/${id}`]}>
+              <Routes>
+                <Route path="/tasks/:id" element={<TaskThreadRoute />} />
+              </Routes>
+            </MemoryRouter>
+          </ComponentsProvider>
         </CommandsProvider>
       </QueryClientProvider>,
     )
@@ -1359,5 +1409,74 @@ describe('TaskThreadRoute — read receipts', () => {
     visit('r1')
     await waitFor(() => expect(posted(sent, '/api/v1/runs/r1/read')).toBe(1))
     expect(await screen.findByRole('button', { name: 'Mark unread' })).not.toBeNull()
+  })
+})
+
+describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-component-host)', () => {
+  it('renders the title and meta rows through the component host, as core’s default', () => {
+    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
+
+    const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
+    expect(box?.dataset.contract).toBe('cezar.task.header.main')
+    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
+    expect(box?.dataset.state).toBe('resolved')
+    expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
+    expect(box?.querySelector('[data-slot="run-meta"]')).not.toBeNull()
+  })
+
+  it('shows core’s title row when a chosen extension header throws, and the task stays usable', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const registry = createCoreComponentRegistry({ onDiagnostic: () => {} })
+    const BrokenHeader = (): never => {
+      throw new Error('Jira is down')
+    }
+    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeaderMain, {
+      id: 'acme.jira.task-header',
+      title: 'Jira header',
+      capabilities: ['shows-title', 'shows-status'],
+      component: BrokenHeader,
+    })
+    const onImplementationError = vi.fn()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        Promise.resolve(
+          new Response(String(input) === '/api/v1/health' ? '{}' : '[]', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      ),
+    )
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <CommandsProvider>
+          <ComponentsProvider
+            registry={registry}
+            preferenceOf={(contractId) => (contractId === TaskHeaderMain.id ? 'acme.jira.task-header' : null)}
+            onImplementationError={onImplementationError}
+          >
+            <MemoryRouter>
+              <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />
+            </MemoryRouter>
+          </ComponentsProvider>
+        </CommandsProvider>
+      </QueryClientProvider>,
+    )
+
+    const header = document.querySelector<HTMLElement>('[data-slot="run-header"]')!
+    const box = header.querySelector<HTMLElement>('[data-slot="component-host"]')
+    expect(box?.dataset.state).toBe('fallback')
+    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
+    expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
+    expect(onImplementationError).toHaveBeenCalledTimes(1)
+    // The task's controls, the thread and the composer are all still there.
+    expect(header.querySelector('[data-slot="run-actions"]')?.textContent).toContain('Notes')
+    expect(header.querySelector('[data-slot="run-tabs"]')?.textContent).toContain('Changes')
+    expect(document.querySelectorAll('[data-slot="user-bubble"]')).toHaveLength(2)
+    const composer = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
+    expect(composer.disabled).toBe(false)
+    consoleError.mockRestore()
   })
 })
