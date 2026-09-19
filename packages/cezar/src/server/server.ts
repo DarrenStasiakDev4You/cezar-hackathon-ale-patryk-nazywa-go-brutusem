@@ -38,6 +38,7 @@ import {
   type PickVariantResponse,
   type RunIndexEntry,
   type RunsIndexResponse,
+  type TaskTransitionEvent,
 } from '@open-mercato/cezar-contract';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
@@ -82,7 +83,7 @@ import { SkillsUpdateConflictError, SkillsUpdateCoordinator, SkillsUpdateService
 import { getTeamSkillsCached, refreshTeamSkills, waitForTeamSkills } from '../skills-remote.ts';
 import { appendHandoffHeartbeat, handoffProgressExcerpt, readHandoff } from '../handoff.ts';
 import { markStarted, onTodosChanged, readTodos, removeTodo, todoTaskText, type TodoItem } from '../todos.ts';
-import type { RunEvent, RunRecord, RunStatus, RunStore } from '../runs/store.ts';
+import type { RunEvent, RunRecord, RunStatus, RunStore, RunTransition } from '../runs/store.ts';
 import {
   HistoryCursorError,
   deriveRunContextEvents,
@@ -5148,6 +5149,20 @@ export function createApp(deps: ServerDeps) {
               event: 'run-deleted',
               data: JSON.stringify({ id, project }),
             });
+          // Stamped and workspace-only (spec 2026-09-19-extension-event-api): the store emits it
+          // right after the `run` event for the same change, so it is written right after that
+          // frame. The per-project streams never carry it — widening them is breaking.
+          const onTransition = ({ run, previousStatus, previousArchived }: RunTransition) => {
+            const frame: TaskTransitionEvent = {
+              project,
+              id: run.id,
+              status: run.status,
+              previousStatus,
+              archived: run.archived,
+              previousArchived,
+            };
+            void stream.writeSSE({ event: 'task-transition', data: JSON.stringify(frame) });
+          };
           const sendTodos = async () => {
             const items: TodoItem[] = await readTodos(dataDir).catch(() => []);
             await stream.writeSSE({
@@ -5159,11 +5174,13 @@ export function createApp(deps: ServerDeps) {
           // watcher — and each subscription is scoped to its own dataDir (2.3).
           const offTodos = capabilities().followups ? onTodosChanged(dataDir, () => void sendTodos()) : () => undefined;
           store.on('run', onRun);
+          store.on('transition', onTransition);
           store.on('deleted', onDeleted);
           attached.set(project, {
             store,
             detach: () => {
               store.off('run', onRun);
+              store.off('transition', onTransition);
               store.off('deleted', onDeleted);
               offTodos();
             },

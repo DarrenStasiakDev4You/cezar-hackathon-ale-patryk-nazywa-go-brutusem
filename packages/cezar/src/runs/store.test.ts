@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from './store.ts';
 
-import type { RunRecord } from './store.ts';
+import type { RunRecord, RunTransition } from './store.ts';
 
 /** A minimal pre-#389 record, exactly as an old runs.json holds it — no
  *  titleSummary, no diffStat. Loading it must keep working (additive proof). */
@@ -1967,5 +1967,154 @@ describe('RunStore — pinned tasks (#935)', () => {
     const store = RunStore.open(dataDir);
     expect(store.getRun('no-pin')?.pinned).toBeUndefined();
     expect(store.getRun('hand-pinned')?.pinned).toBe(true);
+  });
+});
+
+describe('RunStore — task transitions (spec 2026-09-19-extension-event-api)', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-transition-'));
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const createTask = (store: RunStore) =>
+    store.createRun({ title: 't', workflow: 'quick-task', task: 't', steps: [] });
+
+  /** Every `'transition'` the store emits, as `previous → current` lines. */
+  const recordTransitions = (store: RunStore): string[] => {
+    const seen: string[] = [];
+    store.on('transition', ({ run, previousStatus, previousArchived }: RunTransition) => {
+      seen.push(`${run.id}: ${previousStatus}${previousArchived ? ' (archived)' : ''} → ${run.status}${run.archived ? ' (archived)' : ''}`);
+    });
+    return seen;
+  };
+
+  /** The store's private baseline map — the one thing a delete or prune must also drop. */
+  const baseline = (store: RunStore) =>
+    (store as unknown as { broadcast: Map<string, unknown> }).broadcast;
+
+  it('emits one transition per status change, with the status it replaced, right after the run event', () => {
+    const store = RunStore.open(dataDir);
+    const order: string[] = [];
+    store.on('run', () => order.push('run'));
+    store.on('transition', () => order.push('transition'));
+    const seen = recordTransitions(store);
+    const run = createTask(store);
+
+    store.updateRun(run.id, { status: 'running' });
+    store.updateRun(run.id, { status: 'done' });
+
+    expect(seen).toEqual([`${run.id}: queued → running`, `${run.id}: running → done`]);
+    expect(order).toEqual(['run', 'run', 'transition', 'run', 'transition']);
+    store.flush();
+  });
+
+  it('emits nothing for creation, for token and step updates, or for a change that keeps the state', () => {
+    const store = RunStore.open(dataDir);
+    const seen = recordTransitions(store);
+    const run = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 't',
+      steps: [{ id: 'task', name: 'Do the task', kind: 'agent' }],
+    });
+    store.updateRun(run.id, { status: 'running' });
+    seen.length = 0;
+
+    // The per-token path: a step update recomputes the run's totals and touches it.
+    store.updateStep(run.id, 'task', { tokensUsed: 500 });
+    store.updateStep(run.id, 'task', { tokensUsed: 900, status: 'running' });
+    store.updateRun(run.id, { title: 'renamed' });
+    store.updateRun(run.id, { status: 'running' });
+
+    expect(seen).toEqual([]);
+    store.flush();
+  });
+
+  it('emits one transition for archiving twice, and one for restoring', () => {
+    const store = RunStore.open(dataDir);
+    const seen = recordTransitions(store);
+    const run = createTask(store);
+    store.updateRun(run.id, { status: 'done' });
+
+    store.setArchived(run.id, true);
+    store.setArchived(run.id, true);
+    store.setArchived(run.id, false);
+
+    expect(seen).toEqual([
+      `${run.id}: queued → done`,
+      `${run.id}: done → done (archived)`,
+      `${run.id}: done (archived) → done`,
+    ]);
+    store.flush();
+  });
+
+  it('makes one transition of a status and an archive change written together', () => {
+    const store = RunStore.open(dataDir);
+    const seen = recordTransitions(store);
+    const run = createTask(store);
+    store.updateRun(run.id, { status: 'running' });
+
+    store.updateRun(run.id, { status: 'done', archived: true });
+
+    expect(seen).toEqual([`${run.id}: queued → running`, `${run.id}: running → done (archived)`]);
+    store.flush();
+  });
+
+  it('emits nothing at boot for a run reconciled from running to failed; its next change starts from failed', () => {
+    const first = RunStore.open(dataDir);
+    const run = createTask(first);
+    first.updateRun(run.id, { status: 'running' });
+    first.flush();
+
+    const reopened = RunStore.open(dataDir);
+    const seen = recordTransitions(reopened);
+    expect(reopened.getRun(run.id)?.status).toBe('failed');
+    expect(seen).toEqual([]);
+
+    reopened.updateRun(run.id, { status: 'running' });
+
+    expect(seen).toEqual([`${run.id}: failed → running`]);
+    reopened.flush();
+  });
+
+  it('with keepLive (how the server opens stores), emits recovery rewrites as transitions', () => {
+    // Boot recovery (`manager.recover()`) rewrites through the store, so its transitions DO fire.
+    // They reach no client only because recovery runs before any stream attaches (index.ts,
+    // project-context.ts) — this test pins the store half of that contract.
+    const first = RunStore.open(dataDir);
+    const run = createTask(first);
+    first.updateRun(run.id, { status: 'running' });
+    first.flush();
+
+    const reopened = RunStore.open(dataDir, { keepLive: true });
+    const seen = recordTransitions(reopened);
+    expect(reopened.getRun(run.id)?.status).toBe('running');
+    expect(seen).toEqual([]);
+
+    reopened.updateRun(run.id, { status: 'failed' });
+
+    expect(seen).toEqual([`${run.id}: running → failed`]);
+    reopened.flush();
+  });
+
+  it('drops the baseline with the run on delete and on prune', () => {
+    const store = RunStore.open(dataDir);
+    const deleted = createTask(store);
+    expect(baseline(store).has(deleted.id)).toBe(true);
+
+    store.deleteRun(deleted.id);
+
+    expect(baseline(store).has(deleted.id)).toBe(false);
+    // More live runs than the store keeps: the oldest ones are pruned, their baselines too.
+    // (Which run goes is decided by `createdAt`, identical within one millisecond — so compare sets.)
+    for (let n = 0; n < 301; n += 1) createTask(store);
+    expect(store.listRuns()).toHaveLength(300);
+    expect([...baseline(store).keys()].sort()).toEqual(store.listRuns().map((run) => run.id).sort());
+    store.flush();
   });
 });

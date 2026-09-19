@@ -229,6 +229,10 @@ async function serveCommand(
     }
   }
 
+  // Recovery rewrites interrupted runs (`running → failed`, a re-queue, …) and the store emits
+  // those as `'transition'`s. It stays ahead of `startServer` so no stream is attached yet and no
+  // client hears boot-time rewrites as task events (spec 2026-09-19-extension-event-api,
+  // BACKWARD_COMPATIBILITY.md § 2 — `task-transition` is never sent for boot recovery).
   const recovered = store
     .listRuns()
     .filter((r) => ['queued', 'waiting', 'running'].includes(r.status)).length;
