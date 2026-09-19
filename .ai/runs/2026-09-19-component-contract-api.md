@@ -33,6 +33,8 @@ A component contract declares its required and optional capabilities and optiona
 
 ## Progress
 
+PR: #22
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: The richer contract
