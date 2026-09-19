@@ -13,7 +13,7 @@ import {
 import * as React from 'react'
 import { Link, useSearchParams } from 'react-router'
 
-import { archiveProjectRun, setProjectRunRead } from '@/api/client'
+import { setProjectRunRead } from '@/api/client'
 import {
   queryKeys,
   rememberReferenceStatuses,
@@ -23,6 +23,8 @@ import {
   workspaceQueryKeys,
 } from '@/api/queries'
 import type { ProjectListEntry, RunIndexEntry, RunsIndexResponse } from '@open-mercato/cezar-api-client'
+import { TaskArchive } from '@open-mercato/cezar-extension-api'
+import { useCommands } from '@/commands/provider'
 import { dispatchKindLabel, subtaskLabel, taskTreeRows, type TaskTreeInput } from '@/lib/task-tree'
 import { CenteredState } from '@/components/centered-state'
 import { FacetFilter, SegmentedControl, ToggleChip } from '@/components/facet-filter'
@@ -133,12 +135,19 @@ const HOVER_CLOSE_DELAY_MS = 220
  *  wants a human, so it is not swept away, exactly as the per-project broom decides it. */
 const ARCHIVABLE_STATUSES: ReadonlySet<string> = new Set(['done', 'failed', 'cancelled'])
 
-/** Archive (or restore) one indexed run, in its own project. */
+/**
+ * Archive (or restore) one indexed run, in its own project, through `cezar.task.archive` (spec
+ * `2026-09-19-migrate-task-actions-to-command-api`, Q7). The command settles this run's three keys
+ * itself and resolves after that refetch, so the page reconciles only a failure: a second pass on
+ * success would refetch the whole index again for nothing. The row still moves on the click.
+ */
 function useArchiveIndexedRun() {
+  const commands = useCommands()
   return useIndexedRunMutation({
     request: ({ task, archived }: { task: GlobalTask; archived: boolean }) =>
-      archiveProjectRun(task.run.projectId, task.run.id, archived),
+      commands.execute(TaskArchive, { taskId: task.run.id, projectId: task.run.projectId, archived }),
     patch: ({ archived }) => (run) => ({ ...run, archived }),
+    reconcile: 'on-error',
   })
 }
 
@@ -176,13 +185,18 @@ function useReadIndexedRun() {
  * BOOT project, so an action on another project's row would 404 or — with a colliding id — land
  * on the wrong task), and the cache patched is the workspace index rather than the project's own
  * run list, which may not even be loaded here.
+ *
+ * `reconcile` says when the page re-reads the keys itself: `'always'` (the default), or
+ * `'on-error'` for a request that already settles them on success (a command's handler).
  */
 function useIndexedRunMutation<V extends { task: GlobalTask }>({
   request,
   patch,
+  reconcile = 'always',
 }: {
   request: (variables: V) => Promise<unknown>
   patch: (variables: V) => (run: RunIndexEntry) => RunIndexEntry
+  reconcile?: 'always' | 'on-error'
 }) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -210,7 +224,8 @@ function useIndexedRunMutation<V extends { task: GlobalTask }>({
       }
       toast(error.message, { tone: 'danger' })
     },
-    onSettled: (_data, _error, { task }) => {
+    onSettled: (_data, error, { task }) => {
+      if (reconcile === 'on-error' && error === null) return
       void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.runsIndex })
       // The run's own project may be the active scope (its list is `queryKeys.runs.all`) or a
       // sidebar group's explicit key — invalidate both spellings so neither shows a row this

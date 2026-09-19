@@ -1012,6 +1012,72 @@ describe('global tasks page', () => {
     await waitFor(() => expect(rowIds()).toEqual(['a1', 'w1', 'i1']))
   })
 
+  /** GET requests for the cross-project index since `from`. */
+  const indexReads = (from = 0) =>
+    sent.slice(from).filter((request) => request.method === 'GET' && request.path === '/api/v1/workspace/runs-index')
+
+  /** Another finished row's archive toggle — every row's toggles share the page's busy state. */
+  const otherToggle = () =>
+    document
+      .querySelector('[data-slot="global-task-row"][data-run-id="i2"]')!
+      .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!
+
+  it('an archive settles on ONE index refetch, and the toggles unlock once it lands', async () => {
+    stubFetch({
+      runs: [...RUNS, { ...RUNS[2]!, id: 'i2', title: 'Pin the runner', createdAt: '2026-07-14T07:00:00Z' }],
+    })
+    // From here on, the index answers only when the test says so.
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    let gate: Promise<void> | undefined
+    let releaseIndex: (() => void) | undefined
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await answer(input, init)
+      if (gate !== undefined && String(input) === '/api/v1/workspace/runs-index') await gate
+      return response
+    })
+    renderPage()
+    await screen.findByText('Bump the runner')
+    const before = sent.length
+    gate = new Promise<void>((resolve) => (releaseIndex = resolve))
+
+    fireEvent.click(
+      document
+        .querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
+        .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!,
+    )
+
+    // The row moves on the click; the toggles wait for the fresh index.
+    await waitFor(() => expect(rowIds()).toEqual(['a1', 'w1', 'i2']))
+    await waitFor(() => expect(indexReads(before)).toHaveLength(1))
+    expect(otherToggle().disabled).toBe(true)
+
+    releaseIndex?.()
+
+    await waitFor(() => expect(otherToggle().disabled).toBe(false))
+    expect(rowIds()).toEqual(['a1', 'w1', 'i2'])
+    // Settled by the command's refetch alone — the page did not ask a second time.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(indexReads(before)).toHaveLength(1)
+  })
+
+  it('a failed archive rolls back and re-reads the index itself', async () => {
+    // Not a 409: the command leaves the caches alone, so any re-read is the page's reconcile.
+    stubFetch({ archiveStatus: 500 })
+    renderPage()
+    await screen.findByText('Bump the runner')
+    const before = sent.length
+
+    fireEvent.click(
+      document
+        .querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
+        .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!,
+    )
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('still running'))
+    await waitFor(() => expect(rowIds()).toEqual(['a1', 'w1', 'i1']))
+    await waitFor(() => expect(indexReads(before).length).toBeGreaterThanOrEqual(1))
+  })
+
   it('picks up a read receipt made elsewhere, without a page refresh', async () => {
     // The reported bug: open an unread task from here, come back, and it was still bold until a
     // refresh. `useMarkRunSeen` invalidates the workspace index (queries.test.tsx pins that);
