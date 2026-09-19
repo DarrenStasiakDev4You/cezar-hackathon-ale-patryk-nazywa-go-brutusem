@@ -48,5 +48,6 @@ Every Task UI path that continues or archives a task goes through the command re
 ### Phase 3: Global Tasks, the boundary scan and docs
 
 - [x] 3.1 The global Tasks archive runs TaskArchive — c893a8f9
+- [x] Gate fix: the cross-project navigation harness renders global Tasks and needs CommandsProvider — eec7ea04
 - [x] 3.2 The boundary scan and the extension continue check — 7428e5dd
 - [x] 3.3 Docs: extension API README and AGENTS.md — 068072ee
