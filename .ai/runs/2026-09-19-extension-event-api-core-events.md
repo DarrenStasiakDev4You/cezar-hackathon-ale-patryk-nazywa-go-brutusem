@@ -79,11 +79,13 @@ This is **PR 2 of 2** (spec Q1): Phase 3. PR 1 (#23, `feat/extension-event-api`)
 
 ## Progress
 
+PR: #25
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 3: Task and project events
 
-- [ ] 3.1 Server transition feed: RunStore snapshot, task-transition on the workspace stream
-- [ ] 3.2 Task events in the cockpit: tokens, taskEventsFor, EventBusProvider, the stream relay
-- [ ] 3.3 Project reporter: ProjectChanged and ProjectChangeReporter
-- [ ] 3.4 PR 2 docs: README core events table and AGENTS.md rows
+- [x] 3.1 Server transition feed: RunStore snapshot, task-transition on the workspace stream — fb6e8db7
+- [x] 3.2 Task events in the cockpit: tokens, taskEventsFor, EventBusProvider, the stream relay — beeebda5
+- [x] 3.3 Project reporter: ProjectChanged and ProjectChangeReporter — b3568aed
+- [x] 3.4 PR 2 docs: README core events table and AGENTS.md rows — 82411c93
