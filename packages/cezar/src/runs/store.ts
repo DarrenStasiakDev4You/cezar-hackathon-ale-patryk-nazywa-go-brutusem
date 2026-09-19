@@ -355,6 +355,18 @@ export type StepState = z.infer<typeof stepStateSchema>;
 export type QueuedMessage = z.infer<typeof queuedMessageSchema>;
 export type RunRecord = z.infer<typeof runRecordSchema>;
 
+/**
+ * A run whose `status` or `archived` changed since the store last broadcast it — the store's
+ * `'transition'` event (spec `.ai/specs/2026-09-19-extension-event-api.md`, Q4). The server knows
+ * the true previous state, so the cockpit never has to guess it from the records it happened to
+ * see.
+ */
+export interface RunTransition {
+  readonly run: RunRecord;
+  readonly previousStatus: RunStatus;
+  readonly previousArchived: boolean;
+}
+
 /** One persisted event line; `type` mirrors AgentEvent plus engine lifecycle. */
 export interface RunEvent {
   seq: number;
@@ -704,10 +716,17 @@ export function reconcileLoadedRun(run: RunRecord, opts?: { keepLive?: boolean }
  * File-backed run store: `runs.json` index (atomic tmp+rename writes, the
  * pattern from @cezar/core's IssueStore) plus one append-only NDJSON event
  * file per run. Also the in-process event bus the SSE endpoints subscribe to:
- * emits `('run', RunRecord)` and `('event', { runId, event: RunEvent })`.
+ * emits `('run', RunRecord)`, `('event', { runId, event: RunEvent })` and, right
+ * after a `run` whose `status` or `archived` changed, `('transition', RunTransition)`.
  */
 export class RunStore extends EventEmitter {
   private runs = new Map<string, RunRecord>();
+  /** What `touch` last broadcast per run: the baseline a `'transition'` is measured against
+   *  (spec 2026-09-19-extension-event-api). Kept in step with `runs` at every construction site:
+   *  seeded in `open()` after reconcile (so a boot-time rewrite emits nothing), set in
+   *  `createRun`, dropped in `deleteRun` and `pruneOldRuns`. A missing row only makes the next
+   *  `touch` a silent baseline; it never produces a wrong transition. */
+  private broadcast = new Map<string, { status: RunStatus; archived: boolean }>();
   private saveTimer: NodeJS.Timeout | null = null;
   /** The repository this project IS (#945), armed after `open()` by `setRepoHandle`. Undefined
    *  until it arrives and `null` when it cannot be known — both mean "unscoped", which is
@@ -730,7 +749,9 @@ export class RunStore extends EventEmitter {
         const parsed = z.array(runRecordSchema).safeParse(raw);
         if (parsed.success) {
           for (const run of parsed.data) {
-            store.runs.set(run.id, reconcileLoadedRun(run, opts));
+            const loaded = reconcileLoadedRun(run, opts);
+            store.runs.set(loaded.id, loaded);
+            store.broadcast.set(loaded.id, { status: loaded.status, archived: loaded.archived });
           }
         }
       } catch {
@@ -858,6 +879,8 @@ export class RunStore extends EventEmitter {
     this.trackReferencedPrs(run, input.task);
     this.trackReferencedIssues(run, input.task);
     this.runs.set(run.id, run);
+    // Creation (`queued`) is not a transition: its first one is `queued → running`.
+    this.broadcast.set(run.id, { status: run.status, archived: run.archived });
     this.pruneOldRuns();
     this.touch(run);
     return run;
@@ -1340,6 +1363,7 @@ export class RunStore extends EventEmitter {
 
   deleteRun(id: string): boolean {
     const existed = this.runs.delete(id);
+    this.broadcast.delete(id);
     if (existed) {
       try {
         rmSync(this.eventsPath(id), { force: true });
@@ -1408,6 +1432,26 @@ export class RunStore extends EventEmitter {
   private touch(run: RunRecord): void {
     this.scheduleSave();
     this.emit('run', run);
+    this.detectTransition(run);
+  }
+
+  /** Runs on every `touch` — once per token update — so it is one Map lookup and two comparisons,
+   *  and it writes the baseline only when something changed. Several changes between two
+   *  `touch` calls make one transition, from the last broadcast state to the current one. */
+  private detectTransition(run: RunRecord): void {
+    // A record that is no longer in the index (deleted or pruned while a caller held it) must
+    // not grow a baseline row back.
+    if (this.runs.get(run.id) !== run) return;
+    const previous = this.broadcast.get(run.id);
+    if (previous !== undefined && previous.status === run.status && previous.archived === run.archived) return;
+    this.broadcast.set(run.id, { status: run.status, archived: run.archived });
+    if (previous === undefined) return;
+    const transition: RunTransition = {
+      run,
+      previousStatus: previous.status,
+      previousArchived: previous.archived,
+    };
+    this.emit('transition', transition);
   }
 
   private pruneOldRuns(): void {
@@ -1418,6 +1462,7 @@ export class RunStore extends EventEmitter {
     ];
     for (const stale of stalePool) {
       this.runs.delete(stale.id);
+      this.broadcast.delete(stale.id);
       try {
         rmSync(this.eventsPath(stale.id), { force: true });
         rmSync(this.handoffPath(stale.id), { force: true });

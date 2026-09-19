@@ -183,6 +183,58 @@ describe('GET /api/v1/workspace/events', () => {
     expect(body).not.toContain('other-run');
   });
 
+  it('carries a task transition as a stamped task-transition, right after its run event, for every project', async () => {
+    const other = await buildOtherContext();
+    const ws = await openStream('/api/v1/workspace/events');
+    await ws.readUntil('event: ping');
+    const bootRun = store.createRun({ title: 'boot-run', workflow: 'quick-task', task: 'b', steps: [] });
+    const otherRun = other.store.createRun({ title: 'other-run', workflow: 'quick-task', task: 'o', steps: [] });
+
+    store.updateRun(bootRun.id, { status: 'running' });
+    other.store.updateRun(otherRun.id, { status: 'done' });
+    other.store.setArchived(otherRun.id, true);
+    // A token update is not a transition.
+    store.updateRun(bootRun.id, { tokensUsed: 42 });
+    store.updateRun(bootRun.id, { title: 'marker' });
+
+    const body = await ws.readUntil('"title":"marker"');
+    expect(payloadsOf(body, 'task-transition')).toEqual([
+      { project: bootId, id: bootRun.id, status: 'running', previousStatus: 'queued', archived: false, previousArchived: false },
+      { project: other.id, id: otherRun.id, status: 'done', previousStatus: 'queued', archived: false, previousArchived: false },
+      { project: other.id, id: otherRun.id, status: 'done', previousStatus: 'done', archived: true, previousArchived: false },
+    ]);
+    // Each transition frame directly follows the run frame of the same change.
+    const frames = [...body.matchAll(/event: ([a-z-]+)\ndata: (.*)\n/g)]
+      .map((m) => [m[1], (JSON.parse(m[2] || 'null') as { id?: string; status?: string } | null)] as const)
+      .filter(([name]) => name === 'run' || name === 'task-transition')
+      .map(([name, data]) => `${name} ${data?.id === bootRun.id ? 'boot' : 'other'} ${data?.status}`);
+    expect(frames).toEqual([
+      'run boot queued',
+      'run other queued',
+      'run boot running',
+      'task-transition boot running',
+      'run other done',
+      'task-transition other done',
+      'run other done',
+      'task-transition other done',
+      'run boot running',
+      'run boot running',
+    ]);
+  });
+
+  it('never carries task-transition on the boot-project /api/v1/events stream', async () => {
+    const legacy = await openStream('/api/v1/events');
+    await legacy.readUntil('event: ping');
+    const run = store.createRun({ title: 'boot-run', workflow: 'quick-task', task: 'b', steps: [] });
+
+    store.updateRun(run.id, { status: 'running' });
+    store.updateRun(run.id, { title: 'marker' });
+
+    const body = await legacy.readUntil('"title":"marker"');
+    expect(body).toContain('"status":"running"');
+    expect(body).not.toContain('task-transition');
+  });
+
   it('splits usage per project: one stamped event per project with live rows, none for row-less projects', async () => {
     const other = await buildOtherContext();
     const bootRunId = store.createRun({

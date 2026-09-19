@@ -42,6 +42,30 @@ export const runStatusSchema = z.enum([
 export type RunStatus = z.infer<typeof runStatusSchema>;
 
 /**
+ * One task transition — event `task-transition` on the WORKSPACE stream only
+ * (`GET /api/v1/workspace/events`; spec `.ai/specs/2026-09-19-extension-event-api.md`, Q4). The
+ * run store emits it when a run's `status` or `archived` differs from what it last broadcast,
+ * right after the `run` event for the same change; token, step and title updates produce none.
+ * Several changes between two broadcasts are one transition, from the last broadcast state.
+ *
+ * Neutral on purpose: the wire says THAT a task changed state, and the cockpit's extension layer
+ * names what it means (`cezar.task.started`, …). The server builds the frame as this type and the
+ * cockpit parses it with this schema, so the two cannot drift. Not emitted at boot nor on a run's
+ * creation, and the per-project streams never carry it (widening them is breaking,
+ * BACKWARD_COMPATIBILITY.md § 2).
+ */
+export const taskTransitionEventSchema = z.object({
+  /** The registered project, as on every stamped workspace event. */
+  project: z.string(),
+  id: z.string(),
+  status: runStatusSchema,
+  previousStatus: runStatusSchema,
+  archived: z.boolean(),
+  previousArchived: z.boolean(),
+});
+export type TaskTransitionEvent = z.infer<typeof taskTransitionEventSchema>;
+
+/**
  * Sub-state of `running` (spec 2026-07-18-subagent-monitoring-status, #490): the agent ended its
  * turn still working on its own downstream work (a sub-agent, a monitored command) and said so
  * with the `CEZ:MONITORING` marker — a non-attention state, not "needs you".
