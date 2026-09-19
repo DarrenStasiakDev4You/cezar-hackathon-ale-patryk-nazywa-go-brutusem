@@ -22,7 +22,7 @@ A component contract declares its required and optional capabilities and optiona
 - The three core task contracts (`cezar.task.header`, `.timeline`, `.composer`) — they land with the slot item (spec Q1).
 - `context.components` host service, slot rendering, applying `layout`, the implementation picker.
 - Host permissions as capabilities; a `defineComponentImplementation` helper; compile-time capability names.
-- Any change in `packages/web`, the server, the contract or the api-client.
+- Any change in `packages/web`, the server, the contract or the api-client — except the one-line gate fix below, which removes a duplicate JSX attribute already on `main`.
 - `BACKWARD_COMPATIBILITY.md` (the package is private; it gains a section only at publication).
 
 ## Risks
@@ -51,3 +51,4 @@ A component contract declares its required and optional capabilities and optiona
 - [x] 3.1 Export and pin the surface — d6730151
 - [x] 3.2 Example extension declares and passes the check — 55463e73
 - [x] 3.3 Docs: README and AGENTS.md — 9892155f
+- [x] Gate fix: drop the duplicate `data-edit-mode-action` that 3eaa75e7 left on main's edit-mode exit button (TS17001 failed `npm run typecheck`) — 5c673d1c
