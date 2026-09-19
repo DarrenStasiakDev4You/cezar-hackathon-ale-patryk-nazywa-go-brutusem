@@ -43,8 +43,11 @@ The spec decides on one spec, two phases, two stacked PRs (spec Q1). **This run 
 - `packages/web/src/main.tsx` and `app.tsx`: `registerCoreComponents(components)` before
   `startExtensionHost`; `App` takes `components` and wraps its tree in `ComponentsProvider`.
 - Test wrappers that render `RunHeader` or a task route add `ComponentsProvider`.
-- A build check: the entry chunk in the Vite manifest holds `CoreTaskHeaderMain` but not
-  `streamdown` or `run-header`.
+- A build check (`entryChunkGuard` in `packages/web/vite.config.ts`): `CoreTaskHeaderMain` loads
+  with the first paint, and its static imports reach neither `streamdown` nor `run-header`. The
+  spec asked for "the entry chunk holds it, not streamdown": the build puts it in a shared chunk
+  the entry imports, and `streamdown` already loads with the first paint through the New task
+  form's skill detail, so the check guards what this item adds (spec corrected in place).
 - `AGENTS.md`: the "Component implementations" routing row.
 
 ## Non-goals
@@ -99,5 +102,5 @@ The spec decides on one spec, two phases, two stacked PRs (spec Q1). **This run 
 
 - [x] 2.1 The TaskHeaderMain contract — cb305e67
 - [x] 2.2 The split, core's default and its registration — 88db9f0a
-- [ ] 2.3 The boundary test and the failure path on a real page
-- [ ] 2.4 AGENTS.md routing row
+- [x] 2.3 The boundary test and the failure path on a real page — 3c500c6c
+- [x] 2.4 AGENTS.md routing row — f4392941
