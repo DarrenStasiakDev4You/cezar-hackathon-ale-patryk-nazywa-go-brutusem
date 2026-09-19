@@ -30,6 +30,8 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - [x] 2.3 Keep the shell sidebar and main content as root siblings so moving the menu to the other side never nests it inside the content region. — 54a3d00a
 - [x] 2.4 Remove a selected layout element or complete group subtree atomically from the live registry and DOM projection. — 54a3d00a
 - [x] 2.5 Keep edit mode visually legible by removing the global grayscale/opacity wash from the layout surface. — 54a3d00a
+- [x] 2.6 Keep the container placeholder attached, detached, or restored at an edge threshold without mutating the registry during movement. — 40688bb8
+- [x] 2.7 Clone the anchored container into DragOverlay and scale it only while detached; cover the threshold and scale transitions with regression tests. — 40688bb8
 
 ### Phase 3: verification and handoff
 
@@ -120,6 +122,15 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
   files, 7719 tests), `npm run test:unit` (36), `npm run build`/`check:pack`, and
   `npm run test:package` (16).
 
+### Dynamic placeholder continuation — 2026-09-19
+
+- Container dragging now keeps a gray static placeholder at its original slot, detaches it when the
+  translated geometry leaves that slot, and restores it at the corresponding edge once the menu is
+  within one menu width of that edge. The registry remains unchanged until drop.
+- The default overlay clones the registered container DOM so it retains the anchored design; it uses
+  scale `1` while anchored and `0.92` while detached. Escape/cancel clears the placeholder state.
+- Focused layout tests passed — 3 files, 92 tests; `npm run typecheck:web` passed.
+
 ## Risks
 
 - The handle must retain a minimum 44px target and not steal ordinary widget clicks or touch scrolling.
@@ -143,6 +154,8 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - [x] 2.3 Keep the shell sidebar and main content as root siblings so moving the menu to the other side never nests it inside the content region. — 54a3d00a
 - [x] 2.4 Remove a selected layout element or complete group subtree atomically from the live registry and DOM projection. — 54a3d00a
 - [x] 2.5 Keep edit mode visually legible by removing the global grayscale/opacity wash from the layout surface. — 54a3d00a
+- [x] 2.6 Keep the container placeholder attached, detached, or restored at an edge threshold without mutating the registry during movement. — 40688bb8
+- [x] 2.7 Clone the anchored container into DragOverlay and scale it only while detached; cover the threshold and scale transitions with regression tests. — 40688bb8
 
 ### Phase 3: verification and handoff
 
