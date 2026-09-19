@@ -1,23 +1,24 @@
 # Handoff — task-composer-contract
 
-**Last updated:** 2026-09-19T21:04:00Z
+**Last updated:** 2026-09-19T21:31:00Z
 **Branch:** `feat/task-composer-contract`
 **PR:** #48 — https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/48
-**Current phase/step:** Phase 1 Step 1.5
-**Last commit:** `399b20dd` — core prop-only Task Composer implementation
+**Current phase/step:** Phase 2 Step 2.4
+**Last commit:** `6401ead5` — external task-page Task Composer proof
 
 ## What just happened
 
-- Checkpoint 1 passed over Steps 0.1..1.4; `checkpoint-1-checks.md` records the validation.
-- `cezar.task.composer@1`, its JSON model and nine intents are public in the extension API.
-- The controller now owns draft delivery, quick replies, completion loading and engine data.
-- Core's default renders from props through `ComposerView`; the task thread still uses its legacy
-  direct composer until the next step mounts the host.
+- Checkpoint 2 passed over Steps 1.5..2.3; `checkpoint-2-checks.md` records focused validation and
+  browser evidence.
+- The task thread now renders `TaskComposer` through `ComponentHost`; core registration, optional
+  capability fallbacks, the external example and the real registry proof are complete.
+- Final hardening is in the working tree: stable frozen controller props, validated engine intents,
+  byte-level attachment caps and core dictation error handling.
 
 ## Next concrete action
 
-- Add `TaskComposer` to the task-thread host slot, register `CoreTaskComposer` as the core default,
-  and update the registry boundary/eager-entry tests.
+- Finish the final documentation/plan commit, run the configured validation gate, inspect the full
+  diff, update PR #48 to ready and hand off for review/QA.
 
 ## Blockers / open questions
 
@@ -25,10 +26,10 @@
 
 ## Validation and environment
 
-- `npm run typecheck` passed.
-- Focused checkpoint tests passed: 112 tests.
-- Browser evidence is intentionally deferred until the slot is mounted; `.ai/qa/test-env.json` is
-  available for the next checkpoint.
+- `npm run typecheck` passed after the hardening edits.
+- Focused slice passed: 11 files, 108 tests; the broader checkpoint slice had 158 passing tests.
+- Focused browser composer run passed 7/8; one stale timestamp assertion remains. Full E2E is red
+  across 15 files with 32 failures; see `checkpoint-2-checks.md`.
 
 ## Worktree
 

@@ -14,3 +14,11 @@
 - UI browser evidence was deferred because the task-thread host slot is not mounted yet; it is
   required after Step 1.5 and will be captured at the next checkpoint.
 - Next: mount and register the core Task Composer implementation.
+
+## 2026-09-19T21:31:00Z — checkpoint 2
+
+- Covered Steps 1.5..2.3; the task-thread slot, optional-capability fallbacks, external example and
+  real registry/task-page proof are complete.
+- Typecheck and focused tests pass; browser evidence is in `checkpoint-2-artifacts/`.
+- Full E2E remains red on 32 broad-suite failures plus one stale timestamp assertion; the final
+  configured gate is still pending after Step 2.4.
