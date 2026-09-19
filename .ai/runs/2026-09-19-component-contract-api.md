@@ -37,8 +37,8 @@ A component contract declares its required and optional capabilities and optiona
 
 ### Phase 1: The richer contract
 
-- [ ] 1.1 Capability and layout types, and their validation in defineComponentContract
-- [ ] 1.2 Type tests for the richer contract
+- [x] 1.1 Capability and layout types, and their validation in defineComponentContract — 4ea5253d
+- [x] 1.2 Type tests for the richer contract — 230af702
 
 ### Phase 2: Implementations and the check
 
