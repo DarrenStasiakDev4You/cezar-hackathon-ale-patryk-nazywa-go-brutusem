@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Mockup: the Jira example header on the task page</title><style>*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#0f0f10;color:#ececec;display:flex;overflow:hidden}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+aside{width:264px;flex:none;background:#161617;border-right:1px solid #262628;padding:12px 10px;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px;padding:2px 4px}
+.logo{width:26px;height:26px;border-radius:7px;background:#d9f99d}
+.brand small{font-weight:400;font-size:11px;color:#8b8b8f}
+.newtask{background:#ececec;color:#111;border-radius:8px;padding:8px 12px;font-weight:600;text-align:center}
+.nav a{display:block;padding:6px 10px;border-radius:7px;color:#d4d4d6;text-decoration:none}
+.nav a.on{background:#232325;color:#fff;font-weight:600}
+.sect{font-size:11px;letter-spacing:.06em;color:#8b8b8f;padding:6px 10px 0}
+.row{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;font-weight:600;font-size:13px}
+.row.on{background:#232325}
+.dot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex:none;display:inline-block}
+.dot.y{background:#eab308}
+main{flex:1;min-width:0;display:flex;flex-direction:column;gap:18px;padding:14px 0}
+.caption{max-width:820px;margin:0 auto;width:100%;padding:0 24px;font-size:11px;color:#a78bfa;letter-spacing:.02em}
+.header{border-bottom:1px solid #262628;padding:10px 24px 0;background:rgba(15,15,16,.95)}
+.measure{max-width:820px;margin:0 auto}
+.top{display:flex;gap:10px;align-items:flex-start}
+.hostbox{outline:1px dashed #a78bfa;outline-offset:3px;position:relative;flex:1;min-width:0;padding-bottom:14px}
+.tag{position:absolute;left:0;bottom:-2px;font-size:10px;color:#a78bfa}
+.ext{display:flex;align-items:center;gap:8px;min-height:30px;font-size:13px}
+.ext strong{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#d4d4d6}
+.pen{border:1px solid #3a3a3d;border-radius:6px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:#b4b4b8;flex:none}
+.xbtns{margin-left:auto;display:flex;gap:6px;flex:none}
+.xb{border:1px solid #55555a;background:#26262a;border-radius:6px;padding:2px 9px;font-size:12px;color:#ececec;white-space:nowrap}
+.xb.jira{border-color:#7c6cf0;color:#e9e5ff}
+.kebab{width:26px;height:26px;border:1px solid #3a3a3d;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:800;color:#d4d4d6;flex:none;outline:2px solid #a78bfa;outline-offset:2px}
+.coretag{font-size:10px;color:#6b7280;margin-top:6px}
+.tabs{display:flex;align-items:flex-end;gap:18px;margin-top:8px;font-size:13px;color:#b4b4b8}
+.tabs span{padding:6px 2px 9px}
+.tabs .on{color:#fff;font-weight:700;border-bottom:2px solid #fff}
+.acts{margin-left:auto;display:flex;gap:14px;align-items:center;padding-bottom:8px;font-size:13px;color:#d4d4d6}
+.btn{border:1px solid #3a3a3d;border-radius:7px;padding:4px 10px;font-weight:600}
+.gone{color:#6b7280;text-decoration:line-through;font-size:12px}
+.rail{display:flex;align-items:center;gap:10px;padding:10px 0;font-size:12px;border-top:1px solid #1f1f21;margin-top:2px}
+.rail b{font-weight:700}.rail .bar{flex:1;height:2px;background:#eab308}
+.rail .bar.g{background:#22c55e}
+.note{color:#8b8b8f;font-size:12px}</style></head><body><aside><div class="brand"><span class="logo"></span>cezar <small class="mono">my-project</small></div><div class="newtask">+ New task</div><nav class="nav"><a class="on">Tasks</a><a>Git</a><a>GitHub</a><a>Automations</a><a>Skills</a><a>Workflows</a><a>Settings</a></nav><div class="sect">NEEDS YOU</div><div class="row on"><span class="dot y"></span>Fix the flaky login test</div><div class="sect">DONE</div><div class="row"><span class="dot"></span>Tidy the changelog</div></aside><main>
+
+<div class="caption mono">A · a task that needs you: the example offers Stop (not Continue: actions.continue is not available)</div>
+<div class="header"><div class="measure">
+ <div class="top">
+  <div class="hostbox">
+   <div class="ext"><strong>Fix the flaky login test in auth.spec.ts</strong><span class="st"><span class="dot y"></span>needs you</span><span class="pen" aria-label="Rename task">✎</span>
+    <span class="xbtns"><span class="xb">Stop</span><span class="xb jira">Draft Jira issue</span></span></div>
+   <span class="tag mono">host box · example.jira-header.row · shows-title, shows-status, offers-continue, offers-stop</span>
+  </div>
+  <div class="kebab">⋮</div>
+ </div>
+ <div class="coretag mono">core shell ↓ Cancel left the bar (offers-stop) · ⋮ Run actions visible at every width and still lists Continue, Cancel, Archive</div>
+ <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="btn">✓ Finish</span><span>Notes</span><span>Pin</span><span class="gone">Cancel</span></div></div>
+ <div class="rail"><span class="dot y"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar"></span></div>
+</div></div>
+
+<div class="caption mono">B · a finished task: the example offers Continue (→ core's cezar.task.continue); Archive stays in core's bar (no offers-archive)</div>
+<div class="header"><div class="measure">
+ <div class="top">
+  <div class="hostbox">
+   <div class="ext"><strong>Tidy the changelog</strong><span class="st"><span class="dot"></span>done</span><span class="pen" aria-label="Rename task">✎</span>
+    <span class="xbtns"><span class="xb">Continue</span><span class="xb jira">Draft Jira issue</span></span></div>
+   <span class="tag mono">host box · example.jira-header.row</span>
+  </div>
+  <div class="kebab">⋮</div>
+ </div>
+ <div class="coretag mono">core shell ↓ Continue left the bar (offers-continue) · Archive stays core's</div>
+ <div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="gone">Continue</span><span>Archive</span><span>Open in ▾</span><span>Notes</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
+ <div class="rail"><span class="dot"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar g"></span></div>
+</div></div>
+
+<div class="caption" style="color:#8b8b8f">Illustrative mockup — spec 2026-09-19-custom-task-header-extension. The dashed outline marks the host's box; the example imports only the extension API and react.</div>
+</main></body></html>
