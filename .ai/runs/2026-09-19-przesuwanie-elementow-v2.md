@@ -86,6 +86,17 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - Focused layout regression tests: passed — 3 files, 16 tests.
 - The only remaining handoff is 3.2: seeded browser QA and authoritative review for the edit-mode interaction matrix.
 
+### Resume result — 2026-09-19
+
+- Full configured gate passed in order: `npm run typecheck`, `npm test` (416 files, 7717 tests),
+  `npm run test:unit` (36 tests), `npm run build` including `check:pack`, and `npm run test:package` (16 tests).
+- Focused regression tests passed: 4 web files, 105 tests.
+- The review found no actionable code finding. GitHub rejected formal approval because the current
+  account is the PR author; the review report is posted as a PR comment instead.
+- Browser evidence passed for readable edit mode, accessible handles, sidebar movement to the other
+  side, and exit behavior. Context-menu deletion and populated keyboard/touch/mobile coverage remain
+  unexercised; no QA approval is claimed. Evidence is posted on PR #27.
+
 ## Risks
 
 - The handle must retain a minimum 44px target and not steal ordinary widget clicks or touch scrolling.
