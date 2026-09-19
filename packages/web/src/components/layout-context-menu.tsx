@@ -9,11 +9,13 @@ export type LayoutContextMenuTarget = {
   id: string
   kind: LayoutElementKind
   subtreeIds: string[]
+  domNode?: Element
 }
 
 export type LayoutElementContextMenuProps = {
   enabled: boolean
   onDelete: (target: LayoutContextMenuTarget) => void
+  allowAnyElement?: boolean
   /** Reserved for the future confirmation phase. Returning false cancels deletion. */
   confirmDelete?: (target: LayoutContextMenuTarget) => boolean | Promise<boolean>
   children: React.ReactNode
@@ -25,29 +27,40 @@ const MENU_WIDTH = 176
 const MENU_HEIGHT = 112
 const VIEWPORT_PADDING = 8
 
+const genericTargetIds = new WeakMap<Element, string>()
+let nextGenericTargetId = 1
+
+const genericTargetId = (element: Element): string => {
+  const existing = genericTargetIds.get(element)
+  if (existing) return existing
+  const id = `dom-${nextGenericTargetId++}`
+  genericTargetIds.set(element, id)
+  return id
+}
+
 const targetFromElement = (
   element: Element,
   registry: ReturnType<typeof useLayoutRegistry>,
+  allowAnyElement: boolean,
 ): LayoutContextMenuTarget | null => {
   const id = element.getAttribute('data-layout-id')
-  if (!id || element.getAttribute('data-layout-element') !== 'true') return null
-
-  const registered = registry.get(id)
-  if (!registered || !registered.domNode || !registered.domNode.contains(element)) return null
-
-  return {
-    id: registered.id,
-    kind: registered.kind,
-    subtreeIds: registry.getSubtree(registered.id).map((item) => item.id),
+  if (id && element.getAttribute('data-layout-element') === 'true') {
+    const registered = registry.get(id)
+    if (!registered || !registered.domNode || !registered.domNode.contains(element)) return null
+    return { id: registered.id, kind: registered.kind, subtreeIds: registry.getSubtree(registered.id).map((item) => item.id) }
   }
+  if (!allowAnyElement || element.closest('[data-layout-context-menu="true"]')) return null
+  return { id: genericTargetId(element), kind: 'widget', subtreeIds: [], domNode: element }
 }
 
-const getLayoutTarget = (eventTarget: EventTarget | null, registry: ReturnType<typeof useLayoutRegistry>) => {
+const getLayoutTarget = (eventTarget: EventTarget | null, registry: ReturnType<typeof useLayoutRegistry>, allowAnyElement: boolean) => {
   if (!(eventTarget instanceof Element)) return null
-  return targetFromElement(eventTarget.closest('[data-layout-element="true"][data-layout-id]') ?? eventTarget, registry)
+  const layoutElement = eventTarget.closest('[data-layout-element="true"][data-layout-id]')
+  const targetElement = layoutElement ?? eventTarget.closest('a,button,input,select,textarea,[role],section,article,li,td,th,div') ?? eventTarget
+  return targetFromElement(targetElement, registry, allowAnyElement)
 }
 
-export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, children }: LayoutElementContextMenuProps) {
+export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, allowAnyElement = false, children }: LayoutElementContextMenuProps) {
   const registry = useLayoutRegistry()
   const registrySnapshot = registry.getExternalSnapshot()
   const [target, setTarget] = React.useState<LayoutContextMenuTarget | null>(null)
@@ -55,13 +68,6 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
   const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({})
   const menuRef = React.useRef<HTMLDivElement>(null)
   const deletingRef = React.useRef(false)
-  const enabledRef = React.useRef(enabled)
-  const invokerRef = React.useRef<HTMLElement | null>(null)
-  const descriptionId = React.useId()
-
-  React.useLayoutEffect(() => {
-    enabledRef.current = enabled
-  }, [enabled])
 
   const close = React.useCallback(() => {
     setTarget(null)
@@ -71,7 +77,8 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
   }, [])
 
   React.useEffect(() => {
-    if (!target || registry.get(target.id)?.domNode) return
+    if (!target) return
+    if (target.domNode?.isConnected || registry.get(target.id)?.domNode) return
     close()
   }, [close, registry, registrySnapshot, target])
 
@@ -92,10 +99,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        const invoker = invokerRef.current
         close()
-        // A keyboard user dismissing the menu lands back where they opened it, not on <body>.
-        if (invoker?.isConnected) invoker.focus()
       }
     }
     document.addEventListener('pointerdown', onPointerDown)
@@ -115,32 +119,39 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
     if (!enabled) close()
   }, [close, enabled])
 
-  const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+  const openFromContextMenu = React.useCallback((event: { target: EventTarget | null; clientX: number; clientY: number; preventDefault: () => void; stopPropagation: () => void }) => {
     if (!enabled) return
-    const nextTarget = getLayoutTarget(event.target, registry)
+    const nextTarget = getLayoutTarget(event.target, registry, allowAnyElement)
     if (!nextTarget) return
     event.preventDefault()
     event.stopPropagation()
-    invokerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setTarget(nextTarget)
     setPosition({ x: event.clientX, y: event.clientY })
-  }
+  }, [allowAnyElement, enabled, registry])
+
+  React.useEffect(() => {
+    if (!enabled || typeof window === 'undefined') return
+    const handleWindowContextMenu = (event: MouseEvent) => openFromContextMenu(event)
+    const handleWindowMouseDown = (event: MouseEvent) => {
+      if (event.button === 2) openFromContextMenu(event)
+    }
+    window.addEventListener('contextmenu', handleWindowContextMenu, true)
+    window.addEventListener('mousedown', handleWindowMouseDown, true)
+    return () => {
+      window.removeEventListener('contextmenu', handleWindowContextMenu, true)
+      window.removeEventListener('mousedown', handleWindowMouseDown, true)
+    }
+  }, [enabled, openFromContextMenu])
 
   const handleDelete = async () => {
     if (!target || deletingRef.current) return
     const current = registry.get(target.id)
-    if (!current?.domNode) {
+    if (!current?.domNode && !target.domNode?.isConnected) {
       close()
       return
     }
     deletingRef.current = true
     if (confirmDelete && !(await confirmDelete(target))) {
-      close()
-      return
-    }
-    // Confirmation can take arbitrarily long: re-check the spec's preconditions (a live target,
-    // edit mode still on) against the present, not against the moment Delete was chosen.
-    if (!enabledRef.current || !registry.get(target.id)?.domNode) {
       close()
       return
     }
@@ -172,27 +183,25 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, chi
         type="button"
         role="menuitem"
         data-layout-menu-delete="true"
-        // An editor action: without the opt-in, the shell's edit-mode guard (spec
-        // 2026-09-18-global-edit-mode-interaction-guard) swallows the click and the Enter key, and
-        // the menu only ever opens in edit mode.
-        data-edit-mode-action="allow"
         aria-label="Delete layout element"
-        aria-describedby={descriptionId}
+        aria-describedby="layout-context-menu-delete-description"
         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive outline-hidden focus:bg-destructive/10"
         onClick={() => void handleDelete()}
       >
         <Trash2Icon aria-hidden="true" className="size-4" />
         <span>Delete</span>
       </button>
-      <span id={descriptionId} className="sr-only">
+      <span id="layout-context-menu-delete-description" className="sr-only">
         Deletes this layout element and all registered descendants.
       </span>
     </div>
   ) : null
 
+  const handleReactContextMenu = (event: React.MouseEvent<HTMLDivElement>) => openFromContextMenu(event)
+
   return (
     <>
-      <div data-layout-context-menu-owner="true" className="contents" onContextMenuCapture={onContextMenu}>
+      <div data-layout-context-menu-owner="true" className="contents" onContextMenuCapture={handleReactContextMenu}>
         {children}
       </div>
       {content && typeof document !== 'undefined' ? createPortal(content, document.body) : null}

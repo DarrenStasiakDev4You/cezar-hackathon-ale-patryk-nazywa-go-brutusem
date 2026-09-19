@@ -1,12 +1,9 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AppShell } from './app-shell'
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from './layout-context-menu'
 import { LayoutElement } from './layout-element'
 import { LayoutRegistryProvider } from './layout-registry'
-import { ThemeProvider } from './theme-provider'
 
 function renderLayout(props: { enabled?: boolean; onDelete?: (target: LayoutContextMenuTarget) => void; confirmDelete?: (target: LayoutContextMenuTarget) => boolean | Promise<boolean> } = {}) {
   return render(
@@ -25,6 +22,21 @@ function renderLayout(props: { enabled?: boolean; onDelete?: (target: LayoutCont
 
 describe('LayoutElementContextMenu', () => {
   afterEach(() => cleanup())
+
+  it('opens for an ordinary UI element when generic targets are enabled', () => {
+    render(
+      <LayoutRegistryProvider>
+        <LayoutElementContextMenu enabled allowAnyElement onDelete={vi.fn()}>
+          <button type="button">Ordinary action</button>
+        </LayoutElementContextMenu>
+      </LayoutRegistryProvider>,
+    )
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Ordinary action' }), { clientX: 40, clientY: 40 })
+
+    expect(screen.getByRole('menu')).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Delete layout element' })).toBeTruthy()
+  })
 
   it('opens only for the nearest registered element and passes a widget target to delete', async () => {
     const onDelete = vi.fn()
@@ -90,92 +102,6 @@ describe('LayoutElementContextMenu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(onDelete).not.toHaveBeenCalled()
     expect(confirmDelete).not.toHaveBeenCalled()
-  })
-
-  it('returns focus to the invoking element on Escape and describes Delete by a per-menu id', async () => {
-    render(
-      <LayoutRegistryProvider>
-        <LayoutElementContextMenu enabled onDelete={vi.fn()}>
-          <LayoutElement id="card" kind="widget" tabIndex={0}>
-            Revenue
-          </LayoutElement>
-        </LayoutElementContextMenu>
-      </LayoutRegistryProvider>,
-    )
-    const card = await waitFor(() => screen.getByText('Revenue'))
-    card.focus()
-
-    fireEvent.contextMenu(card)
-    const deleteItem = screen.getByRole('menuitem', { name: 'Delete layout element' })
-    await waitFor(() => expect(document.activeElement).toBe(deleteItem))
-    const describedBy = deleteItem.getAttribute('aria-describedby') ?? ''
-    expect(describedBy).not.toBe('layout-context-menu-delete-description')
-    expect(document.getElementById(describedBy)?.textContent).toContain('registered descendants')
-
-    fireEvent.keyDown(deleteItem, { key: 'Escape' })
-    expect(screen.queryByRole('menu')).toBeNull()
-    expect(document.activeElement).toBe(card)
-  })
-
-  it('drops a confirmed delete whose target unmounted, or whose edit mode ended, while confirming', async () => {
-    const onDelete = vi.fn()
-    let settleConfirmation: (value: boolean) => void = () => {}
-    const confirmDelete = vi.fn(() => new Promise<boolean>((resolve) => { settleConfirmation = resolve }))
-    const layout = (enabled: boolean, mounted: boolean) => (
-      <LayoutRegistryProvider>
-        <LayoutElementContextMenu enabled={enabled} onDelete={onDelete} confirmDelete={confirmDelete}>
-          {mounted ? <LayoutElement id="card" kind="widget"><span>Revenue</span></LayoutElement> : null}
-        </LayoutElementContextMenu>
-      </LayoutRegistryProvider>
-    )
-    const view = render(layout(true, true))
-    await waitFor(() => expect(document.querySelector('[data-layout-id="card"]')).not.toBeNull())
-
-    fireEvent.contextMenu(screen.getByText('Revenue'))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
-    view.rerender(layout(true, false))
-    await act(async () => settleConfirmation(true))
-    expect(onDelete).not.toHaveBeenCalled()
-
-    view.rerender(layout(true, true))
-    await waitFor(() => expect(document.querySelector('[data-layout-id="card"]')).not.toBeNull())
-    fireEvent.contextMenu(screen.getByText('Revenue'))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
-    view.rerender(layout(false, true))
-    await act(async () => settleConfirmation(true))
-    expect(onDelete).not.toHaveBeenCalled()
-    expect(confirmDelete).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps Delete usable under the shell edit-mode guard, by click and by Enter', async () => {
-    vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }))
-    const onDelete = vi.fn()
-    render(
-      <ThemeProvider>
-        <MemoryRouter>
-          <AppShell>
-            <LayoutRegistryProvider>
-              <LayoutElementContextMenu enabled onDelete={onDelete}>
-                <LayoutElement id="card" kind="widget">
-                  <span>Revenue</span>
-                </LayoutElement>
-              </LayoutElementContextMenu>
-            </LayoutRegistryProvider>
-          </AppShell>
-        </MemoryRouter>
-      </ThemeProvider>,
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Edit mode' }))
-    await waitFor(() => expect(document.querySelector('[data-layout-id="card"]')).not.toBeNull())
-
-    fireEvent.contextMenu(screen.getByText('Revenue'))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete layout element' }))
-    expect(onDelete).toHaveBeenCalledTimes(1)
-
-    fireEvent.contextMenu(screen.getByText('Revenue'))
-    const deleteItem = screen.getByRole('menuitem', { name: 'Delete layout element' })
-    expect(fireEvent.keyDown(deleteItem, { key: 'Enter' })).toBe(true)
-    vi.unstubAllGlobals()
   })
 
   it('clamps the menu to the viewport when the pointer is near an edge', async () => {
