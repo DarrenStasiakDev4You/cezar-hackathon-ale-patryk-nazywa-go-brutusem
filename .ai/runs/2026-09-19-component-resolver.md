@@ -63,4 +63,4 @@ and followed as written.
 
 ### Phase 2: The Definition of Done proof
 
-- [ ] 2.1 Host proof and routing row
+- [x] 2.1 Host proof and routing row — af38935d
