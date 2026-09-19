@@ -1,7 +1,12 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
-import { checkComponentCompatibility, type ComponentCompatibility } from '../src/compatibility.ts'
-import { defineComponentContract, type ComponentImplementation } from '../src/index.ts'
+import {
+  checkComponentCompatibility,
+  defineComponentContract,
+  type ComponentCompatibility,
+  type ComponentCompatibilityIssue,
+  type ComponentImplementation,
+} from '../src/index.ts'
 
 interface ComposerProps {
   draft: string
@@ -430,5 +435,9 @@ describe('checkComponentCompatibility — types', () => {
     }
     expectTypeOf(unused).toBeFunction()
     expectTypeOf(checkComponentCompatibility).returns.toEqualTypeOf<ComponentCompatibility>()
+    expectTypeOf<ComponentCompatibility['issues'][number]>().toEqualTypeOf<ComponentCompatibilityIssue>()
+    expectTypeOf<ComponentCompatibilityIssue['code']>().toEqualTypeOf<
+      'contract-id-mismatch' | 'contract-version-mismatch' | 'missing-capability' | 'malformed'
+    >()
   })
 })

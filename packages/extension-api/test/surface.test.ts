@@ -18,6 +18,7 @@ describe('@open-mercato/cezar-extension-api surface', () => {
       'TaskArchive',
       'TaskContinue',
       'TaskStop',
+      'checkComponentCompatibility',
       'defineCommand',
       'defineComponentContract',
       'defineEvent',

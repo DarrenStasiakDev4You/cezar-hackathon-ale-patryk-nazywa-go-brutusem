@@ -3,6 +3,11 @@
 
 export { defineCommand, type CommandOptions, type Commands, type CommandToken } from './commands.ts'
 export {
+  checkComponentCompatibility,
+  type ComponentCompatibility,
+  type ComponentCompatibilityIssue,
+} from './compatibility.ts'
+export {
   defineComponentContract,
   type ComponentCapability,
   type ComponentContract,
