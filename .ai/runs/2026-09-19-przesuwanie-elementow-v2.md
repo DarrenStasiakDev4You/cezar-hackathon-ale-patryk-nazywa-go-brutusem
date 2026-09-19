@@ -39,6 +39,7 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - `npm run test:unit`: failed in two unrelated existing tests (`skills-remote.test.ts`, `test-env-launcher.test.ts`).
 - `npm run build`: server and web builds passed; the configured `check:pack` sub-step failed because this environment denies the child Node `spawnSync` with `EPERM`.
 - `npm run test:package`: one inline-contract test passed; four existing package CLI/release tests failed under the same process/platform constraints.
+- Browser QA: not exercised. The shared descriptor points to a stopped Windows-only app/browser from this Linux environment, and `http://127.0.0.1:59974/api/v1/health` is unreachable.
 
 ## Risks
 
