@@ -29,17 +29,17 @@ later items.
 
 ## Resolved assumptions (autonomous defaults)
 
-The brief left these open. Each default is the most reversible choice. The extension API is
+The brief left these open. Each default was the most reversible choice. The extension API is
 private and experimental, `BUILTIN_EXTENSIONS` and `CORE_COMPONENT_CONTRACTS` are empty, and
-nothing outside this repository depends on the component registry. All four are safe to override
-before merge.
+nothing outside this repository depends on the component registry. **The owner reviewed all four
+on 2026-09-19 and confirmed each as written.** The last column records each decision.
 
-| # | Question | Applied default | Why | Confirm? |
+| # | Question | Decision | Why | Owner (2026-09-19) |
 |---|---|---|---|---|
-| Q1 | Scope: the resolver only, or also the React slot that renders the result (error boundary, layout box, re-render when the registry changes) and the preference store and picker? | **The resolver only**, plus `missingCoreDefaults`, a named check that the slot item's gate test runs on the production catalog (§ Proposed Solution, point 6). The slot, core's defaults and their registration, the store and the picker are later items. | AGENTS.md (Task routing → Component implementations): "A core contract joins `CORE_COMPONENT_CONTRACTS` … in the same PR as the slot that renders it", so a slot built now has no real contract to render. Earlier specs give core's defaults to the slot item too (`2026-09-19-component-contract-api.md` § Planned consumers). The registry deferred `subscribe` to the slot, its first reactive reader (#26, Q4). The layout clause of the brief's Definition of Done is met at the resolution level here, and its rendering half lands with the slot (§ Problem Statement, the Definition of Done table). | reversible |
-| Q2 | Where does the user's preference come from in this item? | **An argument.** The caller passes the preferred component id for this contract, or nothing. This item stores nothing. | Storing it raises questions of its own (per user or per project, browser storage or `~/.cezar`) that belong with the picker, which writes it. An argument keeps the resolver pure, so its result is deterministic by construction. The store and the resolver deploy independently, which is also why they are not bundled into one spec. | reversible |
-| Q3 | Which core implementation is the fallback when core registers several for one contract? | **The core registration whose id is `${contract.id}.default`** (`cezar.task.header.default`), computed by one exported helper, `coreDefaultComponentId`. Other core implementations, such as a core compact header, can be chosen but are never the fallback. | Every earlier spec in this epic already names core's default this way, and so do the registry's fixtures (`cezar.fixture.task-header.default`). An id does not depend on order. "The first core registration" would, and the registry tests already register a second core implementation (`cezar.fixture.task-header.compact`). A default under another id is reported by `missingCoreDefaults`, which the slot item's gate test runs, instead of showing up at render time. | reversible |
-| Q4 | Capabilities: may a call site demand optional capabilities, and so reject a preferred implementation that lacks them? | **No, defer it.** Capabilities count through fit: a required one is part of `compatible`, which is the registry's recorded `checkComponentCompatibility` result, so a preferred implementation missing one is never used. The result hands back the chosen implementation's `capabilities`, and the call site relies on an optional one only when it is listed there (item 7's rule). | "No / defer" for a "should it also do X?" question. No call site needs it yet. A `needs` argument is additive later, and it must first answer what happens when core's default lacks the capability too, which the slot item will meet first. | reversible |
+| Q1 | Scope: the resolver only, or also the React slot that renders the result (error boundary, layout box, re-render when the registry changes) and the preference store and picker? | **The resolver only**, plus `missingCoreDefaults`, a named check that the slot item's gate test runs on the production catalog (§ Proposed Solution, point 6). The slot, core's defaults and their registration, the store and the picker are later items. | AGENTS.md (Task routing → Component implementations): "A core contract joins `CORE_COMPONENT_CONTRACTS` … in the same PR as the slot that renders it", so a slot built now has no real contract to render. Earlier specs give core's defaults to the slot item too (`2026-09-19-component-contract-api.md` § Planned consumers). The registry deferred `subscribe` to the slot, its first reactive reader (#26, Q4). The layout clause of the brief's Definition of Done is met at the resolution level here, and its rendering half lands with the slot (§ Problem Statement, the Definition of Done table). | ✅ confirmed |
+| Q2 | Where does the user's preference come from in this item? | **An argument.** The caller passes the preferred component id for this contract, or nothing. This item stores nothing. | Storing it raises questions of its own (per user or per project, browser storage or `~/.cezar`) that belong with the picker, which writes it. An argument keeps the resolver pure, so its result is deterministic by construction. The store and the resolver deploy independently, which is also why they are not bundled into one spec. | ✅ confirmed |
+| Q3 | Which core implementation is the fallback when core registers several for one contract? | **The core registration whose id is `${contract.id}.default`** (`cezar.task.header.default`), computed by one exported helper, `coreDefaultComponentId`. Other core implementations, such as a core compact header, can be chosen but are never the fallback. | Every earlier spec in this epic already names core's default this way, and so do the registry's fixtures (`cezar.fixture.task-header.default`). An id does not depend on order. "The first core registration" would, and the registry tests already register a second core implementation (`cezar.fixture.task-header.compact`). A default under another id is reported by `missingCoreDefaults`, which the slot item's gate test runs, instead of showing up at render time. | ✅ confirmed |
+| Q4 | Capabilities: may a call site demand optional capabilities, and so reject a preferred implementation that lacks them? | **No, defer it.** Capabilities count through fit: a required one is part of `compatible`, which is the registry's recorded `checkComponentCompatibility` result, so a preferred implementation missing one is never used. The result hands back the chosen implementation's `capabilities`, and the call site relies on an optional one only when it is listed there (item 7's rule). | "No / defer" for a "should it also do X?" question. No call site needs it yet. A `needs` argument is additive later, and it must first answer what happens when core's default lacks the capability too, which the slot item will meet first. | ✅ confirmed |
 
 ## 📝 Problem Statement
 
@@ -344,8 +344,8 @@ choice is not the one rendering).
 
 ## 📝 Risks & Impact Review
 
-- **A naming rule starts to matter (Q3).** Core's default must be registered as
-  `${contract.id}.default`. `coreDefaultComponentId` is the only place that spells it, and
+- **A naming rule starts to matter (Q3, confirmed by the owner on 2026-09-19).** Core's default
+  must be registered as `${contract.id}.default`. `coreDefaultComponentId` is the only place that spells it, and
   `missingCoreDefaults` reports a served contract that has no default under that id. Reversing it later means adding
   an explicit catalog field. Core's ids would not change.
 - **The fallback is proven on fixtures only, until the slot item.** Nothing registers a core
@@ -359,8 +359,8 @@ choice is not the one rendering).
   with the host code that honours them.
 - **The layout clause is half-proven here (Q1).** This item proves that removing an extension
   changes the resolution back to core's default and never leaves a contract unresolved. That the
-  slot keeps its box on screen through the swap is the slot's proof. If the owner wants the slot in
-  this PR, it is an additive phase, and the resolver does not change.
+  slot keeps its box on screen through the swap is the slot's proof. The owner confirmed this split
+  on 2026-09-19.
 - **Nothing that works is replaced.** No existing mechanism changes (AGENTS.md § Changing a
   mechanism that already works). No existing runtime file is edited: the PR adds one module and
   its tests, extends one test block and edits AGENTS.md.
