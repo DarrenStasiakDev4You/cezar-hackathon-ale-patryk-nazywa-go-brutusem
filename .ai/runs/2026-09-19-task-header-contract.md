@@ -111,3 +111,4 @@ and tracked by its own plan. Both are separate PRs by the spec's own decision, n
 - [x] 1.4 Core's default registered, and the registry provided — 75b72b33
 - [x] 1.5 The split — 40bfeb02
 - [x] 1.6 AGENTS.md — a6ab0139
+- [x] Post-review fix: remembered reference status on an idle look-up, pending scoped to the task shown, the conflict card closes only for its own request — 3264d447

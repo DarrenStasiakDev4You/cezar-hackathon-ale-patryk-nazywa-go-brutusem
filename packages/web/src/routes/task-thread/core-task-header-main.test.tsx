@@ -204,6 +204,20 @@ describe('CoreTaskHeaderMain, its intents', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="reference-status-card"]')).toBeNull())
   })
 
+  // Review of #37: another chip's request settling must not close a card the user did not press.
+  it('keeps a card open when a request it did not send settles', async () => {
+    const props = headerProps()
+    const { rerender } = render(<CoreTaskHeaderMain {...props} />)
+    fireEvent.focus(chip(534))
+    await screen.findByRole('button', { name: 'Resolve conflicts' })
+
+    const pending = { available: true, enabled: false, pending: true }
+    rerender(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, resolveConflicts: pending }} />)
+    rerender(<CoreTaskHeaderMain {...props} />)
+    expect(document.querySelector('[data-slot="reference-status-card"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Resolve conflicts' })).not.toBeNull()
+  })
+
   it('offers no Resolve conflicts while the action is not offered, and explains a refusal', async () => {
     const props = headerProps()
     const { rerender } = render(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, resolveConflicts: idle }} />)
