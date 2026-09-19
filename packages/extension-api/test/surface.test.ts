@@ -14,9 +14,17 @@ describe('@open-mercato/cezar-extension-api surface', () => {
   // type tests; this list is what exists at runtime.)
   it('exports exactly these runtime names', () => {
     expect(Object.keys(api).sort()).toEqual([
+      'ExtensionActivated',
       'ExtensionDefinitionError',
+      'ProjectChanged',
       'TaskArchive',
+      'TaskArchived',
+      'TaskCancelled',
+      'TaskCompleted',
       'TaskContinue',
+      'TaskFailed',
+      'TaskStarted',
+      'TaskStatusChanged',
       'TaskStop',
       'checkComponentCompatibility',
       'defineCommand',

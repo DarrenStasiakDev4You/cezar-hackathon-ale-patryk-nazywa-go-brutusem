@@ -3,6 +3,11 @@ import { act, cleanup, render, renderHook, waitFor } from '@testing-library/reac
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { TaskArchived, TaskCompleted, TaskStatusChanged, type TaskTransition } from '@open-mercato/cezar-extension-api'
+
+import { createEventBus, type EventBus } from '@/events/bus'
+import { EventBusProvider } from '@/events/provider'
+
 import { createUsageStore, type UsageStore } from './events'
 import { GlobalEventsProvider, useGlobalEvents, useRunUsage, useUsage } from './global-events'
 import { setApiScope } from '@open-mercato/cezar-api-client'
@@ -1080,6 +1085,108 @@ describe('useGlobalEvents — recovery', () => {
     // The pending backoff must not then build a third one on top.
     act(() => void vi.advanceTimersByTime(30_000))
     expect(FakeEventSource.instances).toHaveLength(2)
+  })
+})
+
+describe('useGlobalEvents — task transitions to the extension bus (spec 2026-09-19-extension-event-api)', () => {
+  const transition = (over: Record<string, unknown> = {}) =>
+    JSON.stringify({
+      project: BOOT,
+      id: 'r1',
+      status: 'running',
+      previousStatus: 'queued',
+      archived: false,
+      previousArchived: false,
+      ...over,
+    })
+
+  /** Mount the stream inside an EventBusProvider over `bus`. */
+  function mountWithBus(bus: EventBus) {
+    const withBus = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>
+        <EventBusProvider bus={bus}>{children}</EventBusProvider>
+      </QueryClientProvider>
+    )
+    const view = renderHook(() => useGlobalEvents(usage), { wrapper: withBus })
+    return { ...view, source: FakeEventSource.last }
+  }
+
+  it('relays the active project’s and another project’s transitions, each with its own projectId', async () => {
+    const bus = createEventBus()
+    const heard: TaskTransition[] = []
+    bus.on(TaskStatusChanged, (task) => heard.push(task))
+    const { source } = mountWithBus(bus)
+
+    source.emit('task-transition', transition())
+    source.emit('task-transition', transition({ project: 'other', id: 'r2', status: 'done', previousStatus: 'running' }))
+    await vi.waitFor(() => expect(heard).toHaveLength(2))
+
+    expect(heard).toEqual([
+      { taskId: 'r1', projectId: BOOT, status: 'running', previousStatus: 'queued' },
+      { taskId: 'r2', projectId: 'other', status: 'done', previousStatus: 'running' },
+    ])
+    // Never a cache write, and never HTTP traffic.
+    expect(client.getQueryData(queryKeys.runs.list())).toBeUndefined()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('emits the semantic events after the canonical one', async () => {
+    const bus = createEventBus()
+    const log: string[] = []
+    bus.on(TaskStatusChanged, () => log.push(TaskStatusChanged.id))
+    bus.on(TaskCompleted, () => log.push(TaskCompleted.id))
+    bus.on(TaskArchived, () => log.push(TaskArchived.id))
+    const { source } = mountWithBus(bus)
+
+    source.emit('task-transition', transition({ status: 'review', previousStatus: 'running', archived: true }))
+    await vi.waitFor(() => expect(log).toHaveLength(3))
+
+    expect(log).toEqual(['cezar.task.status-changed', 'cezar.task.completed', 'cezar.task.archived'])
+  })
+
+  it('drops a malformed frame and keeps relaying the next one', async () => {
+    const bus = createEventBus()
+    const heard: string[] = []
+    bus.on(TaskStatusChanged, ({ taskId }) => heard.push(taskId))
+    const { source } = mountWithBus(bus)
+
+    source.emit('task-transition', 'not json')
+    source.emit('task-transition', transition({ status: 'exploded' }))
+    source.emit('task-transition', JSON.stringify({ project: BOOT, id: 'r0' }))
+    source.emit('task-transition', transition({ id: 'r9' }))
+    await vi.waitFor(() => expect(heard).toHaveLength(1))
+
+    expect(heard).toEqual(['r9'])
+  })
+
+  it('keeps patching run caches when the bus throws', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const bus = createEventBus()
+    vi.spyOn(bus, 'emit').mockImplementation(() => {
+      throw new Error('bus is down')
+    })
+    client.setQueryData<ApiRun[]>(queryKeys.runs.list(), [])
+    const { source } = mountWithBus(bus)
+
+    source.emit('run', stampedRun(runRecord('r1', { status: 'running' })))
+    expect(() => source.emit('task-transition', transition())).not.toThrow()
+    source.emit('run', stampedRun(runRecord('r2', { status: 'queued' })))
+    await flushRunEvents()
+
+    expect(client.getQueryData<ApiRun[]>(queryKeys.runs.list())?.map((run) => run.id).sort()).toEqual(['r1', 'r2'])
+    expect(log).toHaveBeenCalledTimes(1)
+  })
+
+  it('still counts a frame as proof of liveness without a bus', () => {
+    vi.useFakeTimers()
+    const { source } = mount()
+
+    act(() => vi.advanceTimersByTime(30_000))
+    expect(() => source.emit('task-transition', transition())).not.toThrow()
+    act(() => vi.advanceTimersByTime(30_000))
+
+    // Within the watchdog's window thanks to that frame: no reopen.
+    expect(FakeEventSource.instances).toHaveLength(1)
   })
 })
 

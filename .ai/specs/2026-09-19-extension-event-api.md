@@ -183,8 +183,10 @@ reach it only through `context.events`.
   With a bus present (from `EventBusProvider`, `null` outside it), each parsed transition goes
   through `taskEventsFor()` and onto the bus. That happens *before* the active-project filter,
   and the filter itself does not change, so another project's transitions still reach
-  extensions. A `task-transition` never patches a cache: the `run` event that precedes it
-  already did.
+  extensions. A `task-transition` never patches a cache. The `run` event that precedes it feeds
+  the caches through the usual batch, a moment later (or never, for another project's caches), so
+  a bus listener may run before the cockpit's own caches show the new status. *(Corrected in the
+  implementation PR.)*
 - **Extension API package.** Adds `Events.off`, `Events.once`, TSDoc updates and
   `core-events.ts`: eight tokens and their payload types, exported from the barrel. No new error
   codes.
@@ -403,9 +405,12 @@ export const taskTransitionEventSchema = z.object({
   never listens for it. `BACKWARD_COMPATIBILITY.md` § 2 lists it among the workspace names. The
   server builds the frame as `z.infer<typeof taskTransitionEventSchema>`, the same schema the
   cockpit parses with, so no api-client mirror (and no `api-types.test.ts` pair) is needed.
-- **Not emitted** at boot. The snapshot is seeded *after* `reconcileLoadedRun`, so an
-  interrupted run the server rewrites from `running` to `failed` on restart emits nothing, and
-  no stream is open yet anyway.
+- **Not sent for boot recovery.** The snapshot is seeded *after* `reconcileLoadedRun`, so a
+  rewrite made while loading emits nothing. The server opens its stores with `keepLive`, and
+  `recover()` then rewrites interrupted runs through the store (`running → failed`, a re-queue),
+  which does emit `'transition'`s. They reach no client because recovery runs before any stream
+  is attached: before `startServer` for the boot project, and inside `build()` before
+  `notifyBuilt` for a lazy one. Both call sites say so. *(Corrected in the implementation PR.)*
 - **Not emitted** for a new run's creation (`queued`). Its first real transition is
   `queued → running`.
 
@@ -431,7 +436,10 @@ These rules are what they mean in practice:
 - **Answering an agent's question** (`waiting` → `running`, a run parked on a `CEZ:ASK`) is a
   status change but not a start.
 - **Accepting a review** (`review` → `done`) is a status change but not a second completion.
-- **A Continue, a send-back or an auto-resume** (any finished status → `running`) is a start.
+- **A Continue, a send-back or an auto-resume** is a start. A direct Continue goes from the
+  finished status to `running`. A deferred one (an auto-resume, a resume that waits for capacity)
+  re-queues first: `failed → queued` is a status change only, and the start is
+  `queued → running`.
 
 ### Core events
 
@@ -519,7 +527,7 @@ existing `global-events` and `routes` tests are the proof (§ Implementation Pla
 | An agent's question is answered (`waiting` → `running`) | `status-changed` only. |
 | `review` → `done` (a review accepted) | `status-changed` only. `completed` fired when the run entered `review`. |
 | `review` → `running` (sent back) → `done` | `status-changed` and `started`, then `status-changed` and `completed` again. |
-| A usage-limit parking (spec `2026-08-03-auto-resume-after-usage-limit`) | `failed` when parked, then `started` (previous `failed`) when the resume runs. `autoResumeAt` is not in the payload. |
+| A usage-limit parking (spec `2026-08-03-auto-resume-after-usage-limit`) | `failed` when parked. The resume re-queues the task (`failed → queued`, `status-changed` only), and `started` follows with previous `queued` when it runs. `autoResumeAt` is not in the payload. *(Corrected in the implementation PR: the first draft said previous `failed`.)* |
 | `queued` → `cancelled` | `status-changed` and `cancelled`, with no `started` before them. |
 | A task archived from anywhere (the UI, the CLI, the sweep, an extension) | `archived`, exactly once per `false → true`. Re-archiving an archived task changes nothing, so nothing is emitted. |
 | Status and archive change between two `touch` calls | One transition: the status events, then `archived`. |

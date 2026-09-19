@@ -2,13 +2,14 @@
 
 > **Experimental and private.** The cockpit's extension registry
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
-> extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands` is
-> honoured (spec `2026-09-19-command-api`); events, storage and components arrive in later items,
-> and every host item may still revise these types in the PR that implements them. Component
-> contracts are already checkable — `checkComponentCompatibility` runs anywhere, in your own tests
-> too (spec `2026-09-19-component-contract-api`) — while `context.components` is still
-> unimplemented. The package is versioned with the release but not published to npm.
-> Design: `.ai/specs/2026-09-18-extension-api-package.md`.
+> extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands`
+> (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`) and
+> `components` (spec `2026-09-19-component-registry`) are honoured; storage arrives in a later
+> item, and every host item may still revise these types in the PR that implements them.
+> `context.components` records implementations, while rendering and selection arrive with the slot
+> and picker items. Component contracts are checkable anywhere — `checkComponentCompatibility`
+> runs in your own tests too (spec `2026-09-19-component-contract-api`). The package is versioned
+> with the release but not published to npm. Design: `.ai/specs/2026-09-18-extension-api-package.md`.
 
 The one package an extension imports. It holds the vocabulary Cezar and its extensions share —
 manifest, lifecycle, commands, events, storage, the component registry and errors — and nothing
@@ -151,6 +152,79 @@ Continuing a task starts an agent session. That is no new power — extension co
 cockpit's origin — but it is the reason the loader must decide who may run third-party code before
 any exists.
 
+### Events
+
+`context.events` is the cockpit's event bus, seen from your extension. Events are typed tokens made
+with `defineEvent<Payload>(id)`; the payload is JSON, and a payload-less event is emitted as
+`emit(token)`.
+
+- `on(token, listener)` — calls `listener` for every later emit of the event. Returns a
+  `Disposable` that removes this one subscription.
+- `once(token, listener)` — the same, for the first later emit only.
+- `off(token, listener)` — removes every subscription of that exact function to that event made
+  through your context, `on` and `once` alike. A re-created arrow function is another listener, so
+  keep the reference or keep the `Disposable`. `off` with nothing to remove does nothing.
+- `emit(token, payload?)` — only ids under your own `${extension.id}.` prefix. You may listen to
+  any id, including one nobody emits yet: that subscription just stays silent, so an extension
+  written for a newer Cezar still runs on an older one.
+
+**Delivery.** `emit` returns before any listener runs. Events are delivered in emit order and,
+within one emit, in subscription order; a listener receives only events emitted after it
+subscribed. The payload is copied as JSON when it is emitted and every listener gets its own copy,
+so a mutation by the emitter or another listener is never seen. A payload that is not JSON (a cycle,
+a `bigint`) makes `emit` throw `invalid-input`, and nothing is delivered.
+
+**Isolation.** A listener that throws, or returns a promise that rejects, is reported
+(`[cezar:extensions] <extension>: listener for <event> failed`) and affects nothing else: the
+emitter, the other listeners and your extension's status are untouched.
+
+**Ownership.** An extension emits only into its own namespace, and never a core `cezar.*` event —
+even a built-in whose own id is under `cezar`. Anything else throws `namespace-violation`. Names
+cannot collide, because every id sits under exactly one owner's prefix. Any extension may listen to
+any event, so **never put a secret in a payload**.
+
+**Storms.** An emit made synchronously from inside a listener counts toward a cascade depth; past
+16, it is dropped and reported. After 1,000 listener calls without a break the bus yields to the
+page and resumes in its next task, so a busy extension cannot freeze rendering.
+
+**Cleanup.** Every subscription is disposed when your extension deactivates — including deliveries
+already queued for it — and when a failed or timed-out `activate` ends. While `deactivate()` runs,
+your listeners may still be called. Afterwards `on`, `once`, `off` and `emit` throw `disposed`.
+
+**Core events.** Emitted by Cezar only and exported from this package with their payload types:
+
+| Token | Id | Payload | When |
+| --- | --- | --- | --- |
+| `TaskStatusChanged` | `cezar.task.status-changed` | `TaskTransition` | Every status change of any task, in any registered project. Always first for its change. |
+| `TaskStarted` | `cezar.task.started` | `TaskTransition` | Into `running` from anything but `running`/`waiting`: a start, a Continue, a send-back, an auto-resume. A deferred resume (an auto-resume, or one that waits for capacity) re-queues first, so its start comes from `queued`. Answering an agent's question is not a start. |
+| `TaskCompleted` | `cezar.task.completed` | `TaskTransition` | Into `done` or `review` from outside that pair: a successful finish. Accepting a review (`review → done`) is not a second one. |
+| `TaskFailed` | `cezar.task.failed` | `TaskTransition` | Into `failed`, a usage-limit parking included. |
+| `TaskCancelled` | `cezar.task.cancelled` | `TaskTransition` | Into `cancelled`. |
+| `TaskArchived` | `cezar.task.archived` | `TaskEvent` | Archived, from anywhere; last for its change. Restoring emits nothing. |
+| `ProjectChanged` | `cezar.project.changed` | `ProjectChange` | The registered project the cockpit shows changed. `null` on a page that belongs to no project. Starts from `null`; no replay and no getter. |
+| `ExtensionActivated` | `cezar.extension.activated` | `{ extensionId, version }` | An extension became active — after its own listeners are live, so it hears its own activation. Not replayed for extensions that activate later. |
+
+A `TaskEvent` is `{ taskId, projectId, status }` — ids and statuses only, never a prompt or a
+title — and a `TaskTransition` adds `previousStatus`. Both work as a task command's input:
+
+```ts
+import { TaskArchive, TaskCompleted } from '@open-mercato/cezar-extension-api'
+
+// Auto-archive every task that finishes successfully. Archiving twice is harmless (see below).
+context.events.on(TaskCompleted, (task) => {
+  void context.commands.execute(TaskArchive, task)
+})
+```
+
+Two things to design for:
+
+- **Each open cockpit reacts.** Every page (a second tab, a phone) receives the same task events
+  and runs its own extensions, so a reaction runs once per open cockpit. **Never trigger a
+  non-idempotent action from a task event** — `TaskContinue` would start one session per page.
+- **A disconnect gap is not replayed.** Transitions that happen while the page's connection to the
+  server is down are lost; everything after the reconnect is exact. A task event is a nudge, not a
+  ledger: when completeness matters, read the current state instead.
+
 ### Storage
 
 `context.storage` is async, private to the extension and holds JSON values. `get<T>()` is an
@@ -164,6 +238,22 @@ implementation of a core contract. Providing never selects: the user picks an im
 contract, core's default always stays available, and a replacement that throws while rendering
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
 goes through the same check.
+
+**Status.** `context.components` records implementations: the cockpit keeps every one per contract,
+with the id of the extension that provided it. Rendering and selection arrive with the slot and
+picker items, so nothing renders a provided implementation yet, and the cockpit serves no core
+contract yet.
+
+**What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
+deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a
+malformed implementation id, `namespace-violation` for an id outside `${extension.id}.`,
+`duplicate-registration` for an id already provided, and `invalid-input` for a field of the wrong
+type (an empty `title`, a `component` that is not a function or an object, `capabilities` that is
+not an array of strings). An implementation that does not fit is kept but never rendered, and is
+reported as a diagnostic in the browser console instead of thrown: another major
+(`contract-version-mismatch`), a missing required capability (`missing-capability`), or a contract
+this Cezar does not serve (`unknown-contract`). So one outdated component never fails your
+activation.
 
 A contract made with `defineComponentContract<Props>(id, options)` has three parts:
 
@@ -205,7 +295,9 @@ context.components.provide(Greeting, {
 })
 ```
 
-and its test (`test/example.test.ts`), which checks it as a host does:
+`example.hello.greeting` is the example's own contract, which the cockpit does not serve: on a real
+host this registration is recorded as `unknown-contract`, and the example is exercised against the
+test context only. Its test (`test/example.test.ts`) checks it as a host does:
 
 ```ts
 const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
@@ -235,7 +327,7 @@ notice; at publication each core contract is listed with its major in `BACKWARD_
 `isExtensionError(error, code?)` recognises every `ExtensionErrorCode` by its `code`, never by
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
 and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
-malformed command token); `namespace-violation`, `duplicate-registration`, `command-not-found`,
+malformed command, event or component contract token, or a malformed component implementation id); `namespace-violation`, `duplicate-registration`, `command-not-found`,
 `contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
 `command-timeout` come from the host. The union grows additively: a copy of this package older than
 the host does not recognise the newer codes.

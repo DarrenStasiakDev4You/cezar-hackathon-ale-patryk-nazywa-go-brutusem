@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
-import { defineCommand, isExtensionError, type CommandToken, type Disposable } from '@open-mercato/cezar-extension-api'
+import { defineCommand, isExtensionError, type CommandToken } from '@open-mercato/cezar-extension-api'
 
-import { fixtureManifest } from '../extensions/registry.fixtures'
-import type { ExtensionScope } from '../extensions/registry'
+import { fakeScope } from '../extensions/registry.fixtures'
 import { CommandError, createCommandRegistry, type CoreCommandOptions } from './registry'
 
 afterEach(() => {
@@ -231,45 +230,6 @@ describe('core registration and execution', () => {
     await expect(registry.execute(Hidden, { text: 'hi' })).resolves.toBe('HI')
   })
 })
-
-/**
- * A recording ExtensionScope with the registry's contract: `track` returns an idempotent handle,
- * `end()` disposes what is still tracked (newest first) and from then on every call fails with
- * `disposed`.
- */
-function fakeScope(extensionId: string) {
-  let live = true
-  const tracked = new Set<Disposable>()
-  const disposedError = () =>
-    Object.assign(new Error(`Extension "${extensionId}" has been deactivated`), { code: 'disposed' as const })
-  const scope: ExtensionScope = {
-    extension: fixtureManifest(extensionId),
-    track(registration) {
-      if (!live) {
-        registration.dispose()
-        throw disposedError()
-      }
-      const handle: Disposable = {
-        dispose() {
-          if (tracked.delete(handle)) registration.dispose()
-        },
-      }
-      tracked.add(handle)
-      return handle
-    },
-    assertLive() {
-      if (!live) throw disposedError()
-    },
-  }
-  return {
-    scope,
-    tracked,
-    end() {
-      live = false
-      for (const handle of [...tracked].reverse()) handle.dispose()
-    },
-  }
-}
 
 const AlphaPing = defineCommand<[count: number], string>('acme.alpha.ping')
 const BetaPing = defineCommand<[count: number], string>('acme.beta.ping')

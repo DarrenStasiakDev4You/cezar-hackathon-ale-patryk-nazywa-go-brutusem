@@ -30,6 +30,20 @@ export {
   type TaskRef,
   type TaskStopResult,
 } from './core-commands.ts'
+export {
+  ExtensionActivated,
+  ProjectChanged,
+  TaskArchived,
+  TaskCancelled,
+  TaskCompleted,
+  TaskFailed,
+  TaskStarted,
+  TaskStatusChanged,
+  type ExtensionActivation,
+  type ProjectChange,
+  type TaskEvent,
+  type TaskTransition,
+} from './core-events.ts'
 export { ExtensionDefinitionError, isExtensionError, type ExtensionErrorCode } from './errors.ts'
 export { defineEvent, type Events, type EventToken } from './events.ts'
 export { defineExtension, type Extension } from './extension.ts'

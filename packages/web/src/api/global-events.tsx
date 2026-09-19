@@ -16,7 +16,10 @@ import {
   type GlobalEvent,
   type UsageStore,
 } from './events'
-import { apiPath, getApiScope, queryScope } from '@open-mercato/cezar-api-client'
+import { apiPath, getApiScope, queryScope, taskTransitionEventSchema } from '@open-mercato/cezar-api-client'
+import type { EventBus } from '@/events/bus'
+import { useEventBus } from '@/events/provider'
+import { emitTaskEvents } from '@/events/task-events'
 import { queryKeys, useHealthSubscription, workspaceQueryKeys } from './queries'
 import { RUN_EVENT_BATCH_MS } from './run-events'
 import type {
@@ -425,6 +428,8 @@ function applyGlobalEvent(queryClient: QueryClient, usage: UsageStore, event: Gl
  */
 export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void {
   const queryClient = useQueryClient()
+  // `null` outside EventBusProvider: then `task-transition` frames are only proof of liveness.
+  const bus = useEventBus()
 
   useEffect(() => {
     // jsdom has no EventSource, and neither would a prerender. Read it off `globalThis` so the
@@ -613,6 +618,17 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
         })
       }
 
+      // Task transitions (spec 2026-09-19-extension-event-api) feed the extension bus for EVERY
+      // project: extensions hear every project's tasks, so this listener applies no
+      // active-project filter. It never patches a cache. The `run` frame written just before it
+      // feeds the caches through the run batch a moment later (and never another project's), so a
+      // bus listener may run before the caches show the new status.
+      current.addEventListener('task-transition', (event) => {
+        if (disposed || source !== current) return
+        lastFrameAt = Date.now()
+        if (bus !== null) relayTaskTransition(bus, (event as MessageEvent<string>).data)
+      })
+
       current.addEventListener('provider-status', (event) => {
         if (disposed || source !== current) return
         lastFrameAt = Date.now()
@@ -710,7 +726,28 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
       source = null
       current?.close()
     }
-  }, [queryClient, usage, url])
+  }, [queryClient, usage, url, bus])
+}
+
+/**
+ * One `task-transition` frame → its `cezar.task.*` events on the bus. Never throws into the
+ * message loop: a malformed frame is dropped and a throwing bus is logged, so either costs this
+ * one frame — never the stream, the `run` patching or the other listeners.
+ */
+function relayTaskTransition(bus: EventBus, data: string): void {
+  let payload: unknown
+  try {
+    payload = JSON.parse(data)
+  } catch {
+    return
+  }
+  const parsed = taskTransitionEventSchema.safeParse(payload)
+  if (!parsed.success) return
+  try {
+    emitTaskEvents(bus, parsed.data)
+  } catch (error) {
+    console.error('[cezar:extensions] relaying a task transition to the event bus failed', error)
+  }
 }
 
 const UsageContext = createContext<UsageStore | null>(null)

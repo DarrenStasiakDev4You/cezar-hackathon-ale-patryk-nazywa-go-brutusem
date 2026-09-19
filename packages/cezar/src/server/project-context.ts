@@ -229,6 +229,9 @@ export class ProjectContexts {
         );
         await reclaimWorktrees(project.root, store, keep).catch(() => [] as string[]);
       }
+      // Before `notifyBuilt` attaches this store to the open workspace streams: recovery's rewrites
+      // are store `'transition'`s, and no client may hear them as task events (spec
+      // 2026-09-19-extension-event-api — `task-transition` is never sent for boot recovery).
       await manager.recover();
       // Which repository this project IS (#945), so the referenced tier stops adopting another
       // repo's PR/issue as a task's subject. Fire-and-forget on purpose — it costs a `gh` spawn
