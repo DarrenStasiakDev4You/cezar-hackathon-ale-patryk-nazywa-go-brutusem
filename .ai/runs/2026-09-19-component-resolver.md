@@ -58,8 +58,8 @@ and followed as written.
 
 ### Phase 1: The resolver
 
-- [ ] 1.1 resolveComponent and coreDefaultComponentId
-- [ ] 1.2 missingCoreDefaults
+- [x] 1.1 resolveComponent and coreDefaultComponentId — 22473f18
+- [x] 1.2 missingCoreDefaults — 466afbe1
 
 ### Phase 2: The Definition of Done proof
 
