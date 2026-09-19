@@ -1,6 +1,7 @@
 import { ExtensionActivated, type Extension } from '@open-mercato/cezar-extension-api'
 
 import type { CommandRegistry } from '../commands/registry'
+import type { CockpitComponentRegistry } from '../component-registry/registry'
 import type { EventBus } from '../events/bus'
 import {
   createExtensionRegistry,
@@ -12,7 +13,7 @@ import {
 
 /**
  * Placeholder services until each service's item lands and replaces its placeholder behind the
- * same `services(scope)` seam (commands and events have; storage and components have not).
+ * same `services(scope)` seam (commands, events and components have; storage has not).
  *
  * Every method first calls `scope.assertLive()` (so a call after deactivation fails with
  * `disposed`, as the contract says), then fails with
@@ -43,18 +44,21 @@ export const unavailableServices: ExtensionRegistryOptions['services'] = (scope)
 
 /**
  * The services the cockpit gives each activation: the real `commands` — the command registry's
- * extension view (spec `2026-09-19-command-api`) — and the real `events` — the event bus's
- * extension view (spec `2026-09-19-extension-event-api`), with storage and components still the
- * {@link unavailableServices} placeholders until their items land.
+ * extension view (spec `2026-09-19-command-api`) — the real `events` — the event bus's extension
+ * view (spec `2026-09-19-extension-event-api`) — and the real `components` — the component
+ * registry's extension view (spec `2026-09-19-component-registry`), with storage still the
+ * {@link unavailableServices} placeholder until its item lands.
  */
 export function cockpitServices(deps: {
   readonly commands: CommandRegistry
   readonly events: EventBus
+  readonly components: CockpitComponentRegistry
 }): ExtensionRegistryOptions['services'] {
   return (scope) => ({
     ...unavailableServices(scope),
     commands: deps.commands.forExtension(scope),
     events: deps.events.forExtension(scope),
+    components: deps.components.forExtension(scope),
   })
 }
 

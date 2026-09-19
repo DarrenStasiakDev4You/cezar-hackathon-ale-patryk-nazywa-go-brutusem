@@ -9,12 +9,15 @@ import {
   isExtensionError,
   TaskArchive,
   TaskContinue,
+  type ComponentImplementation,
   type Extension,
   type ExtensionActivation,
   type ExtensionContext,
 } from '@open-mercato/cezar-extension-api'
 import { registerCoreCommands } from '../commands/core-commands'
 import { createCommandRegistry } from '../commands/registry'
+import { CORE_COMPONENT_CONTRACTS } from '../component-registry/core-contracts'
+import { createComponentRegistry, type CockpitComponentRegistry } from '../component-registry/registry'
 import { createEventBus, type EventErrorReport } from '../events/bus'
 import { BUILTIN_EXTENSIONS } from './builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost, unavailableServices } from './host'
@@ -39,20 +42,24 @@ function thrown(run: () => unknown): unknown {
 }
 
 /**
- * The boot order `main.tsx` uses: the command registry with the core commands and the event bus
- * first, then the host, with the bus's lifecycle events.
+ * The boot order `main.tsx` uses: the command registry with the core commands, the event bus and
+ * the component registry first, then the host, with the bus's lifecycle events.
  */
-function bootCockpit(extensions: readonly Extension[], busOptions: Parameters<typeof createEventBus>[0] = {}) {
+function bootCockpit(
+  extensions: readonly Extension[],
+  busOptions: Parameters<typeof createEventBus>[0] = {},
+  components: CockpitComponentRegistry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS }),
+) {
   const commands = createCommandRegistry()
   registerCoreCommands(commands, { queryClient: new QueryClient() })
   const events = createEventBus(busOptions)
   const host = startExtensionHost({
     extensions,
-    services: cockpitServices({ commands, events }),
+    services: cockpitServices({ commands, events, components }),
     onStatusChange: extensionLifecycleEvents(events),
     onError: () => {},
   })
-  return { ...host, commands, events }
+  return { ...host, commands, events, components }
 }
 
 describe('startExtensionHost', () => {
@@ -350,8 +357,7 @@ describe('cockpitServices', () => {
     expect(beta?.commands.has(Broken)).toBe(true)
   })
 
-  it('keeps storage and components on the placeholders', async () => {
-    const list = defineComponentContract<Record<string, never>>('cezar.fixture.list', { version: 1 })
+  it('keeps storage on the placeholder', async () => {
     let context: ExtensionContext | undefined
     const { ready } = boot([
       fixture('acme.alpha', {
@@ -363,10 +369,120 @@ describe('cockpitServices', () => {
     await ready
     const live = context as ExtensionContext
 
-    expect(() => live.components.provide(list, { id: 'acme.alpha.list', title: 'List', component: () => null })).toThrow(
-      'context.components is not available in this Cezar version yet',
-    )
     await expect(live.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
+  })
+})
+
+describe('the components service', () => {
+  interface TaskHeaderProps {
+    readonly title: string
+  }
+
+  /** The brief's `task.header@1`, as a fixture: the production catalog serves no contract yet. */
+  const TaskHeader = defineComponentContract<TaskHeaderProps>('cezar.fixture.task-header', {
+    version: 1,
+    requiredCapabilities: ['shows-title'],
+  })
+
+  const header = (id: string, title: string): ComponentImplementation<TaskHeaderProps> => ({
+    id,
+    title,
+    capabilities: ['shows-title'],
+    component: () => null,
+  })
+
+  /** An extension that provides `<id>.task-header` from `activate()`. */
+  const provider = (extensionId: string, title: string) =>
+    fixture(extensionId, {
+      activate(context) {
+        context.components.provide(TaskHeader, header(`${extensionId}.task-header`, title))
+      },
+    })
+
+  /** A cockpit serving the fixture contract, with core's default registered before the host starts. */
+  function bootServingHeader(extensions: readonly Extension[]) {
+    const components = createComponentRegistry({ contracts: [TaskHeader] })
+    components.register(TaskHeader, header('cezar.fixture.task-header.default', 'Task header'))
+    return bootCockpit(extensions, {}, components)
+  }
+
+  const provenance = (components: CockpitComponentRegistry) =>
+    components.list('cezar.fixture.task-header').map((registration) => [registration.componentId, registration.extensionId])
+
+  it('DoD, end to end: one contract lists a core and two extension implementations, with their provenance', async () => {
+    const { components, ready } = bootServingHeader([
+      provider('acme.jira', 'Jira header'),
+      provider('acme.compact', 'Compact header'),
+    ])
+
+    await ready
+
+    expect(provenance(components)).toEqual([
+      ['cezar.fixture.task-header.default', null],
+      ['acme.jira.task-header', 'acme.jira'],
+      ['acme.compact.task-header', 'acme.compact'],
+    ])
+    expect(components.list('cezar.fixture.task-header').map((registration) => registration.metadata.title)).toEqual([
+      'Task header',
+      'Jira header',
+      'Compact header',
+    ])
+    expect(components.listUsable(TaskHeader)).toEqual(components.list('cezar.fixture.task-header'))
+  })
+
+  it('removes an extension’s implementation when that extension deactivates', async () => {
+    const { registry, components, ready } = bootServingHeader([
+      provider('acme.jira', 'Jira header'),
+      provider('acme.compact', 'Compact header'),
+    ])
+    await ready
+
+    await registry.deactivate('acme.jira')
+
+    expect(provenance(components)).toEqual([
+      ['cezar.fixture.task-header.default', null],
+      ['acme.compact.task-header', 'acme.compact'],
+    ])
+  })
+
+  it('fails only the extension that provides the same id twice, with duplicate-registration', async () => {
+    const { registry, components, ready } = bootServingHeader([
+      provider('acme.jira', 'Jira header'),
+      fixture('acme.twice', {
+        activate(context) {
+          context.components.provide(TaskHeader, header('acme.twice.task-header', 'Twice'))
+          context.components.provide(TaskHeader, header('acme.twice.task-header', 'Twice again'))
+        },
+      }),
+      provider('acme.compact', 'Compact header'),
+    ])
+
+    await ready
+
+    expect(registry.get('acme.twice')).toMatchObject({ status: 'failed', error: { code: 'duplicate-registration' } })
+    expect(registry.get('acme.jira')?.status).toBe('active')
+    expect(registry.get('acme.compact')?.status).toBe('active')
+    // The failed activation's first registration went with it.
+    expect(provenance(components)).toEqual([
+      ['cezar.fixture.task-header.default', null],
+      ['acme.jira.task-header', 'acme.jira'],
+      ['acme.compact.task-header', 'acme.compact'],
+    ])
+  })
+
+  it('keeps an extension active when the production catalog does not serve its contract, and reports it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { registry, components, ready } = bootCockpit([provider('acme.jira', 'Jira header')])
+
+    await ready
+
+    expect(registry.get('acme.jira')?.status).toBe('active')
+    expect(components.get('acme.jira.task-header')).toMatchObject({
+      compatible: false,
+      issues: [{ code: 'unknown-contract', contractId: 'cezar.fixture.task-header' }],
+    })
+    expect(components.listUsable(TaskHeader)).toEqual([])
+    expect(warn).toHaveBeenCalledTimes(1)
   })
 })
 
