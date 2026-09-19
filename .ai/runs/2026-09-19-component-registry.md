@@ -64,6 +64,8 @@ and fit. The spec's Q1–Q4 decisions are owner-confirmed and followed as writte
 
 ## Progress
 
+PR: #28
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: The registry, core side
