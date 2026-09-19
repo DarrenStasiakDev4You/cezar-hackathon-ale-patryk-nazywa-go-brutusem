@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ProjectListEntry, RunIndexEntry } from '@open-mercato/cezar-api-client'
 import { ListViewProvider, useListView } from '@/components/list-view'
 import { __clearRememberedStatusesForTests, workspaceQueryKeys } from '@/api/queries'
@@ -222,13 +223,15 @@ function stubFetch({
 function renderPage(client = createQueryClient(), entry = '/tasks') {
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[entry]}>
-        <ListViewProvider>
-          <GlobalTasksRoute />
-          <Toaster />
-          <LocationProbe />
-        </ListViewProvider>
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={[entry]}>
+          <ListViewProvider>
+            <GlobalTasksRoute />
+            <Toaster />
+            <LocationProbe />
+          </ListViewProvider>
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }
@@ -506,12 +509,14 @@ describe('global tasks page', () => {
       stubFetch()
       render(
         <QueryClientProvider client={createQueryClient()}>
-          <MemoryRouter initialEntries={['/tasks?archived=1']}>
-            <ListViewProvider>
-              <GlobalTasksRoute />
-              <SharedViewProbe />
-            </ListViewProvider>
-          </MemoryRouter>
+          <CommandsProvider>
+            <MemoryRouter initialEntries={['/tasks?archived=1']}>
+              <ListViewProvider>
+                <GlobalTasksRoute />
+                <SharedViewProbe />
+              </ListViewProvider>
+            </MemoryRouter>
+          </CommandsProvider>
         </QueryClientProvider>,
       )
 
@@ -752,6 +757,36 @@ describe('global tasks page', () => {
       expect(posted?.path).toBe('/api/v1/p/api/runs/a1/messages')
       expect(posted?.body).toMatchObject({ text: resolveConflictsPrompt(42) })
     })
+  })
+
+  it('reopens a FINISHED task in its own project to resolve a conflict', async () => {
+    // A task parked after its session ended has no live session to message: the prompt goes
+    // through `cezar.task.continue`, and the explicit project is what keeps it off the boot one.
+    stubFetch({
+      runs: RUNS.map((run) =>
+        run.id === 'a1' ? { ...run, status: 'done' as const, finishedAt: '2026-07-14T11:00:00Z' } : run,
+      ),
+      refStatus: { api: { prs: { 42: 'ready', 40: 'ready' }, conflicts: [42] } },
+    })
+    renderPage()
+    await screen.findByText('Add checkout endpoint')
+
+    const chip = await waitFor(() => {
+      const found = document.querySelector('[data-slot="pr-chip"][data-conflicting="true"]')
+      if (!found) throw new Error('the chip has not learned about the conflict yet')
+      return found as HTMLElement
+    })
+    fireEvent.focus(chip)
+    const button = await waitFor(() => screen.getByRole('button', { name: 'Resolve conflicts' }))
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false))
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      const posted = sent.find((request) => request.method === 'POST' && request.path.endsWith('/continue'))
+      expect(posted?.path).toBe('/api/v1/p/api/runs/a1/continue')
+      expect(posted?.body).toEqual({ text: resolveConflictsPrompt(42) })
+    })
+    expect(sent.some((request) => request.path.endsWith('/messages'))).toBe(false)
   })
 
   it('leaves every chip neutral when the forge cannot be reached', async () => {
@@ -1005,6 +1040,72 @@ describe('global tasks page', () => {
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('still running'))
     // Rolled back: the row is still in the Active list.
     await waitFor(() => expect(rowIds()).toEqual(['a1', 'w1', 'i1']))
+  })
+
+  /** GET requests for the cross-project index since `from`. */
+  const indexReads = (from = 0) =>
+    sent.slice(from).filter((request) => request.method === 'GET' && request.path === '/api/v1/workspace/runs-index')
+
+  /** Another finished row's archive toggle — every row's toggles share the page's busy state. */
+  const otherToggle = () =>
+    document
+      .querySelector('[data-slot="global-task-row"][data-run-id="i2"]')!
+      .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!
+
+  it('an archive settles on ONE index refetch, and the toggles unlock once it lands', async () => {
+    stubFetch({
+      runs: [...RUNS, { ...RUNS[2]!, id: 'i2', title: 'Pin the runner', createdAt: '2026-07-14T07:00:00Z' }],
+    })
+    // From here on, the index answers only when the test says so.
+    const answer = vi.mocked(fetch).getMockImplementation()!
+    let gate: Promise<void> | undefined
+    let releaseIndex: (() => void) | undefined
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await answer(input, init)
+      if (gate !== undefined && String(input) === '/api/v1/workspace/runs-index') await gate
+      return response
+    })
+    renderPage()
+    await screen.findByText('Bump the runner')
+    const before = sent.length
+    gate = new Promise<void>((resolve) => (releaseIndex = resolve))
+
+    fireEvent.click(
+      document
+        .querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
+        .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!,
+    )
+
+    // The row moves on the click; the toggles wait for the fresh index.
+    await waitFor(() => expect(rowIds()).toEqual(['a1', 'w1', 'i2']))
+    await waitFor(() => expect(indexReads(before)).toHaveLength(1))
+    expect(otherToggle().disabled).toBe(true)
+
+    releaseIndex?.()
+
+    await waitFor(() => expect(otherToggle().disabled).toBe(false))
+    expect(rowIds()).toEqual(['a1', 'w1', 'i2'])
+    // Settled by the command's refetch alone — the page did not ask a second time.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(indexReads(before)).toHaveLength(1)
+  })
+
+  it('a failed archive rolls back and re-reads the index itself', async () => {
+    // Not a 409: the command leaves the caches alone, so any re-read is the page's reconcile.
+    stubFetch({ archiveStatus: 500 })
+    renderPage()
+    await screen.findByText('Bump the runner')
+    const before = sent.length
+
+    fireEvent.click(
+      document
+        .querySelector('[data-slot="global-task-row"][data-run-id="i1"]')!
+        .querySelector<HTMLButtonElement>('[data-action="archive-run"]')!,
+    )
+
+    await waitFor(() => expect(screen.getByRole('status').textContent).toContain('still running'))
+    await waitFor(() => expect(rowIds()).toEqual(['a1', 'w1', 'i1']))
+    await waitFor(() => expect(indexReads(before).length).toBeGreaterThanOrEqual(1))
   })
 
   it('picks up a read receipt made elsewhere, without a page refresh', async () => {

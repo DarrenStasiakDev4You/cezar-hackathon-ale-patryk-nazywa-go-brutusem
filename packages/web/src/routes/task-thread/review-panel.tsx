@@ -9,9 +9,11 @@ import {
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { ApiError, continueRun, createRunPr } from '@/api/client'
+import { ApiError, createRunPr } from '@/api/client'
 import { queryKeys } from '@/api/queries'
 import type { ApiRun, RunStatus } from '@open-mercato/cezar-api-client'
+import { TaskContinue } from '@open-mercato/cezar-extension-api'
+import { useCommands } from '@/commands/provider'
 import { TwinkleBackdrop } from '@/components/centered-state'
 import { RunDiff } from '@/components/run-diff'
 import { Button } from '@/components/ui/button'
@@ -71,26 +73,26 @@ function ReviewActions({ run }: { run: ApiRun }) {
   const [manual, setManual] = useState<string | null>(null)
   const finish = useFinishRun(run.id)
   const continuation = useContinuationProvider(run)
+  const commands = useCommands()
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
 
   // Legacy send-back semantics verbatim (web/app.js `data-action="send-back"`): the notes go
   // back into the SAME session via continue, prefixed `Review feedback:` — the run leaves
   // `review`, works, and gates again. On success the status flip unmounts this panel.
+  // `cezar.task.continue` owns the request and the refetch; this mutation keeps only the draft
+  // seam, the pending state and the toast, and — as before — resolves once the server accepted.
   const sendBack = useMutation({
     mutationFn: async (text: string) => {
       if (!continuation.canContinue) return null
       // Through the draft's submit seam: the notes are dropped once they have really gone back,
       // and a rejected send-back leaves them in the box AND in the store.
       return draft.submit(() =>
-        continueRun(run.id, {
+        commands.execute(TaskContinue, {
+          taskId: run.id,
           text: `Review feedback:\n${text}`,
           runner: continuation.runnerOverride,
         }),
       )
-    },
-    onSuccess: (result) => {
-      if (result === null) return
-      invalidate()
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })

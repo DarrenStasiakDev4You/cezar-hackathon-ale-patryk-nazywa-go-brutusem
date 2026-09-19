@@ -3,6 +3,7 @@ import { cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ApiRun, RunStatus } from '@open-mercato/cezar-api-client'
 
 import { deliveryPath, useDeliverPrompt } from './deliver-prompt'
@@ -83,7 +84,11 @@ async function renderDeliver(record: ApiRun, overrides: Record<string, () => Res
       return { action, deliver: useDeliverPrompt(record, action) }
     },
     {
-      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <CommandsProvider>{children}</CommandsProvider>
+        </QueryClientProvider>
+      ),
     },
   )
   // Provider discovery gates `continueWith`; wait for it so a rejection can only be the server's.

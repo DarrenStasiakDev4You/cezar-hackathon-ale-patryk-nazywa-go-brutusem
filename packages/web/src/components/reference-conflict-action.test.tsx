@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { resolveConflictsPrompt } from '@/routes/task-thread/run-actions'
 
@@ -78,8 +79,10 @@ const run = (status: RunStatus, extra: Partial<ApiRun> = {}): ApiRun => ({
 function renderButton(record: ApiRun) {
   return render(
     <QueryClientProvider client={createQueryClient()}>
-      <ResolveConflictsButton run={record} prNumber={864} />
-      <Toaster />
+      <CommandsProvider>
+        <ResolveConflictsButton run={record} prNumber={864} />
+        <Toaster />
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }

@@ -1,9 +1,9 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 
-import { ApiError } from '@/api/client'
 import { runQueryOptions, useSendMessage } from '@/api/queries'
 import type { ApiRun, AttachmentInput, RunStatus } from '@open-mercato/cezar-api-client'
+import { apiErrorOf } from '@/commands/errors'
 
 import type { ContinueAction } from './follow-up-engine'
 import { lastSessionId } from './run-actions'
@@ -60,7 +60,9 @@ export function useDeliverPrompt(run: ApiRun, continueAction: ContinueAction): D
       try {
         return await deliver(attempted)
       } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 409) throw error
+        // Either path's 409: the message's own `ApiError`, or the one behind the continue
+        // command's `command-failed`.
+        if (apiErrorOf(error)?.status !== 409) throw error
         let fresh: ApiRun
         try {
           fresh = await queryClient.fetchQuery({ ...runQueryOptions(run.id), staleTime: 0 })

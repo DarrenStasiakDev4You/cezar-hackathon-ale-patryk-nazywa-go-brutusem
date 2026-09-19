@@ -16,6 +16,7 @@ export {
   TaskStop,
   type TaskArchiveInput,
   type TaskArchiveResult,
+  type TaskAttachment,
   type TaskContinueInput,
   type TaskContinueResult,
   type TaskRef,

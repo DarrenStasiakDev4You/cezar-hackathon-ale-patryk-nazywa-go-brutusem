@@ -1,12 +1,14 @@
-import { QueryClient } from '@tanstack/react-query'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryObserver } from '@tanstack/react-query'
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
+import type { AttachmentInput } from '@open-mercato/cezar-api-client'
 import {
   TaskArchive,
   TaskContinue,
   TaskStop,
   isExtensionError,
   type TaskArchiveInput,
+  type TaskAttachment,
   type TaskContinueInput,
 } from '@open-mercato/cezar-extension-api'
 
@@ -85,6 +87,70 @@ describe('cezar.task.continue', () => {
 
     expect(sent).toEqual([{ path: '/api/v1/p/web/runs/r1/continue', method: 'POST', body: { runner: 'codex' } }])
     expect(keys()).toEqual([['workspace', 'runs-index'], ['default', 'runs'], ['web', 'runs', 'list']])
+  })
+
+  const attachment = { mediaType: 'image/png', data: 'iVBORw0KGgo=', name: 'shot.png' }
+  const full = {
+    runner: 'codex',
+    model: 'gpt-5.1-codex',
+    agentProfile: 'work',
+    text: 'Fix the failing test.',
+    attachments: [attachment],
+  } satisfies Omit<TaskContinueInput, 'taskId'>
+  const fullBody = {
+    text: 'Fix the failing test.',
+    images: [attachment],
+    runner: 'codex',
+    model: 'gpt-5.1-codex',
+    agentProfile: 'work',
+  }
+
+  it('sends the composer’s whole request — prompt, files, runner, model and account', async () => {
+    const sent = stubFetch()
+    const { registry } = setup()
+
+    await registry.execute(TaskContinue, { taskId: 'r1', ...full })
+    await registry.execute(TaskContinue, { taskId: 'r1', projectId: 'web', ...full })
+
+    expect(sent).toEqual([
+      { path: '/api/v1/runs/r1/continue', method: 'POST', body: fullBody },
+      { path: '/api/v1/p/web/runs/r1/continue', method: 'POST', body: fullBody },
+    ])
+  })
+
+  it('omits a blank prompt and an empty file list, and keeps the "auto" model', async () => {
+    const sent = stubFetch()
+    const { registry } = setup()
+
+    await registry.execute(TaskContinue, { taskId: 'r1', text: '  \n ', attachments: [], model: '' })
+
+    expect(sent).toEqual([{ path: '/api/v1/runs/r1/continue', method: 'POST', body: { model: '' } }])
+  })
+
+  it('sends a file with no name without one', async () => {
+    const sent = stubFetch()
+    const { registry } = setup()
+
+    await registry.execute(TaskContinue, {
+      taskId: 'r1',
+      attachments: [{ mediaType: 'application/pdf', data: 'JVBERi0=' }],
+    })
+
+    expect(sent[0]?.body).toEqual({ images: [{ mediaType: 'application/pdf', data: 'JVBERi0=' }] })
+  })
+
+  it('ignores unknown keys', async () => {
+    const sent = stubFetch()
+    const { registry } = setup()
+
+    await registry.execute(TaskContinue, { taskId: 'r1', text: 'Go on.', temperature: 0.2 } as TaskContinueInput)
+
+    expect(sent[0]?.body).toEqual({ text: 'Go on.' })
+  })
+
+  it('mirrors the contract’s attachment shape in both directions', () => {
+    expectTypeOf<TaskAttachment>().toExtend<AttachmentInput>()
+    expectTypeOf<AttachmentInput>().toExtend<TaskAttachment>()
   })
 })
 
@@ -169,6 +235,44 @@ describe('input validation', () => {
     expect(sent).toEqual([])
   })
 
+  const secret = 'do-not-echo-this-value'
+  const file = (overrides: Record<string, unknown>) => ({ mediaType: 'image/png', data: 'iVBORw0KGgo=', ...overrides })
+
+  it.each<[string, Record<string, unknown>, string]>([
+    ['a numeric model', { model: 1 }, 'model must be a string of at most 200 characters when present'],
+    ['a 201-character model', { model: `${secret}${'m'.repeat(201)}` }, 'model must be a string of at most 200 characters when present'],
+    ['an over-long account', { agentProfile: `${secret}${'a'.repeat(64)}` }, 'agentProfile must be a string of at most 64 characters when present'],
+    ['a non-string prompt', { text: { secret } }, 'text must be a string of at most 100000 characters when present'],
+    ['an over-long prompt', { text: `${secret}${'t'.repeat(100_000)}` }, 'text must be a string of at most 100000 characters when present'],
+    ['attachments that are not a list', { attachments: secret }, 'attachments must be a list of at most 4 files when present'],
+    ['five attachments', { attachments: [file({}), file({}), file({}), file({}), file({})] }, 'attachments must be a list of at most 4 files when present'],
+    [
+      'an unsupported media type',
+      { attachments: [file({}), file({ mediaType: `application/${secret}` })] },
+      'attachments[1] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters',
+    ],
+    [
+      'an empty payload',
+      { attachments: [file({ data: '' })] },
+      'attachments[0] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters',
+    ],
+    [
+      'an over-long file name',
+      { attachments: [file({ name: `${secret}${'n'.repeat(255)}` })] },
+      'attachments[0] must be an image, text, markdown or PDF file with 1 to 7,000,000 characters of data and a name of at most 255 characters',
+    ],
+  ])('refuses %s for continue, naming the field and not the value', async (_label, fields, rule) => {
+    const sent = stubFetch()
+    const { registry } = setup()
+
+    const error = await rejection(registry.execute(TaskContinue, { taskId: 'r1', ...fields } as TaskContinueInput))
+
+    expect(error.code).toBe('invalid-input')
+    expect(error.message).toBe(`Invalid input for cezar.task.continue: ${rule}`)
+    expect(error.message).not.toContain(secret)
+    expect(sent).toEqual([])
+  })
+
   it('refuses a non-boolean archived flag, naming the rule and not the value', async () => {
     const sent = stubFetch()
     const { registry } = setup()
@@ -204,6 +308,33 @@ describe('failures', () => {
     expect(error.message).toBe('run is still active')
     expect((error.cause as { status?: number }).status).toBe(409)
     expect(keys()).toEqual([['default', 'runs']])
+  })
+
+  it('a 409 refetch starts after the 409, replacing one already in flight', async () => {
+    stubFetch(() => jsonResponse({ error: 'run is still active' }, 409))
+    const queryClient = new QueryClient()
+    const registry = createCommandRegistry()
+    registerCoreCommands(registry, { queryClient })
+    // An observed runs list whose answers the test releases by hand, as a mounted view would have.
+    const pending: Array<(runs: string[]) => void> = []
+    const queryFn = vi.fn(() => new Promise<string[]>((resolve) => pending.push(resolve)))
+    const key = ['default', 'runs', 'list']
+    const unsubscribe = new QueryObserver(queryClient, { queryKey: key, queryFn }).subscribe(() => {})
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(1))
+    pending.shift()?.(['initial'])
+    await vi.waitFor(() => expect(queryClient.getQueryData(key)).toEqual(['initial']))
+    // A refetch asked BEFORE the task changed is still on its way when the 409 arrives.
+    void queryClient.invalidateQueries({ queryKey: key })
+    await vi.waitFor(() => expect(queryFn).toHaveBeenCalledTimes(2))
+
+    await rejection(registry.execute(TaskContinue, { taskId: 'r1' }))
+
+    // The 409 asked again rather than trusting the answer already on its way.
+    expect(queryFn).toHaveBeenCalledTimes(3)
+    pending.shift()?.(['before the 409'])
+    pending.shift()?.(['after the 409'])
+    await vi.waitFor(() => expect(queryClient.getQueryData(key)).toEqual(['after the 409']))
+    unsubscribe()
   })
 
   it('another refusal rejects command-failed and invalidates nothing', async () => {
@@ -260,6 +391,19 @@ describe('when a command resolves', () => {
     const registry = stalledSetup()
 
     expect(await settlesSoon(registry.execute(TaskContinue, { taskId: 'r1' }))).toBe(true)
+    expect(
+      await settlesSoon(
+        registry.execute(TaskContinue, {
+          taskId: 'r1',
+          projectId: 'web',
+          runner: 'codex',
+          model: '',
+          agentProfile: 'work',
+          text: 'Go on.',
+          attachments: [{ mediaType: 'text/plain', data: 'aGk=' }],
+        }),
+      ),
+    ).toBe(true)
   })
 
   it('stop and archive resolve only after the refetch, so their results arrive with fresh caches', async () => {
@@ -299,5 +443,20 @@ describe('invalidateTaskKeys', () => {
     await expect(invalidateTaskKeys(queryClient)).resolves.toBeUndefined()
 
     expect(invalidated).toHaveBeenCalledTimes(4)
+  })
+
+  it('passes its options to every invalidation, and none when it has none', async () => {
+    const queryClient = new QueryClient()
+    const invalidated = vi.spyOn(queryClient, 'invalidateQueries')
+
+    await invalidateTaskKeys(queryClient, 'web', { cancelRefetch: false })
+    await invalidateTaskKeys(queryClient)
+
+    expect(invalidated.mock.calls).toEqual([
+      [{ queryKey: ['workspace', 'runs-index'] }, { cancelRefetch: false }],
+      [{ queryKey: ['default', 'runs'] }, { cancelRefetch: false }],
+      [{ queryKey: ['web', 'runs', 'list'] }, { cancelRefetch: false }],
+      [{ queryKey: ['default', 'runs'] }],
+    ])
   })
 })

@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
-import { useContinueRun, useSendMessage } from '@/api/queries'
+import { useSendMessage } from '@/api/queries'
 import type { ApiRun, RunRecord } from '@open-mercato/cezar-api-client'
+import { TaskContinue } from '@open-mercato/cezar-extension-api'
+import { apiErrorOf } from '@/commands/errors'
+import { useCommand, useTaskRefetch } from '@/commands/provider'
 
 import {
   useActiveProviderAvailability,
@@ -38,8 +41,11 @@ export const IDLE_TEARDOWN_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1_000, 1_0
 const delayIdleTeardownRetry = (delayMs: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, delayMs))
 
-function isIdleTeardownRefusal(error: unknown): error is ApiError {
-  return error instanceof ApiError && error.status === 409 && error.message === 'run is still active'
+function isIdleTeardownRefusal(error: unknown): boolean {
+  // The resume runs through `cezar.task.continue`, so the refusal arrives as the `ApiError`
+  // behind its `command-failed` — or bare, from a caller that still posts directly.
+  const refusal = apiErrorOf(error)
+  return refusal?.status === 409 && refusal.message === 'run is still active'
 }
 
 /** Reopen once the old idle-closed session has left the RunManager's active map.
@@ -114,7 +120,10 @@ export function useAskAnswer(run: ApiRun, projectId?: string): AskAnswerDelivery
   // `projectId` only from a surface standing OUTSIDE the run's project — the global Tasks page.
   // Everywhere else the scope is already the run's own and naming it would be noise.
   const sendMessage = useSendMessage(run.id, projectId)
-  const resume = useContinueRun(run.id, projectId)
+  // `cezar.task.continue`, resolving once the task's caches are fresh — as this delivery always
+  // did, so the card never sees the closed state after its answer reopened the session.
+  const refetchTask = useTaskRefetch()
+  const resume = useCommand(TaskContinue, { onSuccess: (_result, input) => refetchTask(input) })
   const activeProvider = useActiveProviderAvailability(run)
   const existingProvider = useExistingProviderAvailability(run)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -143,7 +152,7 @@ export function useAskAnswer(run: ApiRun, projectId?: string): AskAnswerDelivery
     }
     // No runner override: the server keeps the run's own backend and model, so answering a
     // question cannot silently switch engines when another provider happens to be connected.
-    return resume.mutateAsync({ text })
+    return resume.mutateAsync({ taskId: run.id, projectId, text })
   }
 
   const send = async (text: string): Promise<string | undefined> => {

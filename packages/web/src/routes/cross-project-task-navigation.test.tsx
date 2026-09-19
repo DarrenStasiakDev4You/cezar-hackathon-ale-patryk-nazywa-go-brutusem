@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type { ProjectsResponse } from '@open-mercato/cezar-api-client'
 import { AppearanceProvider } from '@/components/appearance-provider'
 import { ListViewProvider } from '@/components/list-view'
@@ -130,16 +131,18 @@ function renderAt(entry: string) {
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
-        <ThemeProvider>
-          <AppearanceProvider>
-            <MemoryRouter initialEntries={[entry]}>
-              <ListViewProvider>
-                <AppRoutes />
-                <NavigationProbe />
-              </ListViewProvider>
-            </MemoryRouter>
-          </AppearanceProvider>
-        </ThemeProvider>
+        <CommandsProvider>
+          <ThemeProvider>
+            <AppearanceProvider>
+              <MemoryRouter initialEntries={[entry]}>
+                <ListViewProvider>
+                  <AppRoutes />
+                  <NavigationProbe />
+                </ListViewProvider>
+              </MemoryRouter>
+            </AppearanceProvider>
+          </ThemeProvider>
+        </CommandsProvider>
       </QueryClientProvider>
     </StrictMode>,
   )
