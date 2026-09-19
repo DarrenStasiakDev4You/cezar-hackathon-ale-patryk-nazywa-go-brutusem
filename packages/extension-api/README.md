@@ -327,7 +327,7 @@ notice; at publication each core contract is listed with its major in `BACKWARD_
 `isExtensionError(error, code?)` recognises every `ExtensionErrorCode` by its `code`, never by
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
 and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
-malformed command, event or component contract token); `namespace-violation`, `duplicate-registration`, `command-not-found`,
+malformed command, event or component contract token, or a malformed component implementation id); `namespace-violation`, `duplicate-registration`, `command-not-found`,
 `contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
 `command-timeout` come from the host. The union grows additively: a copy of this package older than
 the host does not recognise the newer codes.

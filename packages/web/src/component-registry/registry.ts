@@ -149,7 +149,7 @@ interface ServedContract {
 }
 
 export function createComponentRegistry(options: ComponentRegistryOptions = {}): CockpitComponentRegistry {
-  const served = catalogOf(options.contracts ?? [])
+  const served = catalogOf(options)
   const onDiagnostic = options.onDiagnostic ?? logComponentDiagnostic
   /** Every registration by component id. The Map keeps registration order. */
   const registrations = new Map<ContributionId, ComponentRegistration>()
@@ -249,7 +249,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       if (token === undefined || served.get(token.id)?.version !== token.version) return Object.freeze([])
       // Compatible means checked against the host's token, so the major is the served one.
       const usable = select((registration) => registration.contractId === token.id && registration.compatible)
-      return usable as readonly ComponentRegistration[] as readonly UsableComponent<P>[]
+      return usable as readonly UsableComponent<P>[]
     },
 
     get(componentId) {
@@ -428,18 +428,36 @@ function copyList(list: unknown): CapabilityCopy {
   return { ok: true, names }
 }
 
-/** The catalog by contract id. Throws `ComponentError` for host misuse. */
-function catalogOf(contracts: readonly AnyComponentContract[]): ReadonlyMap<ContributionId, ServedContract> {
-  if (!Array.isArray(contracts)) {
+/**
+ * The catalog by contract id. Throws `ComponentError` for host misuse, never the caller's own
+ * error: the token's id and major, then its capability lists as the check reads them, so a token
+ * the check could not use fails here rather than at every later `provide`.
+ */
+function catalogOf(options: ComponentRegistryOptions): ReadonlyMap<ContributionId, ServedContract> {
+  let tokens: readonly unknown[]
+  try {
+    const contracts: unknown = options.contracts ?? []
+    if (!Array.isArray(contracts)) throw new TypeError('not an array')
+    tokens = [...(contracts as readonly unknown[])]
+  } catch {
     throw new ComponentError('invalid-input', 'options.contracts must be an array of component contracts')
   }
   const served = new Map<ContributionId, ServedContract>()
-  for (const token of contracts) {
+  for (const token of tokens) {
     const read = tokenOf(token)
     if (read === undefined) throw new ComponentError('invalid-id', INVALID_CONTRACT)
     const { id, version } = read
     if (!id.startsWith(CORE_PREFIX)) {
       throw new ComponentError('namespace-violation', `Served component contract "${id}" must be under "${CORE_PREFIX}"`)
+    }
+    const malformed = checkComponentCompatibility(token as AnyComponentContract, { id }).issues.filter(
+      (issue) => issue.code === 'malformed',
+    )
+    if (malformed.length > 0) {
+      throw new ComponentError(
+        'invalid-id',
+        `Served component contract "${id}" is malformed: ${malformed.map((issue) => issue.message).join('; ')}`,
+      )
     }
     const first = served.get(id)
     if (first !== undefined) {
@@ -448,7 +466,7 @@ function catalogOf(contracts: readonly AnyComponentContract[]): ReadonlyMap<Cont
         `Component contract "${id}" is served twice (@${first.version} and @${version}): one major per id`,
       )
     }
-    served.set(id, { version, token })
+    served.set(id, { version, token: token as AnyComponentContract })
   }
   return served
 }

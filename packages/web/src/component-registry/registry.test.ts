@@ -136,10 +136,48 @@ describe('createComponentRegistry and its catalog', () => {
     )
   })
 
-  it('refuses a catalog that is not an array with invalid-input', () => {
-    const error = thrown(() => createComponentRegistry({ contracts: {} as unknown as AnyComponentContract[] }))
+  it.each<[string, () => Parameters<typeof createComponentRegistry>[0]]>([
+    ['a catalog that is not an array', () => ({ contracts: {} as unknown as AnyComponentContract[] })],
+    ['a revoked proxy as the catalog', () => ({ contracts: revoked() as AnyComponentContract[] })],
+    [
+      'a catalog whose iterator throws',
+      () => {
+        const contracts = [Header]
+        Object.defineProperty(contracts, Symbol.iterator, {
+          value: () => {
+            throw new Error('iterator broke')
+          },
+        })
+        return { contracts }
+      },
+    ],
+    [
+      'options whose contracts getter throws',
+      () =>
+        Object.defineProperty({}, 'contracts', {
+          get() {
+            throw new Error('getter broke')
+          },
+        }),
+    ],
+  ])('refuses %s with invalid-input, never the raw error', (_label, options) => {
+    const error = thrown(() => createComponentRegistry(options()))
 
+    expect(error).toBeInstanceOf(ComponentError)
     expect(error.code).toBe('invalid-input')
+    expect(error.message).toBe('options.contracts must be an array of component contracts')
+  })
+
+  it('refuses a served token whose capability lists the check cannot read, with invalid-id', () => {
+    const handBuilt = { kind: 'component', id: 'cezar.fixture.task-header', version: 1, requiredCapabilities: 'shows-title' }
+
+    const error = thrown(() => createComponentRegistry({ contracts: [handBuilt as unknown as AnyComponentContract] }))
+
+    expect(error.code).toBe('invalid-id')
+    expect(error.message).toBe(
+      'Served component contract "cezar.fixture.task-header" is malformed: ' +
+        'contract.requiredCapabilities must be an array of strings',
+    )
   })
 })
 
@@ -339,6 +377,15 @@ describe('core register', () => {
     expect(error.componentId).toBe('cezar.fixture.task-header.default')
     expect(error.message).toContain(`Invalid component "cezar.fixture.task-header.default": ${rule}`)
     expect(error.message).not.toContain('SECRET')
+  })
+
+  it('accepts an object component, as memo, forwardRef and lazy return', () => {
+    const registry = servedRegistry()
+    const memoized = { $$typeof: Symbol.for('react.memo'), type: CoreHeader, compare: null }
+
+    registry.register(Header, { ...coreDefault, component: memoized as unknown as ComponentType<HeaderProps> })
+
+    expect(registry.get(coreDefault.id)?.component).toBe(memoized)
   })
 
   it('refuses an implementation that is not an object with invalid-input', () => {
