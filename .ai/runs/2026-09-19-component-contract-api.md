@@ -52,3 +52,9 @@ A component contract declares its required and optional capabilities and optiona
 - [x] 3.2 Example extension declares and passes the check — 55463e73
 - [x] 3.3 Docs: README and AGENTS.md — 9892155f
 - [x] Gate fix: drop the duplicate `data-edit-mode-action` that 3eaa75e7 left on main's edit-mode exit button (TS17001 failed `npm run typecheck`) — 5c673d1c
+
+### Post-review fixes
+
+- [x] Post-review fix: bound capability lists in the check (a lying `length` hung or OOM'd it), one `malformed` per list, generic `implementation` for inline literals — dbc86615
+- [x] Post-review fix: contract capability issues name the author's exact entry; a list over 32 names is one issue — 70435826
+- [x] Post-review fix: README states what `issues` holds; the drift test pins quoted runs unbroken — a58bcc9a
