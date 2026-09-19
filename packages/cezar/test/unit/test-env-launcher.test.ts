@@ -59,8 +59,8 @@ cat > packages/cezar/dist/index.js <<'EOF'
 const http = require('node:http');
 const port = Number(process.argv[process.argv.indexOf('--port') + 1]);
 http.createServer((req, res) => {
-  res.writeHead(200, { 'content-type': req.url === '/api/health' ? 'application/json' : 'text/html' });
-  res.end(req.url === '/api/health' ? '{"ok":true}' : '<!doctype html>');
+  res.writeHead(200, { 'content-type': req.url === '/api/v1/health' ? 'application/json' : 'text/html' });
+  res.end(req.url === '/api/v1/health' ? '{"ok":true}' : '<!doctype html>');
 }).listen(port, '127.0.0.1');
 EOF
 printf '<!doctype html>' > packages/cezar/web/dist/index.html
@@ -124,7 +124,7 @@ for (const withSetsid of [true, false]) {
         await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
       }
       assert.equal(process.kill(first.app.pid, 0), true);
-      const health = await fetch(`${first.baseUrl}/api/health`).then((response) => response.json());
+      const health = await fetch(`${first.baseUrl}/api/v1/health`).then((response) => response.json());
       assert.deepEqual(health, { ok: true });
 
       const warm = spawnSync('/bin/sh', [up], { encoding: 'utf8', env, timeout: 20_000 });
