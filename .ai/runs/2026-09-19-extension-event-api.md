@@ -104,6 +104,8 @@ separate PRs by the spec's own decision, not duplicates of each other.
 
 ## Progress
 
+PR: #23
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: The bus and the contract
@@ -117,3 +119,7 @@ separate PRs by the spec's own decision, not duplicates of each other.
 - [x] 2.1 Lifecycle event: ExtensionActivated and registry onStatusChange — e36c6a73
 - [x] 2.2 Boot wiring and the extension service — 088fb377
 - [x] 2.3 PR 1 docs: README Events section and AGENTS.md row — 5cd75876
+
+### Post-review fixes
+
+- [x] Post-review fix: a resumed drain that finds only cancelled deliveries ends its backlog streak; a dropped cascade is reported once per event id per streak; doc and test gaps from the review — 9545a2be
