@@ -1,9 +1,11 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useRuns } from '@/api/queries'
 import { createQueryClient } from '@/api/query-client'
+import { CommandsProvider } from '@/commands/provider'
 import type {
   AgentProfilesResponse,
   ApiRun,
@@ -173,16 +175,59 @@ function Harness({ run, draft = '' }: { run: ApiRun; draft?: string }) {
 function renderAction(record: ApiRun, draft = '', entry = '/') {
   return render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={[entry]}>
-        <Harness run={record} draft={draft} />
-        <Toaster />
-      </MemoryRouter>
+      <CommandsProvider>
+        <MemoryRouter initialEntries={[entry]}>
+          <Harness run={record} draft={draft} />
+          <Toaster />
+        </MemoryRouter>
+      </CommandsProvider>
     </QueryClientProvider>,
   )
 }
 
 const continueBody = () =>
   requests.find((r) => r.url.endsWith('/continue') && r.method === 'POST')?.body
+
+describe('continueWith', () => {
+  it('resolves only once the runs refetch has landed, as it always did', async () => {
+    serve()
+    // Every run-list answer after the first waits for the test: that one is the refetch.
+    const answer = vi.mocked(fetch).getMockImplementation()
+    let releaseRefetch: (() => void) | undefined
+    let runLists = 0
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await answer!(input, init)
+      if (String(input) === '/api/v1/runs' && (init?.method ?? 'GET') === 'GET' && ++runLists > 1) {
+        await new Promise<void>((resolve) => (releaseRefetch = resolve))
+      }
+      return response
+    })
+    const client = createQueryClient()
+    const { result } = renderHook(() => ({ runs: useRuns(), action: useContinueAction(makeRun()) }), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <CommandsProvider>{children}</CommandsProvider>
+        </QueryClientProvider>
+      ),
+    })
+    await waitFor(() => expect(result.current.runs.isSuccess).toBe(true))
+    await waitFor(() => expect(result.current.action.canContinue).toBe(true))
+
+    let resolved = false
+    const continued = result.current.action.continueWith('go on', []).then(() => (resolved = true))
+    await waitFor(() => expect(releaseRefetch).toBeDefined())
+    // Accepted, and the refetch is in flight: the composer must not see the closed state yet.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    expect(resolved).toBe(false)
+
+    releaseRefetch?.()
+    await continued
+
+    expect(continueBody()).toEqual({ text: 'go on' })
+    // The command's own refetch was joined, not repeated.
+    expect(requests.filter((r) => r.method === 'GET' && r.url === '/api/v1/runs')).toHaveLength(2)
+  })
+})
 
 describe('follow-up ContinueAction runner/model selection (#401)', () => {
   it('an untouched Continue omits runner & model — the run keeps its backend', async () => {

@@ -1,11 +1,11 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 
 import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
-import { continueRun } from '@/api/client'
-import { queryKeys, useConfig, useRunnerModels } from '@/api/queries'
+import { useConfig, useRunnerModels } from '@/api/queries'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client'
-import type { ApiRun, ContinueResponse, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
+import type { ApiRun, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
+import { TaskContinue, type TaskContinueResult } from '@open-mercato/cezar-extension-api'
+import { useCommand, useTaskRefetch } from '@/commands/provider'
 import { PickerPill, RunnerPill } from '@/components/picker-pill'
 import {
   modelsForRunner,
@@ -32,9 +32,10 @@ export interface ContinueAction {
    * Reopen the session, starting it on this prompt. An empty draft is the legacy one-click
    * Continue: the engine opens with its own "Continue.". REJECTS with the server's message
    * rather than toasting itself, so the composer can restore the draft it optimistically
-   * cleared — nothing the user typed is lost to a 409.
+   * cleared — nothing the user typed is lost to a 409. Resolves once the task's caches are
+   * fresh, so the thread never shows the closed state after the session reopened.
    */
-  continueWith: (text: string, images: AttachmentInput[]) => Promise<ContinueResponse>
+  continueWith: (text: string, images: AttachmentInput[]) => Promise<TaskContinueResult>
 }
 
 /**
@@ -45,10 +46,11 @@ export interface ContinueAction {
  *
  * A hook rather than a self-contained button, because the composer owns the draft: the prompt
  * the user typed and the engine they picked have to reach `POST /continue` in ONE request, and
- * the pills' state lives here.
+ * the pills' state lives here. That request is `cezar.task.continue` (spec
+ * `2026-09-19-migrate-task-actions-to-command-api`): the pills are its `runner`, `model` and
+ * `agentProfile` arguments, and the command owns the endpoint and the cache rule.
  */
 export function useContinueAction(run: ApiRun): ContinueAction {
-  const queryClient = useQueryClient()
   const available = runActionFlags(run).continueRun
   const config = useConfig()
   // null = "not touched": the pills fall back to the run's current backend/model/account, so an
@@ -99,29 +101,33 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     ? pickedAccount
     : null
 
-  const mutation = useMutation({
-    mutationFn: ({ text, images }: { text: string; images: AttachmentInput[] }) => {
-      if (!canContinue) {
-        return Promise.reject(new Error(continuation.reason ?? 'Connect an agent provider to continue.'))
-      }
-      return continueRun(run.id, {
-        // An empty draft posts no `text` at all, so the server's default opening prompt
-        // ("Continue.") still applies — one-click Continue, unchanged.
-        text: text.trim() ? text : undefined,
-        images: images.length ? images : undefined,
-        // Send an override only for a pill the user actually touched; otherwise omit it so the
-        // server keeps the run's current backend/model. If that backend disconnected, the
-        // connected fallback must be explicit even when the pills were untouched.
-        runner: continuation.runnerOverride,
-        model: !modelsLocked && pickedModel !== null ? model : undefined,
-        // Only a login the user actually picked rides the request. Omitted, the run keeps the
-        // account it is on — and the reopened session still resumes, which an explicit switch
-        // deliberately does not (a session id lives inside ONE account's config dir).
-        agentProfile: account ?? undefined,
-      })
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
-  })
+  // Resolves on fresh caches, as the composer always did: without the wait it would show the
+  // closed state (empty draft, enabled Continue) for a moment before the record turns live.
+  const refetchTask = useTaskRefetch()
+  const resume = useCommand(TaskContinue, { onSuccess: (_result, input) => refetchTask(input) })
+
+  const continueWith = (text: string, images: AttachmentInput[]): Promise<TaskContinueResult> => {
+    if (!canContinue) {
+      return Promise.reject(new Error(continuation.reason ?? 'Connect an agent provider to continue.'))
+    }
+    return resume.mutateAsync({
+      taskId: run.id,
+      // An empty draft sends no `text` at all, so the server's default opening prompt
+      // ("Continue.") still applies — one-click Continue, unchanged. The command drops a blank
+      // prompt and an empty file list the same way.
+      ...(text.trim() ? { text } : {}),
+      ...(images.length ? { attachments: images } : {}),
+      // Send an override only for a pill the user actually touched; otherwise omit it so the
+      // server keeps the run's current backend/model. If that backend disconnected, the
+      // connected fallback must be explicit even when the pills were untouched.
+      ...(continuation.runnerOverride !== undefined ? { runner: continuation.runnerOverride } : {}),
+      ...(!modelsLocked && pickedModel !== null ? { model } : {}),
+      // Only a login the user actually picked rides the request. Omitted, the run keeps the
+      // account it is on — and the reopened session still resumes, which an explicit switch
+      // deliberately does not (a session id lives inside ONE account's config dir).
+      ...(account !== null ? { agentProfile: account } : {}),
+    })
+  }
 
   return {
     available,
@@ -166,6 +172,6 @@ export function useContinueAction(run: ApiRun): ContinueAction {
         />
       </div>
     ),
-    continueWith: (text, images) => mutation.mutateAsync({ text, images }),
+    continueWith,
   }
 }
