@@ -42,10 +42,11 @@ const CLIENT_MODULE = 'src/api/client'
 // `from` of its own. `(?=\S)` and the lazy clause leave one way to split any whitespace, so a
 // line that is not a declaration fails fast.
 const DECLARATION =
-  /^[ \t]*(import|export)[ \t]+(?=\S)(type[ \t]+)?((?:(?!^[ \t]*(?:import|export)\b)[\s\S])*?)\bfrom[ \t]*['"]([^'"]+)['"]/gm
+  /^[ \t]*(import|export)[ \t]+(?=\S)(type[ \t]+(?=\S))?((?:(?!^[ \t]*(?:import|export)\b)[\s\S])*?)\bfrom[ \t]*['"]([^'"]+)['"]/gm
 
-/** `import('…')` — a module loaded at run time reaches every export, the six included. */
-const DYNAMIC_IMPORT = /\bimport[ \t]*\([ \t]*['"]([^'"]+)['"][ \t]*\)/g
+/** `import('…')` — a module loaded at run time reaches every export, the six included. A
+ *  `typeof import('…')` is a type: it cannot call anything. */
+const DYNAMIC_IMPORT = /(?<!\btypeof\s*)\bimport[ \t]*\([ \t]*['"]([^'"]+)['"][ \t]*\)/g
 
 /** Every import (and re-export) of a client action from a file other than the core handlers. */
 export function findClientActionImports(files: readonly SourceFile[]): ClientActionImport[] {
@@ -67,15 +68,17 @@ export function findClientActionImports(files: readonly SourceFile[]): ClientAct
 }
 
 /** The client actions one declaration's clause brings in; `*` for all of them at once. */
-function actionNames(clause: string): string[] {
+function actionNames(rawClause: string): string[] {
+  // A clause holds names and punctuation only, so its comments can go before it is read: they may
+  // carry commas, braces or stars of their own.
+  const clause = rawClause.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').trim()
   // `import * as client` and `export * from`: every export behind a name this scan cannot follow
   // (`client.cancelRun`, `const { cancelRun } = client`, `client['cancelRun']`) — so the whole
   // module counts. Import the functions you need by name instead.
-  if (/(?:^|,)\s*\*/.test(clause.trim())) return ['*']
+  if (/(?:^|,)\s*\*/.test(clause)) return ['*']
   const named = /\{([^}]*)\}/.exec(clause)?.[1] ?? ''
   const names: string[] = []
-  // Comments in a long list may carry commas of their own.
-  for (const part of named.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '').split(',')) {
+  for (const part of named.split(',')) {
     const specifier = part.trim()
     // `type x` is erased at compile time: it cannot call anything.
     if (specifier === '' || /^type\s/.test(specifier)) continue

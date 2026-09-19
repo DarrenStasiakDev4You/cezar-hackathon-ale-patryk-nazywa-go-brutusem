@@ -67,12 +67,15 @@ describe('findClientActionImports', () => {
     const source = [
       'import {',
       '  ApiError,',
+      '  getRuns, // see {x} below',
       '  cancelRun, // stop; see #12, then archive',
       '  /* restore, later */ archiveRun,',
       "} from '@/api/client'",
     ].join('\n')
 
     expect(scan('src/routes/x.tsx', source)).toEqual(['cancelRun ← @/api/client', 'archiveRun ← @/api/client'])
+    // A star or a comma in a comment is not a namespace import.
+    expect(scan('src/routes/x.tsx', "import { /** the list, */ getRuns } from '@/api/client'")).toEqual([])
   })
 
   it('counts the whole module for a namespace import, an export-all and a dynamic import', () => {
@@ -104,6 +107,7 @@ describe('findClientActionImports', () => {
       "import { continueRun } from './client'",
       "import { archiveRun } from '@open-mercato/cezar-api-client'",
       "const lazy = () => import('@/routes/global-tasks')",
+      "type Client = typeof import('@/api/client')",
       '// import { cancelRun } from "@/api/client"',
       ' * import { archiveRun } from "@/api/client"',
     ].join('\n')
@@ -116,6 +120,7 @@ describe('findClientActionImports', () => {
     const started = performance.now()
 
     expect(scan('src/routes/x.tsx', `export ${' '.repeat(50_000)}x`)).toEqual([])
+    expect(scan('src/routes/x.tsx', `export type${' '.repeat(50_000)}x`)).toEqual([])
     expect(performance.now() - started).toBeLessThan(1_000)
   })
 
