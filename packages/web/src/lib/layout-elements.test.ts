@@ -74,7 +74,7 @@ describe('LayoutRegistry', () => {
     unregister()
   })
 
-  it('keeps sibling order stable and moves only within one parent', () => {
+  it('keeps sibling order stable and rejects cross-parent moves through the local API', () => {
     const registry = new LayoutRegistry()
     registry.register({ id: 'group', kind: 'group' })
     registry.register({ id: 'first', kind: 'widget' })
@@ -116,5 +116,18 @@ describe('LayoutRegistry', () => {
 
     expect(registry.moveWithinParent({ id: 'root', targetId: 'child', position: 'after' })).toBe(false)
     expect(registry.getSiblingIds()).toEqual(['root'])
+  })
+
+  it('moves an element to another parent atomically', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'left', kind: 'group' })
+    registry.register({ id: 'right', kind: 'group' })
+    registry.register({ id: 'card', kind: 'widget', parentId: 'left' })
+    registry.register({ id: 'other', kind: 'widget', parentId: 'right' })
+
+    expect(registry.moveToParent({ id: 'card', targetId: 'other', position: 'before', parentId: 'right' })).toBe(true)
+    expect(registry.get('card')?.parentId).toBe('right')
+    expect(registry.getSiblingIds('left')).toEqual([])
+    expect(registry.getSiblingIds('right')).toEqual(['card', 'other'])
   })
 })

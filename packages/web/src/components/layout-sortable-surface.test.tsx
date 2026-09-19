@@ -38,7 +38,7 @@ describe('LayoutSortableSurface', () => {
     expect(first?.querySelector('[data-layout-drag-handle]')).not.toBeNull()
   })
 
-  it('resolves only same-parent drop targets and derives direction from sibling order', () => {
+  it('resolves same-parent and cross-parent drop targets', () => {
     const registry = new LayoutRegistry()
     registry.register({ id: 'first', kind: 'widget' })
     registry.register({ id: 'second', kind: 'widget' })
@@ -47,7 +47,7 @@ describe('LayoutSortableSurface', () => {
 
     expect(resolveLayoutMove(registry, 'first', 'second')).toEqual({ id: 'first', targetId: 'second', position: 'after' })
     expect(resolveLayoutMove(registry, 'second', 'first')).toEqual({ id: 'second', targetId: 'first', position: 'before' })
-    expect(resolveLayoutMove(registry, 'first', 'child')).toBeNull()
+    expect(resolveLayoutMove(registry, 'first', 'child')).toEqual({ id: 'first', targetId: 'child', position: 'before', parentId: 'group' })
   })
 
 })

@@ -58,17 +58,19 @@ function useDetectedEditMode(): boolean {
 export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, overId: string): LayoutMove | null {
   const source = registry.get(activeId)
   const target = registry.get(overId)
-  if (!source || !target || source.id === target.id || source.parentId !== target.parentId) return null
+  if (!source || !target || source.id === target.id) return null
 
   const siblings = registry.getSiblingIds(source.parentId)
   const sourceIndex = siblings.indexOf(source.id)
   const targetIndex = siblings.indexOf(target.id)
-  if (sourceIndex < 0 || targetIndex < 0) return null
+  const sameParent = source.parentId === target.parentId
+  if (sameParent && (sourceIndex < 0 || targetIndex < 0)) return null
 
   return {
     id: source.id,
     targetId: target.id,
-    position: sourceIndex < targetIndex ? 'after' : 'before',
+    position: sameParent && sourceIndex < targetIndex ? 'after' : 'before',
+    ...(target.parentId === undefined ? {} : { parentId: target.parentId }),
   }
 }
 
@@ -111,7 +113,7 @@ export function LayoutSortableSurface({ children, enabled, className, ids, rende
 
     if (targetId) {
       const move = resolveLayoutMove(registry, sourceId, targetId)
-      if (move) moved = registry.moveWithinParent(move)
+      if (move) moved = registry.moveToParent(move)
     }
 
     setActiveId(null)

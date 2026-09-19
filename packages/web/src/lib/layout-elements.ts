@@ -18,6 +18,8 @@ export type LayoutMove = {
   id: string
   targetId: string | null
   position: 'before' | 'after'
+  /** Destination parent. Omit to keep the source parent. */
+  parentId?: string
 }
 
 export type LayoutRegistryListener = () => void
@@ -150,27 +152,50 @@ export class LayoutRegistry {
    */
   moveWithinParent(move: LayoutMove): boolean {
     const source = this.elements.get(move.id)
-    if (!source || (move.targetId !== null && move.targetId === move.id)) return false
-
-    const siblings = this.siblingOrder.get(source.parentId)
-    if (!siblings) return false
-
+    if (!source || move.parentId !== undefined && move.parentId !== source.parentId) return false
     const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
     if (move.targetId !== null && (!target || target.parentId !== source.parentId)) return false
+    return this.move(move)
+  }
+
+  /** Moves an element between sibling lists, preserving the tree invariants atomically. */
+  moveToParent(move: LayoutMove): boolean {
+    return this.move(move)
+  }
+
+  private move(move: LayoutMove): boolean {
+    const source = this.elements.get(move.id)
+    if (!source || (move.targetId !== null && move.targetId === move.id)) return false
+
+    const target = move.targetId === null ? undefined : this.elements.get(move.targetId)
+    const destinationParentId = move.parentId ?? target?.parentId ?? source.parentId
+    if (destinationParentId !== undefined && !this.elements.has(destinationParentId)) return false
+    if (move.targetId !== null && (!target || target.parentId !== destinationParentId)) return false
     if (target && this.getSubtreeIds(move.id).has(target.id)) return false
 
-    const next = siblings.filter((id) => id !== move.id)
+    const sourceSiblings = this.siblingOrder.get(source.parentId)
+    const destinationSiblings = this.siblingOrder.get(destinationParentId) ?? []
+    if (!sourceSiblings) return false
+    const next = destinationParentId === source.parentId
+      ? sourceSiblings.filter((id) => id !== move.id)
+      : [...destinationSiblings]
     const targetIndex = move.targetId === null ? next.length : next.indexOf(move.targetId)
     if (targetIndex < 0) return false
     const insertionIndex = move.targetId === null
       ? next.length
       : targetIndex + (move.position === 'after' ? 1 : 0)
-    const currentIndex = siblings.indexOf(move.id)
+    const currentIndex = sourceSiblings.indexOf(move.id)
     if (currentIndex < 0) return false
 
     next.splice(insertionIndex, 0, move.id)
-    if (next.every((id, index) => id === siblings[index])) return false
-    this.siblingOrder.set(source.parentId, next)
+    if (destinationParentId === source.parentId && next.every((id, index) => id === sourceSiblings[index])) return false
+    if (destinationParentId !== source.parentId) {
+      const remaining = sourceSiblings.filter((id) => id !== move.id)
+      if (remaining.length > 0) this.siblingOrder.set(source.parentId, remaining)
+      else this.siblingOrder.delete(source.parentId)
+    }
+    this.siblingOrder.set(destinationParentId, next)
+    this.elements.set(move.id, { ...source, ...(destinationParentId === undefined ? { parentId: undefined } : { parentId: destinationParentId }) })
     this.rebuildSnapshot()
     return true
   }
