@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset="utf-8"><title>Mockup: Q3 route B (not the default) — an extension header that owns Continue, Stop and Archive</title><style>*{box-sizing:border-box;margin:0;padding:0}
+<!doctype html><html><head><meta charset="utf-8"><title>Mockup: an extension's task header built from the contract's props alone</title><style>*{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:#0f0f10;color:#ececec;display:flex;overflow:hidden}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -50,15 +50,11 @@ main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
 .menu div b{font-weight:700;color:#e9d5ff}</style></head><body><aside><div class="brand"><span class="logo"></span>cezar <small class="mono">my-project</small></div><div class="newtask">+ New task</div><nav class="nav"><a class="on">Tasks</a><a>Git</a><a>GitHub</a><a>Automations</a><a>Skills</a><a>Workflows</a><a>Settings</a></nav><div class="sect">RECENT</div><div class="row on"><span class="dot"></span>Summarize the README</div><div class="row"><span class="dot"></span>Tidy the changelog</div><div class="row"><span class="dot v"></span>Reword the intro</div></aside><main><div class="header"><div class="measure">
 <div style="display:flex;gap:10px;align-items:flex-start">
  <div class="hostbox" style="flex:1">
-  <div class="t1" style="gap:12px"><h1>Summarize the README</h1><span class="pill" style="margin-left:0"><span class="dot"></span>done</span><span class="mono note">claude · auto</span>
-   <span style="margin-left:auto;display:flex;gap:8px"><span class="btn">▶ Continue</span><span class="btn" style="font-weight:500">Archive</span></span></div>
-  <span class="tag mono">Q3 ROUTE B, NOT THE DEFAULT · host box · example.compact-header.row · declares task-actions</span>
- </div>
- <div style="position:relative"><div class="kebab" style="outline:2px solid #a78bfa;outline-offset:2px">⋮</div>
-  <div class="menu" style="right:0;top:150px;width:210px"><div class="lbl">⋮ Run actions (opened)</div><hr><div><b>▶ Continue</b></div><div>Terminal</div><div>Notes</div><div>Mark unread</div><div>Pin</div><div><b>Archive</b></div><hr><div class="danger">Delete</div></div>
+  <div class="t1" style="gap:12px"><h1>Summarize the README</h1><span class="pill" style="margin-left:0"><span class="dot"></span>done</span><span class="mono note">claude · auto</span><span class="chip mono" style="color:#a78bfa">PR #123 · ready</span><span class="mono note" style="margin-left:auto">+42 −7 · 3 files</span></div>
+  <span class="tag mono">host box · example.compact-header.row · shows-title, shows-status · props only</span>
  </div>
 </div>
-<div class="coretag mono">core shell ↓ bar without Continue / Cancel / Archive · ⋮ Run actions visible at every width</div>
-<div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span>Open in ▾</span><span>Notes</span><span>Mark unread</span><span>Pin</span><span style="color:#f87171">Delete</span></div></div>
+<div class="coretag mono">core shell ↓ unchanged — the actions, tabs, step rail and the Run actions menu stay core's (Q3 default)</div>
+<div class="tabs"><span class="on">Session</span><span>Changes</span><span>Commits</span><span>Files</span><div class="acts"><span class="btn">▶ Continue</span><span>Open in ▾</span><span>Notes</span><span>Mark unread</span><span>Pin</span><span>Archive</span><span style="color:#f87171">Delete</span></div></div>
 <div class="rail"><span class="dot"></span><b>Do the task</b><span class="note">step 1 of 1</span><span class="bar"></span></div>
 </div></div><div class="thread"><div class="measure"><p class="note">· run started — workflow "quick-task" (runner: claude)</p><p class="note">· worktree ready — branch cez/965e8a21</p><p>Okay — looking into: Summarize the README</p><div class="tool"><b>Ran</b> <span class="mono">git status --short</span></div><p>Done — the summary is in <span class="mono">SUMMARY.md</span> and a draft PR is open.</p></div></div><div class="composer measure">Reply to continue — / for skills, @ for files… <span class="send">↑</span><div style="clear:both"></div></div></main></body></html>
