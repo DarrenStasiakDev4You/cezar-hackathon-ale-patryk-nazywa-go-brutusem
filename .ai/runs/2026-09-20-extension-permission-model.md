@@ -56,7 +56,7 @@ Source doc: `.ai/specs/2026-09-19-extension-permission-model.md`
 ### Phase 2: Host enforcement
 
 - [x] 2.1 Add host permission checks, grants, and denial error — 78245d88
-- [x] 2.2 Add guarded services and own-command namespace handling — 78245d88
+- [x] 2.2 Add guarded services and own-command namespace handling — 78245d88 / e508e9e9
 - [x] 2.3 Wire registry grants, activation checks, guarded contexts, and records — 78245d88
 - [x] 2.4 Apply built-in grants and host/registry regression coverage — 78245d88
 
