@@ -134,4 +134,28 @@ describe('LayoutRegistry', () => {
     expect(registry.get('card')?.parentId).toBeUndefined()
     expect(registry.getSiblingIds()).toEqual(['left', 'card', 'right'])
   })
+
+  it('moves a group without changing its subtree', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'left', kind: 'group' })
+    registry.register({ id: 'right', kind: 'group' })
+    registry.register({ id: 'sidebar', kind: 'group', parentId: 'left' })
+    registry.register({ id: 'nav', kind: 'widget', parentId: 'sidebar' })
+    registry.register({ id: 'footer', kind: 'widget', parentId: 'sidebar' })
+    registry.register({ id: 'content', kind: 'widget', parentId: 'right' })
+
+    expect(registry.moveToParent({
+      id: 'sidebar',
+      targetId: 'content',
+      position: 'before',
+      parentId: 'right',
+    })).toBe(true)
+
+    expect(registry.get('sidebar')).toMatchObject({ id: 'sidebar', kind: 'group', parentId: 'right' })
+    expect(registry.get('sidebar')?.children).toEqual(['nav', 'footer'])
+    expect(registry.get('nav')).toMatchObject({ id: 'nav', parentId: 'sidebar' })
+    expect(registry.get('footer')).toMatchObject({ id: 'footer', parentId: 'sidebar' })
+    expect(registry.getSiblingIds('left')).toEqual([])
+    expect(registry.getSiblingIds('right')).toEqual(['sidebar', 'content'])
+  })
 })
