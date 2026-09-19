@@ -7,10 +7,12 @@ cross-side movable group.
 
 Scope: `packages/web/src/components/layout-element.tsx`,
 `packages/web/src/components/layout-sortable-surface.tsx`, `packages/web/src/components/app-shell.tsx`,
+`packages/web/src/components/layout-context-menu.tsx`, `packages/web/src/lib/layout-elements.ts`,
 `packages/web/src/styles/index.css`, and focused regression tests.
 
-Non-goals: persistence, HTTP/CLI, extension contracts, resize, deletion, new dependencies,
-or rewriting the already-merged layout registry.
+Non-goals: persistence, HTTP/CLI, extension contracts, resize, new dependencies, or rewriting
+the already-merged layout registry beyond the explicit subtree removal operation needed by the
+edit-mode delete action.
 
 Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
@@ -25,6 +27,9 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 - [x] 2.1 Treat the shell sidebar as the movable group and reject ordinary widget drops across parent/menu boundaries. — e9a63039
 - [x] 2.2 Add regression coverage for allowed group movement, rejected widget cross-parent drops, and unchanged click/guard behavior. — e9a63039
+- [x] 2.3 Keep the shell sidebar and main content as root siblings so moving the menu to the other side never nests it inside the content region. — 54a3d00a
+- [x] 2.4 Remove a selected layout element or complete group subtree atomically from the live registry and DOM projection. — 54a3d00a
+- [x] 2.5 Keep edit mode visually legible by removing the global grayscale/opacity wash from the layout surface. — 54a3d00a
 
 ### Phase 3: verification and handoff
 
@@ -63,10 +68,19 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 - `npm run test:package`: 1 passed, 4 existing CLI/release tests failed.
 - Browser QA and authoritative review remain the outstanding 3.2 handoff because the seeded interaction matrix is still unavailable and the full gate remains non-green.
 
+### User-reported regression fix — 2026-09-19
+
+- Focused web tests: passed — 4 files, 105 tests, including individual/group deletion and flat shell movement.
+- `npm run typecheck:web`: passed after the fix.
+- Removed the edit-mode surface wash, made registered deletion update the layout registry atomically,
+  and removed the shell drop zone that nested the sidebar inside main content.
+
 ## Risks
 
 - The handle must retain a minimum 44px target and not steal ordinary widget clicks or touch scrolling.
 - The shell movement must continue to remove the source column and expand the main region without introducing persistence.
+- Deletion must remove a single registered element or an entire registered group subtree without
+  leaving stale registry entries or React DOM nodes.
 
 ## Progress
 
@@ -81,6 +95,9 @@ Source doc: `.ai/specs/2026-09-19-przesuwanie-elementow.md`
 
 - [x] 2.1 Treat the shell sidebar as the movable group and reject ordinary widget drops across parent/menu boundaries. — e9a63039
 - [x] 2.2 Add regression coverage for allowed group movement, rejected widget cross-parent drops, and unchanged click/guard behavior. — e9a63039
+- [x] 2.3 Keep the shell sidebar and main content as root siblings so moving the menu to the other side never nests it inside the content region. — 54a3d00a
+- [x] 2.4 Remove a selected layout element or complete group subtree atomically from the live registry and DOM projection. — 54a3d00a
+- [x] 2.5 Keep edit mode visually legible by removing the global grayscale/opacity wash from the layout surface. — 54a3d00a
 
 ### Phase 3: verification and handoff
 
