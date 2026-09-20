@@ -12,7 +12,7 @@ PR: #54
 | 1.3 | 1 | Add absent-default coverage and repository guidance. | inline | done |
 | 2.1 | 2 | Rename the public contract, exports, implementation/model files, ids, and consumers/tests. | inline | done |
 | 2.2 | 2 | Document provider-neutral contracts and `core.*` implementations; update boundary assertions. | inline | done |
-| 2.3 | 2 | Run the validation gate, review the complete diff, and resolve findings. | inline | todo |
+| 2.3 | 2 | Run the validation gate, review the complete diff, and resolve findings. | inline | blocked |
 
 ## Scope
 
@@ -21,5 +21,6 @@ PR: #54
 
 ## Validation Notes
 
-- Typecheck, unit tests, build, package tests, and focused component/task-header suites pass.
-- The full test command has unrelated server-suite failures and an automations route loading failure; these are recorded in the run handoff.
+- Typecheck, node unit tests, build, package tests, and focused component/task-header suites pass.
+- The full Vitest command remains blocked by 12 failures in 8 suites outside the focused changed-code run, plus 2 teardown errors; the exact result is recorded in `final-gate-checks.md`.
+- Review found no functional findings in the changed component-registry or task-header code; only two indentation defects were fixed and pushed in `86db7c01`.
