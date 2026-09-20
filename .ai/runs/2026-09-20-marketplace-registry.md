@@ -21,8 +21,8 @@ Spec PR: #73 (merged)
 
 ### Phase 2: On-Demand Service Endpoint
 
-- [ ] 2.1 Implement the fixed-source, dependency-injected fetcher with timeout, byte cap, redirect policy, in-flight coalescing, and short-lived in-memory success cache.
-- [ ] 2.2 Add and chain the workspace marketplace route, expose the inferred typed-client method, and test success, partial, unavailable, cache, and non-project-scoped behavior.
+- [x] 2.1 Implement the fixed-source, dependency-injected fetcher with timeout, byte cap, redirect policy, in-flight coalescing, and short-lived in-memory success cache. — 5dc2b6b5
+- [x] 2.2 Add and chain the workspace marketplace route, expose the inferred typed-client method, and test success, partial, unavailable, cache, and non-project-scoped behavior. — 5dc2b6b5
 
 ### Phase 3: Operational Handoff
 
