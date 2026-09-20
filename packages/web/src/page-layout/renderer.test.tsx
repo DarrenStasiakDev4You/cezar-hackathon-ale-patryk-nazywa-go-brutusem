@@ -78,6 +78,37 @@ describe('PageRenderer', () => {
     expect(document.querySelector('[data-zone-id="fixture.content"][data-zone-state="error"]')).not.toBeNull()
   })
 
+  it('does not render more content than a single zone accepts', () => {
+    const { pageRegistry, components } = layout()
+    pageRegistry.registerPage(
+      definePage({
+        id: 'fixture.single-page',
+        version: 1,
+        zones: [{ id: 'fixture.single', accepts: [Card], cardinality: 'single', required: true }],
+      }),
+    )
+
+    render(
+      <ComponentsProvider registry={components}>
+        <PageLayoutProvider registry={pageRegistry}>
+          <PageRenderer
+            content={{
+              pageId: 'fixture.single-page',
+              zones: {
+                'fixture.single': [
+                  { key: 'first', contract: Card, props: { label: 'first' } },
+                  { key: 'second', contract: Card, props: { label: 'second' } },
+                ],
+              },
+            }}
+          />
+        </PageLayoutProvider>
+      </ComponentsProvider>,
+    )
+
+    expect(screen.getAllByTestId('card').map((item) => item.textContent)).toEqual(['first'])
+  })
+
   it('uses a caller fallback for a required-zone error without knowing component types', () => {
     const { pageRegistry, components } = layout()
     render(

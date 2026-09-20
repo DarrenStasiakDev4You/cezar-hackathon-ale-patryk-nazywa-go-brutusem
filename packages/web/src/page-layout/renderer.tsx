@@ -68,7 +68,7 @@ export interface ZoneRendererProps {
 }
 
 export function ZoneRenderer({ pageId, zone, content = [], issues = [], fallback }: ZoneRendererProps): ReactElement | null {
-  const accepted = content.filter((item) => accepts(zone, item))
+  const accepted = acceptedContent(zone, content)
   if (accepted.length === 0) {
     if (!zone.required) return null
     const issue = issues[0] ?? { code: 'invalid-content' as const, zoneId: zone.id }
@@ -118,6 +118,18 @@ function LayoutError(props: { readonly message: string; readonly pageId: string;
 
 function accepts(zone: ZoneDefinition, content: ZoneContent): boolean {
   return zone.accepts.some((contract) => contract.id === content.contract.id && contract.version === content.contract.version)
+}
+
+function acceptedContent(zone: ZoneDefinition, content: readonly ZoneContent[]): readonly ZoneContent[] {
+  const seen = new Set<string>()
+  const accepted: ZoneContent[] = []
+  for (const item of content) {
+    if (!accepts(zone, item) || seen.has(item.key)) continue
+    seen.add(item.key)
+    accepted.push(item)
+    if (zone.cardinality === 'single') break
+  }
+  return accepted
 }
 
 export type { PageComponentContract }
