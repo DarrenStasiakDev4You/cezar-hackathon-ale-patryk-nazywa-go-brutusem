@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   checkComponentCompatibility,
+  TaskComposer,
   TaskHeader,
   type ComponentContract,
   type ComponentImplementation,
@@ -26,8 +27,8 @@ interface Registered {
 function registered(): Registered[] {
   const seen: Registered[] = []
   registerCoreComponents({
-    register<P>(contract: ComponentContract<P>, implementation: ComponentImplementation<P>) {
-      // Only `TaskHeader` is served; the first test pins that.
+    register<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<P, Settings>) {
+      // The first registration is the task header; the second is the composer.
       seen.push({ contract, implementation: implementation as unknown as ComponentImplementation<TaskHeaderProps> })
       return { dispose() {} }
     },
@@ -37,7 +38,7 @@ function registered(): Registered[] {
 
 describe('core defaults: the gate', () => {
   it('serves the task header’s main part', () => {
-    expect(CORE_COMPONENT_CONTRACTS).toEqual([TaskHeader])
+    expect(CORE_COMPONENT_CONTRACTS).toEqual([TaskHeader, TaskComposer])
   })
 
   it('leaves no served contract without core’s default on the registry main.tsx builds', () => {
@@ -47,7 +48,7 @@ describe('core defaults: the gate', () => {
   it('fails without registerCoreComponents, so the check is shown to fail', () => {
     const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
 
-    expect(missingDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['task.header'])
+    expect(missingDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['task.header', 'cezar.task.composer'])
   })
 
   it('gives a ComponentsProvider without a registry the same catalog, with core’s default for the header', () => {
@@ -78,12 +79,14 @@ describe('core’s task header main part', () => {
   it('is registered once, for TaskHeader, and fits it with all three capabilities', () => {
     const [only, ...others] = registered()
 
-    expect(others).toEqual([])
+    expect(others).toHaveLength(1)
     expect(only?.contract).toBe(TaskHeader)
     expect(checkComponentCompatibility(TaskHeader, only!.implementation)).toEqual({
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status', 'shows-meta'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
   })
 
@@ -93,7 +96,6 @@ describe('core’s task header main part', () => {
     expect(registry.get('core.task-header')).toMatchObject({
       componentId: 'core.task-header',
       extensionId: null,
-      isDefault: true,
       compatible: true,
       component: registered()[0]?.implementation.component,
     })
@@ -103,12 +105,14 @@ describe('core’s task header main part', () => {
     expect(resolution.fallback).toBe(resolution.component)
   })
 
-  it('keeps core’s id: an extension cannot claim the core namespace', () => {
+  it('keeps core’s id: registered before the extension host, it cannot be taken by an extension', () => {
     const registry = createCoreComponentRegistry()
     const components = registry.forExtension(fakeScope('cezar.task').scope)
     const implementation = registered()[0]!.implementation
 
-    expect(() => components.provide(TaskHeader, { ...implementation, title: 'Impostor header' })).toThrow(/may only provide components under/)
+    expect(() => components.provide(TaskHeader, { ...implementation, title: 'Impostor header' })).toThrow(
+      /already provided by core/,
+    )
     expect(registry.get('core.task-header')?.extensionId).toBeNull()
   })
 })

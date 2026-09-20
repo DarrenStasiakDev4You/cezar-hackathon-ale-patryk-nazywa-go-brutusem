@@ -15,6 +15,12 @@ const manifest = (): ExtensionManifest => ({
   engines: { cezar: '^0.12.0' },
 })
 
+const typedPermissions: ExtensionManifest = { ...manifest(), permissions: ['storage'] }
+// @ts-expect-error Permission names are a closed union for TypeScript authors.
+const typoPermission: ExtensionManifest = { ...manifest(), permissions: ['storge'] }
+void typedPermissions
+void typoPermission
+
 function definitionError(run: () => unknown): ExtensionDefinitionError {
   try {
     run()
@@ -37,6 +43,14 @@ describe('defineExtension', () => {
     expect(Object.isFrozen(extension.manifest.engines)).toBe(true)
   })
 
+  it('freezes manifest permissions', () => {
+    const extension = defineExtension({
+      manifest: { ...manifest(), permissions: ['storage'] },
+      activate() {},
+    })
+    expect(Object.isFrozen(extension.manifest.permissions)).toBe(true)
+  })
+
   it('accepts an async activate and an optional deactivate', () => {
     expect(() =>
       defineExtension({ manifest: manifest(), async activate() {}, async deactivate() {} }),
@@ -54,6 +68,23 @@ describe('defineExtension', () => {
     expect(error.message).toContain('"Acme"')
     expect(error.message).toContain('manifest.version must be a semver version')
     expect(Object.isFrozen(error.issues)).toBe(true)
+  })
+
+  it('reports an invalid permission with its manifest path', () => {
+    const error = definitionError(() =>
+      defineExtension({
+        manifest: { ...manifest(), permissions: ['Bad.permission'] as never },
+        activate() {},
+      }),
+    )
+    expect(error.code).toBe('invalid-manifest')
+    expect(error.issues).toEqual([
+      {
+        path: 'manifest.permissions[0]',
+        message:
+          'must be one or more dot-separated segments of [a-z][a-z0-9-]*, at most 64 characters',
+      },
+    ])
   })
 
   it('throws when activate is not a function', () => {
@@ -88,6 +119,9 @@ describe('defineExtension', () => {
       manifest: manifest(),
       activate(context) {
         expectTypeOf(context).toEqualTypeOf<ExtensionContext>()
+        expectTypeOf(context.notifications.info).toEqualTypeOf<(message: string) => void>()
+        expectTypeOf(context.notifications.warning).toEqualTypeOf<(message: string) => void>()
+        expectTypeOf(context.notifications.error).toEqualTypeOf<(message: string) => void>()
       },
       extra: 1,
     })

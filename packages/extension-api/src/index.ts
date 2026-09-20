@@ -8,17 +8,42 @@ export {
   type ComponentCompatibilityIssue,
 } from './compatibility.ts'
 export {
+  booleanSetting,
   defineComponentContract,
+  defineSettings,
   type ComponentCapability,
   type ComponentContract,
   type ComponentContractOptions,
+  type ComponentRenderProps,
+  type ComponentRegistrationHandle,
+  type ComponentSettingsDefinition,
+  type ComponentSettingsSchema,
+  type ComponentSettingsScope,
+  type ComponentSettingDefinition,
+  type BooleanSettingDefinition,
   type ComponentImplementation,
   type ComponentLayout,
   type ComponentProps,
   type ComponentRegistry,
+  type InferSettings,
+  type SettingsOf,
 } from './components.ts'
 export type { ExtensionContext } from './context.ts'
 export {
+  TaskComposer,
+  type TaskActionState,
+  type TaskComposerActions,
+  type TaskComposerAttachment,
+  type TaskComposerAvailability,
+  type TaskComposerCompletionList,
+  type TaskComposerCompletions,
+  type TaskComposerDraft,
+  type TaskComposerEngine,
+  type TaskComposerFile,
+  type TaskComposerProps,
+  type TaskComposerRunnerChoice,
+  type TaskComposerSkill,
+  type TaskComposerStatus,
   TaskHeader,
   type TaskHeaderActions,
   type TaskHeaderActionState,
@@ -62,4 +87,6 @@ export { isValidContributionId, isValidExtensionId, type ContributionId, type Ex
 export type { IsJson, JsonPrimitive, JsonValue } from './json.ts'
 export type { Disposable } from './lifecycle.ts'
 export { validateManifest, type ExtensionManifest, type ManifestIssue } from './manifest.ts'
+export type { Notifications } from './notifications.ts'
+export type { ExtensionPermission } from './permissions.ts'
 export type { ExtensionStorage } from './storage.ts'

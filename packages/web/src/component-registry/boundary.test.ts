@@ -50,7 +50,7 @@ describe('findCoreImplementationImports', () => {
     const source = [
       "import type { CoreTaskHeader } from './core-task-header'",
       "import { RunHeader } from './run-header'",
-      "import { useTaskHeaderModel } from './task-header-model'",
+      "import { useTaskHeaderMainProps } from './task-header-main'",
       "type Header = typeof import('./core-task-header')",
       "// import { CoreTaskHeader } from './core-task-header'",
     ].join('\n')
@@ -63,12 +63,15 @@ describe('findCoreImplementationImports', () => {
 
     expect(scan('src/component-registry/core-components.ts', registration)).toEqual([])
     // The scan is not blind to how that module really writes its import.
-    expect(scan('src/component-registry/elsewhere.ts', registration)).toEqual(['@/routes/task-thread/core-task-header'])
+    expect(scan('src/component-registry/elsewhere.ts', registration)).toEqual([
+      '@/routes/task-thread/core-task-composer',
+      '@/routes/task-thread/core-task-header',
+    ])
   })
 })
 
 describe('the cockpit', () => {
-  it('renders core’s task header only through ComponentHost: nothing but core-components.ts imports it', () => {
+  it('renders core’s task header main part only through ComponentHost: nothing but core-components.ts imports it', () => {
     const sources = cockpitSources()
 
     expect(sources.length).toBeGreaterThan(100)

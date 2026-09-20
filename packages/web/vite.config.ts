@@ -34,7 +34,10 @@ export const reactRuntimeChunk = {
  */
 export const entryChunkRules = {
   /** Core's defaults: in the entry chunk, or in a chunk it imports statically. */
-  eager: [/\/src\/routes\/task-thread\/core-task-header\.tsx$/],
+  eager: [
+    /\/src\/routes\/task-thread\/core-task-header\.tsx$/,
+    /\/src\/routes\/task-thread\/core-task-composer\.tsx$/,
+  ],
   /** What a core default must not reach through its static imports. */
   keptOut: [/\/node_modules\/streamdown\//, /\/src\/routes\/task-thread\/run-header\.tsx$/],
 }
