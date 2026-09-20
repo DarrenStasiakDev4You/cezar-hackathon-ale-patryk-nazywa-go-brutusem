@@ -537,7 +537,9 @@ export const AppRoutes = memo(function AppRoutes() {
             pre-3.5 bookmark and every legacy flat `/settings/appearance` (which the redirect
             below turns into `/p/<boot>/settings/appearance`) lands on the global twin instead
             of a 404 — query and hash intact across both hops. */}
-        {visibleSettingsSections('global', capabilities).map((section) => (
+        {/* `components` also has a project-scoped settings page; its flat legacy spelling must
+            remain owned by that project route rather than colliding with this moved-section map. */}
+        {visibleSettingsSections('global', capabilities, { omit: ['components'] }).map((section) => (
           <Route
             key={section.id}
             path={`settings/${section.id}`}
