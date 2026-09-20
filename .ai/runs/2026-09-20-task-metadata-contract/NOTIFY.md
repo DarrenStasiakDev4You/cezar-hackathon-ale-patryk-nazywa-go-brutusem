@@ -34,3 +34,22 @@
 - `.ai/scripts/in-docker.sh` is absent from the base revision, so native commands were used instead of the unavailable wrapper.
 - Applied PR labels: `feature`, `review`, `needs-qa`, `priority-medium`, `risk-high`. QA approval was intentionally not applied.
 - Final handoff: review PR #55, then perform manual QA before merge.
+
+## 2026-09-20T02:03:19Z — resumed final gate
+- Re-read `HANDOFF.md`, the authoritative `PLAN.md` Tasks table, and the `NOTIFY.md` tail before resuming. All nine implementation Tasks remain `done`; no implementation work was repeated.
+- The exact configured Docker wrapper is absent from the base revision. Native equivalents passed for typecheck, test:unit (36/36), build/check:pack, and test:package (16/16). Native `npm test` remained red on unrelated/environment-sensitive baseline tests; two fresh runs reported 8 and 12 failures under concurrent worktree load. The gate remains blocked; no unrelated tests were changed.
+- Full `npm run test:e2e` was attempted through the repository integration path with a fresh dry-run app and timed out at 600 seconds after broad unrelated failures. The task-thread suite retained five stale/unrelated failures. The test environment was stopped.
+- Final review-state handling checked the unchanged PR head `3d65ca9` against the prior authoritative review. Per review rules, no duplicate review or autofix commit was created. The prior review's blocker is still the red configured gate; it found no change-specific findings.
+- Final-gate record: `.ai/runs/2026-09-20-task-metadata-contract/final-gate-checks.md`. UI evidence remains partial; `needs-qa` is preserved and neither `qa-approved` nor `qa-self-verified` was added.
+
+## 2026-09-20T02:09:22Z — om-auto-continue-pr-loop resume
+- Resumed by: @DarrenStasiakDev4You
+- Resume point: final gate (source: HANDOFF.md / Tasks table)
+- PR head SHA: `3d65ca91d49ae4c25f1533ddfe1e193d5adb8a8c`
+- All implementation Tasks remain `done`; no implementation work is repeated. The final gate remains blocked by the absent configured Docker wrapper and red unrelated baseline tests.
+
+## 2026-09-20T02:09:22Z — resume complete
+- Final status: `in-progress`; PR remains draft because the configured validation gate is unavailable and not green.
+- Exact wrapper commands were retried and all exited `2` because `.ai/scripts/in-docker.sh` is absent. No implementation files changed and no duplicate review was run at the unchanged head.
+- PR: https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/55
+- Lock release follows this handoff; preserve `needs-qa` and do not apply QA approval from automation.
