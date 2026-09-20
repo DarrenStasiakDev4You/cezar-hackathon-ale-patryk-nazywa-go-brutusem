@@ -39,4 +39,4 @@ Risks:
 - [x] 2.1 Add a pure load result that distinguishes current, migrated and fallback layouts while retaining raw input. — 3026a749
 - [x] 2.2 Connect the loader to the default core layout without throwing into the root React tree. — 3026a749
 - [x] 2.3 Add regression coverage for optional resolver fallback and required-component failure to the full default. — 67b3bdcf
-- [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR.
+- [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR. — review complete; full `npm test` is blocked by five pre-existing failures in `extension-api/test/plain-task-composer.test.ts` and `web/src/routes/task-thread/external-task-header.test.tsx`; other gate commands pass.
