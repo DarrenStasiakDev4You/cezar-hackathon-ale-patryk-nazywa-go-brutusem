@@ -20,7 +20,7 @@
 | 2 | 2.3 | The split | inline | done | 5063eda9 |
 | 3 | 3.1 | The second implementation | inline | done | 7e4e2d96 |
 | 3 | 3.2 | The proof on the task page | inline | done | 69239e79 |
-| 3 | 3.3 | The conformance test | inline | done | pending |
+| 3 | 3.3 | The conformance test | inline | done | 652458ba |
 | 3 | 3.4 | The README and AGENTS.md | inline | todo | — |
 
 ## Goal
