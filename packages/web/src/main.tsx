@@ -6,6 +6,9 @@ import { createQueryClient } from './api/query-client'
 import { registerCoreCommands } from './commands/core-commands'
 import { createCommandRegistry } from './commands/registry'
 import { createCoreComponentRegistry } from './component-registry/core-components'
+import { CORE_COMPONENT_CONTRACTS } from './component-registry/core-contracts'
+import { createComponentPreferences } from './component-registry/preferences'
+import { uiStateComponentStorage } from './component-registry/stored-components-provider'
 import { createPersistentComponentSettingsStore, resolveComponentProjectId } from './component-registry/settings'
 import { createEventBus } from './events/bus'
 import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
@@ -43,7 +46,15 @@ const events = createEventBus()
 // component contract with its provenance. Core's defaults are registered here, before the host
 // starts, as the core commands are, so core always keeps its own ids and every served contract
 // has a default to render and to fall back to (spec `2026-09-19-component-host`).
-const components = createCoreComponentRegistry({ settings: createPersistentComponentSettingsStore({ resolveProjectId: resolveComponentProjectId }), resolveProjectId: resolveComponentProjectId })
+const components = createCoreComponentRegistry({
+  settings: createPersistentComponentSettingsStore({ resolveProjectId: resolveComponentProjectId }),
+  resolveProjectId: resolveComponentProjectId,
+})
+const componentPreferences = createComponentPreferences({
+  registry: components,
+  contracts: CORE_COMPONENT_CONTRACTS,
+  storage: uiStateComponentStorage(queryClient),
+})
 
 // Extensions compiled into the cockpit (spec `2026-09-18-extension-registry`). Started outside the
 // React tree and never awaited: the host never throws and its `ready` never rejects, so no
@@ -60,6 +71,12 @@ if (!container) throw new Error('cezar: #root container is missing from index.ht
 
 createRoot(container).render(
   <StrictMode>
-    <App queryClient={queryClient} commands={commands} events={events} components={components} />
+    <App
+      queryClient={queryClient}
+      commands={commands}
+      events={events}
+      components={components}
+      componentPreferences={componentPreferences}
+    />
   </StrictMode>,
 )
