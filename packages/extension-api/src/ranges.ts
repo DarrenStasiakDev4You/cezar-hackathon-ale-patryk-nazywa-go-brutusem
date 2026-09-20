@@ -110,9 +110,13 @@ function parseComparator(text: string): ComparatorSet | null {
     const upper = operator === '^'
       ? version.major > 0
         ? boundary(version, 0)
-        : version.minor > 0
-          ? boundary(version, 1)
-          : boundary(version, 2)
+        : version.specified < 3
+          ? version.specified === 1
+            ? boundary(version, 0)
+            : boundary(version, 1)
+          : version.minor > 0
+            ? boundary(version, 1)
+            : boundary(version, 2)
       : boundary(version, version.specified <= 1 ? 0 : 1)
     return [
       { operator: '>=', version: withoutRangeFields(version) },
