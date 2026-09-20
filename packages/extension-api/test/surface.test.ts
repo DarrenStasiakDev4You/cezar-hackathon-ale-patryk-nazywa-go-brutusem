@@ -14,6 +14,7 @@ describe('@open-mercato/cezar-extension-api surface', () => {
   // type tests; this list is what exists at runtime.)
   it('exports exactly these runtime names', () => {
     expect(Object.keys(api).sort()).toEqual([
+      'EXTENSION_API_VERSION',
       'ExtensionActivated',
       'ExtensionDefinitionError',
       'LAYOUT_SCHEMA_VERSION',
@@ -33,6 +34,7 @@ describe('@open-mercato/cezar-extension-api surface', () => {
       'TaskStop',
       'booleanSetting',
       'checkComponentCompatibility',
+      'checkPackageCompatibility',
       'defineCommand',
       'defineComponentContract',
       'defineEvent',
@@ -45,6 +47,7 @@ describe('@open-mercato/cezar-extension-api surface', () => {
       'parseLayoutSchema',
       'serializeLayoutSchema',
       'validateManifest',
+      'validatePackageManifest',
     ])
   })
 })
