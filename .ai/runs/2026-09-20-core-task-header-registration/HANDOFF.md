@@ -4,7 +4,7 @@ PR #54 remains in progress on `feat/core-task-header-registration`.
 
 ## Resume Point
 
-The first remaining task is **2.2**: commit the provider-neutral/core namespace documentation and boundary assertions. Step 2.1's implementation rename is staged for its lean commit; Step 2.2's documentation changes remain unstaged.
+The first remaining task is **2.3**: run the configured validation gate, complete the review, and resolve findings. Steps 2.1 and 2.2 are committed as separate lean commits.
 
 ## Current State
 
@@ -21,6 +21,5 @@ The first remaining task is **2.2**: commit the provider-neutral/core namespace 
 
 ## Next Actions
 
-1. Commit Step 2.1, then commit Step 2.2 as a separate lean commit.
-2. Run/review the final gate and record the outcome in `final-gate-checks.md`.
-3. Run the authoritative PR review/autofix pass, update PR #54, and release the lock.
+1. Run/review the final gate and record the outcome in `final-gate-checks.md`.
+2. Run the authoritative PR review/autofix pass, update PR #54, and release the lock.

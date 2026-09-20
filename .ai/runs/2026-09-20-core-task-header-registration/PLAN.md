@@ -11,7 +11,7 @@ PR: #54
 | 1.2 | 1 | Resolve fallbacks from `isDefault` and rename the missing-default diagnostics. | inline | done |
 | 1.3 | 1 | Add absent-default coverage and repository guidance. | inline | done |
 | 2.1 | 2 | Rename the public contract, exports, implementation/model files, ids, and consumers/tests. | inline | done |
-| 2.2 | 2 | Document provider-neutral contracts and `core.*` implementations; update boundary assertions. | inline | todo |
+| 2.2 | 2 | Document provider-neutral contracts and `core.*` implementations; update boundary assertions. | inline | done |
 | 2.3 | 2 | Run the validation gate, review the complete diff, and resolve findings. | inline | todo |
 
 ## Scope

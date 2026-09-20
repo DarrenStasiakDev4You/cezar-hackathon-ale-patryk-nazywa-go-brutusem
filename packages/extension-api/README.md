@@ -239,10 +239,10 @@ what you read (the example does). Like all Cezar state it may be deleted; work f
 ### Replacing a component
 
 `context.components.provide(contract, { id, title, capabilities?, component })` offers an
-implementation of a core contract. Providing never selects: the user picks an implementation per
-contract, core's default always stays available, and a replacement that throws while rendering
-falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
-goes through the same check.
+implementation of a component contract. Providing never selects: the user picks an implementation
+per contract, the declared default always stays available, and a replacement that throws while
+rendering falls back to it. Core's implementations use the `core.…` prefix, while a provider's
+implementations use its own prefix, and every implementation goes through the same check.
 
 **Status.** The cockpit serves one core contract, the task header's main part (below). It keeps
 every implementation per contract with the id of the extension that provided it, and renders a
@@ -258,7 +258,7 @@ for it, so it only reaches the console), and an infinite loop or a component tha
 suspending cannot be stopped. If your extension deactivates, core's default takes its place without
 a notice.
 
-**The task header's main part.** `TaskHeaderMain` (`cezar.task.header.main@1`) is the header's
+**The task header.** `TaskHeader` (`task.header@1`) is the header's
 public model and its presentational part: the title, the status and the basic facts. Its props are
 all JSON except seven intents:
 
