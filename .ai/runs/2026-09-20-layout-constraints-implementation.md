@@ -20,7 +20,7 @@ Implement `.ai/specs/2026-09-20-layout-constraints.md` against `main`: add immut
 
 ## Risks
 
-The public component-definition shape and layout mutation seams are compatibility-sensitive. Validator drift between page admission, rendering, and edit-mode operations is the primary correctness risk. Existing legacy descriptors must remain behaviorally compatible, while constrained descriptors must reject stale or unsupported mutations atomically.
+The public component-definition shape and layout mutation seams are compatibility-sensitive. Validator drift between page admission, rendering, and edit-mode operations is the primary correctness risk. Existing legacy descriptors must remain behaviorally compatible, while constrained descriptors must reject stale or unsupported mutations atomically. The exact full `npm test` gate remains blocked by unrelated environment-sensitive timeouts in server/process fixtures; the implementation-specific suite, typecheck, unit gate, build and package gate pass.
 
 Source doc: .ai/specs/2026-09-20-layout-constraints.md
 
