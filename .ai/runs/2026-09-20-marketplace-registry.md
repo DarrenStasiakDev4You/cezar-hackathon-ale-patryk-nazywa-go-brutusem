@@ -26,7 +26,7 @@ Spec PR: #73 (merged)
 
 ### Phase 3: Operational Handoff
 
-- [ ] 3.1 Add the checked-in sample catalog fixture and update `BACKWARD_COMPATIBILITY.md` with exact route, response, cache, and additive evolution semantics.
+- [x] 3.1 Add the checked-in sample catalog fixture and update `BACKWARD_COMPATIBILITY.md` with exact route, response, cache, and additive evolution semantics. — d22c80df
 
 ## Progress
 
