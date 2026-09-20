@@ -141,6 +141,6 @@ function isZoneContent(value: unknown): value is ZoneContent {
   return value.contract.kind === 'component' && typeof value.contract.id === 'string' && typeof value.contract.version === 'number' && isRecord(value.props)
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === 'object' && value !== null
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }

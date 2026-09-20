@@ -94,9 +94,10 @@ function validateDefinition(definition: PageDefinition): string[] {
       issues.push(`${path} must be an object`)
       return
     }
-    if (!isValidContributionId(zone.id)) issues.push(`${path}.id must be a valid contribution id`)
-    if (zoneIds.has(zone.id)) issues.push(`${path}.id duplicates another zone`)
-    zoneIds.add(zone.id)
+    const zoneId = typeof zone.id === 'string' ? zone.id : ''
+    if (!isValidContributionId(zoneId)) issues.push(`${path}.id must be a valid contribution id`)
+    if (zoneIds.has(zoneId)) issues.push(`${path}.id duplicates another zone`)
+    zoneIds.add(zoneId)
     if (zone.cardinality !== 'single' && zone.cardinality !== 'many') {
       issues.push(`${path}.cardinality must be "single" or "many"`)
     }
@@ -130,7 +131,7 @@ function validateZoneLayout(layout: unknown, path: string, issues: string[]): vo
     issues.push(`${path}.layout must be an object`)
     return
   }
-  if (layout.order !== undefined && (!Number.isInteger(layout.order) || layout.order < 0)) {
+  if (layout.order !== undefined && (typeof layout.order !== 'number' || !Number.isInteger(layout.order) || layout.order < 0)) {
     issues.push(`${path}.layout.order must be a non-negative integer`)
   }
   if (layout.sizing !== undefined && layout.sizing !== 'content' && layout.sizing !== 'fill') {
@@ -141,7 +142,10 @@ function validateZoneLayout(layout: unknown, path: string, issues: string[]): vo
   }
   if (
     layout.minBlockSize !== undefined &&
-    (!Number.isInteger(layout.minBlockSize) || layout.minBlockSize < 0 || layout.minBlockSize > 2048)
+    (typeof layout.minBlockSize !== 'number' ||
+      !Number.isInteger(layout.minBlockSize) ||
+      layout.minBlockSize < 0 ||
+      layout.minBlockSize > 2048)
   ) {
     issues.push(`${path}.layout.minBlockSize must be an integer from 0 to 2048`)
   }
@@ -163,15 +167,15 @@ function freezeDefinition(definition: PageDefinition): PageDefinition {
 
 function isComponentContract(value: unknown): value is PageComponentContract {
   if (!isRecord(value)) return false
-  return value.kind === 'component' && isValidContributionId(value.id) && isPositiveInteger(value.version)
+  return value.kind === 'component' && typeof value.id === 'string' && isValidContributionId(value.id) && isPositiveInteger(value.version)
 }
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value >= 1
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
-  return typeof value === 'object' && value !== null
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 // Keep the exported contract type useful to callers without exposing the phantom props function.
