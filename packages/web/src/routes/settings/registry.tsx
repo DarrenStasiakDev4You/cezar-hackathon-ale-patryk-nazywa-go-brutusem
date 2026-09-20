@@ -1,5 +1,6 @@
 import {
   BellIcon,
+  BlocksIcon,
   BookmarkIcon,
   BotIcon,
   FileCogIcon,
@@ -21,6 +22,7 @@ import { AgentConfigSection } from './agent-config-section'
 import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
 import { BookmarkletsSection } from './bookmarklets-section'
+import { ComponentsSection } from './components-section'
 import { NotificationsSection } from './notifications-section'
 import { ProjectsSection } from './projects-section'
 import { PromptTemplatesSection } from './prompt-templates-section'
@@ -57,6 +59,7 @@ export type SettingsSectionId =
   | 'prompt-templates'
   | 'keyboard'
   | 'skills'
+  | 'components'
 
 /** Which settings area a section belongs to — and therefore which store it writes. */
 export type SettingsScope = 'project' | 'global'
@@ -162,6 +165,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Updates for skills installed on this machine.',
     icon: PackageCheckIcon,
     component: SkillsSection,
+    scope: 'global',
+  },
+  {
+    id: 'components',
+    title: 'Components',
+    description: 'Choose which implementation renders each interface component.',
+    icon: BlocksIcon,
+    component: ComponentsSection,
     scope: 'global',
   },
   {

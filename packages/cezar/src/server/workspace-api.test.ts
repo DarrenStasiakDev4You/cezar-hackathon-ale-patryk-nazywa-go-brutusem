@@ -392,6 +392,34 @@ describe('the workspace settings API (step 2.7)', () => {
     expect(rawUiState()).toEqual({ sidebar: { collapsed: { cezar: true } } });
   });
 
+  it('round-trips component implementation choices and preserves future component siblings', async () => {
+    const components = {
+      implementations: { 'cezar.task.header.main': 'acme.jira.task-header' },
+      futureSettings: { compact: true },
+    };
+    const res = await putUiState({ components });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ components });
+    expect(rawUiState()).toEqual({ components });
+
+    await putUiState({ appearance: { accent: 'violet' } });
+    expect(rawUiState()).toEqual({ components, appearance: { accent: 'violet' } });
+  });
+
+  it.each([
+    ['a non-string value', { 'cezar.task.header.main': 7 }],
+    ['an empty implementation id', { '': 'acme.jira.task-header' }],
+    ['an overlong implementation id', { ['x'.repeat(129)]: 'acme.jira.task-header' }],
+    ['more than 200 entries', Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`cezar.component.${index}`, 'acme.impl']))],
+  ])('rejects component implementation choices with %s without writing state', async (_case, implementations) => {
+    const res = await putUiState({ components: { implementations } });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()) as { error: string }).toHaveProperty('error');
+    expect(() => readFileSync(workspaceUiStatePath(), 'utf8')).toThrow();
+  });
+
   it.each([
     ['a non-string id', ['shop', 7]],
     ['an empty id', ['shop', '']],
