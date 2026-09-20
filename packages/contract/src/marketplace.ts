@@ -13,9 +13,16 @@ const extensionIdPattern = /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/;
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 const rangePart = '(?:0|[1-9]\\d*|[xX*])';
 const rangeTokenPattern = new RegExp(`^(?:\\^|~|>=|<=|>|<|=)?${rangePart}(?:\\.${rangePart}){0,2}(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`);
-const permissionPattern = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/;
 const sha256Pattern = /^[0-9a-f]{64}$/;
 const httpsUrlPattern = /^https:\/\/[^\s/?#@]+(?:[/?#][^\s]*)?$/;
+const MARKETPLACE_PERMISSIONS = [
+  'ui.components',
+  'commands.execute',
+  'storage',
+  'events',
+  'network',
+  'notifications',
+] as const;
 
 function isAbsoluteHttpsUrl(value: string): boolean {
   return httpsUrlPattern.test(value);
@@ -44,7 +51,7 @@ export const marketplaceExtensionVersionSchema = z.object({
     apiVersion: z.number().int().positive(),
     cezar: z.string().trim().min(1).max(MARKETPLACE_MAX_RANGE_LENGTH).refine(isSupportedRange),
   }).strict(),
-  permissions: z.array(z.string().regex(permissionPattern).max(64)).max(MARKETPLACE_MAX_PERMISSIONS)
+  permissions: z.array(z.enum(MARKETPLACE_PERMISSIONS)).max(MARKETPLACE_MAX_PERMISSIONS)
     .refine((permissions) => new Set(permissions).size === permissions.length),
   releaseUrl: z.string().max(MARKETPLACE_MAX_URL_LENGTH).refine(isConcreteReleaseUrl),
   checksum: z.object({

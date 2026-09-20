@@ -1,9 +1,15 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  MARKETPLACE_MAX_DOCUMENT_BYTES,
   marketplaceCatalogSchema,
   marketplaceCatalogResponseSchema,
 } from '@open-mercato/cezar-contract';
-import { parseMarketplaceCatalog, parseMarketplaceCatalogJson } from './marketplace.ts';
+import {
+  createMarketplaceRegistry,
+  parseMarketplaceCatalog,
+  parseMarketplaceCatalogJson,
+} from './marketplace.ts';
 
 const checksum = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
@@ -45,6 +51,11 @@ describe('marketplace contract and parser', () => {
     }).success).toBe(true);
   });
 
+  it('keeps the checked-in GitHub Release example parseable without fetching it', () => {
+    const fixture = JSON.parse(readFileSync(new URL('../test/fixtures/marketplace-catalog.json', import.meta.url), 'utf8')) as unknown;
+    expect(parseMarketplaceCatalog(fixture)?.partial).toBe(false);
+  });
+
   it('rejects moving release aliases, uppercase checksums, duplicate permissions and bad ranges', () => {
     expect(marketplaceCatalogSchema.safeParse(catalog([extension('acme.jira', [
       version('1.3.0', 'https://github.com/acme/example/releases/latest/download/extension.tgz'),
@@ -56,6 +67,10 @@ describe('marketplace contract and parser', () => {
     expect(marketplaceCatalogSchema.safeParse(catalog([extension('acme.jira', [{
       ...version('1.3.0'),
       permissions: ['events', 'events'],
+    }])])).success).toBe(false);
+    expect(marketplaceCatalogSchema.safeParse(catalog([extension('acme.jira', [{
+      ...version('1.3.0'),
+      permissions: ['unknown.permission'],
     }])])).success).toBe(false);
   });
 
@@ -90,5 +105,66 @@ describe('marketplace contract and parser', () => {
     expect(parseMarketplaceCatalog({ schemaVersion: 2, generatedAt: '2026-09-20T09:00:00.000Z', extensions: [] })).toBeNull();
     expect(parseMarketplaceCatalogJson('{not json')).toBeNull();
     expect(parseMarketplaceCatalogJson(' '.repeat(1_000_001))).toBeNull();
+  });
+
+  it('fetches on demand, coalesces concurrent reads and reuses only successful results', async () => {
+    let calls = 0;
+    let now = 1_000;
+    const registry = createMarketplaceRegistry({
+      now: () => now,
+      fetch: async () => {
+        calls += 1;
+        return new Response(JSON.stringify(catalog()), { status: 200 });
+      },
+    });
+    const [first, second] = await Promise.all([registry.read(), registry.read()]);
+    expect(first).toEqual(second);
+    expect(calls).toBe(1);
+    now += 1_000;
+    await registry.read();
+    expect(calls).toBe(1);
+  });
+
+  it('fails closed for transport, redirect, malformed and oversized responses', async () => {
+    const cases = [
+      () => Promise.reject(new Error('offline')),
+      async () => new Response('', { status: 302, headers: { location: 'https://evil.example/catalog.json' } }),
+      async () => new Response('{not json', { status: 200 }),
+      async () => new Response('x'.repeat(MARKETPLACE_MAX_DOCUMENT_BYTES + 1), { status: 200 }),
+      async () => new Response('upstream secret body', { status: 500 }),
+    ];
+    for (const fetch of cases) {
+      const response = await createMarketplaceRegistry({ fetch }).read();
+      expect(response).toEqual({ available: false, reason: 'marketplace registry is unavailable' });
+    }
+  });
+
+  it('aborts a fetch that exceeds the explicit timeout', async () => {
+    const response = await createMarketplaceRegistry({
+      timeoutMs: 1,
+      fetch: async (_input, init) => await new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('timed out')));
+      }),
+    }).read();
+    expect(response).toEqual({ available: false, reason: 'marketplace registry is unavailable' });
+  });
+
+  it('returns partial results with a bounded diagnostic and preserves declarations', async () => {
+    const diagnostics: string[] = [];
+    const response = await createMarketplaceRegistry({
+      fetch: async () => new Response(JSON.stringify(catalog([extension('acme.jira', [
+        version('1.3.0'),
+        { ...version('1.3.1'), compatibility: { apiVersion: 99, cezar: '^9.0.0' } },
+        { ...version('invalid'), version: 'not-semver' },
+      ])])), { status: 200 }),
+      onDiagnostic: (message) => diagnostics.push(message),
+    }).read();
+    expect(response.available).toBe(true);
+    if (response.available) {
+      expect(response.partial).toBe(true);
+      expect(response.extensions[0]?.versions.find((item) => item.version === '1.3.1')?.compatibility)
+        .toEqual({ apiVersion: 99, cezar: '^9.0.0' });
+    }
+    expect(diagnostics).toEqual(['partial catalog; invalid entries were omitted']);
   });
 });
