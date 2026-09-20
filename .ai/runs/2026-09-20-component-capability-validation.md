@@ -25,6 +25,7 @@ Non-goals: settings UI, stored preferences, HTTP routes, persisted data, or chan
 - [x] Post-step fix: update the existing core-component whole-result assertion for the additive fields. — eed14682
 - [x] 1.2 Record capability lists on registry registrations, preserve unknown-contract behavior, and add registry regression tests. — 98ac183e
 - [x] 1.3 Add `listComponentChoices` with resolver agreement, deterministic grouping, and focused choices tests. — 5db468d1
+- [x] Post-step fix: cover actual tracked disposal removing an unavailable choice. — 99e72f0a
 - [x] 1.4 Add extension-host Definition of Done coverage and update the extension API README and `AGENTS.md` guidance. — 38279c6a
 
 ## Progress
