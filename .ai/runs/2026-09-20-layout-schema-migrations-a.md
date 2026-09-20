@@ -23,6 +23,15 @@ Risks:
 - A partial split or required-component removal could silently lose user layout intent; validators, immutable transforms and fail-closed fallback guard this boundary.
 - The v1 LayoutSchema is owned by `@open-mercato/cezar-extension-api`; the web migration seam must consume it without duplicating its wire shape or importing runtime component implementations.
 
+## Validation record
+
+- `npm run typecheck` — passed.
+- Focused layout schema, migration and Task Page boundary tests — 18 passed.
+- `npm run test:unit` — passed (36 tests).
+- `npm run build` — passed, including the web build and package check.
+- `npm run test:package` — passed (16 tests).
+- `npm test` — blocked: 17 tests failed across six unrelated existing test files while 8,255 passed. Step 2.4 remains open until the repository-wide Vitest gate is green.
+
 ## Progress
 
 PR: #68 (https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/68)
@@ -43,3 +52,5 @@ PR: #68 (https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazy
 - [x] 2.3 Add regression coverage for optional resolver fallback and required-component failure to the full default. — 67b3bdcf
 - [x] Follow-up: align the migration seam with the shipped extension-api v1 contract and keep migration rules contract-based. — bbb0abb0
 - [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR.
+
+> Resume note: the validation gate, diff review and authoritative review ran on 2026-09-20. The review requested changes because `npm test` remains red; rerun `/om-auto-continue-pr 68` after the six failing test files are resolved.
