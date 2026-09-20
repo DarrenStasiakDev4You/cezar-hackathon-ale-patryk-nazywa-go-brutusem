@@ -3,11 +3,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
-import type { TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import type { TaskHeaderMainProps, TaskMetadataProps } from '@open-mercato/cezar-extension-api'
 import { ReferenceChip } from '@/components/reference-chip'
 import { ReferenceStatusProvider } from '@/components/reference-status'
 
 import { CoreTaskHeaderMain } from './core-task-header-main'
+import { CoreTaskMetadata } from './core-task-metadata'
 
 beforeEach(() => {
   // Radix's tooltip arrow measures itself with a ResizeObserver; jsdom has no layout observer.
@@ -80,6 +81,23 @@ function headerProps(extra: Partial<TaskHeaderMainProps> = {}): TaskHeaderMainPr
   }
 }
 
+function metadataProps(props: TaskHeaderMainProps): TaskMetadataProps {
+  return {
+    task: { id: props.task.taskId, projectId: props.task.projectId, title: props.task.title },
+    metadata: { ...props.meta, engine: props.engine },
+    actions: { resolveConflicts: props.actions.resolveConflicts, chooseEngine: props.actions.chooseEngine },
+    intents: {
+      resolveConflicts: props.onResolveConflicts,
+      navigate: props.onNavigate,
+      chooseEngine: props.onChooseEngine,
+    },
+  }
+}
+
+function RenderedHeader(props: TaskHeaderMainProps) {
+  return <><CoreTaskHeaderMain {...props} /><CoreTaskMetadata {...metadataProps(props)} /></>
+}
+
 const meta = () => document.querySelector('[data-slot="run-meta"]') as HTMLElement
 const chip = (number: number) => meta().querySelector(`[href$="/${number}"]`) as HTMLElement
 const panelText = () => document.querySelector('[data-slot="reference-status-card"]')?.textContent ?? ''
@@ -93,7 +111,7 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
   // No QueryClientProvider, router, CommandsProvider or ComponentsProvider above it: anything it
   // reached for beyond its props would throw here.
   it('renders the title row with the prompt as its hover text, the pill and the plan mirror', () => {
-    render(<CoreTaskHeaderMain {...headerProps()} />)
+    render(<RenderedHeader {...headerProps()} />)
 
     const title = screen.getByRole('heading', { level: 1 })
     expect(title.textContent).toBe('Do the thing')
@@ -103,14 +121,14 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
   })
 
   it('reads a tone it does not know as neutral', () => {
-    render(<CoreTaskHeaderMain {...headerProps({ attention: { label: 'thinking', tone: 'ultraviolet', pulse: true } })} />)
+    render(<RenderedHeader {...headerProps({ attention: { label: 'thinking', tone: 'ultraviolet', pulse: true } })} />)
 
     const dot = document.querySelector('[data-slot="pill"] [data-slot="status-dot"]') as HTMLElement
     expect(dot.className).toContain('bg-soft-foreground')
   })
 
   it('renders the meta row: workflow, branch, the chips, the diff, the automation link and usage', () => {
-    render(<CoreTaskHeaderMain {...headerProps()} />)
+    render(<RenderedHeader {...headerProps()} />)
     const row = meta()
 
     expect(row.textContent).toContain('quick-task')
@@ -131,7 +149,7 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
   })
 
   it('says what a look-up is doing when there is no status to show, and dates a remembered one', async () => {
-    render(<CoreTaskHeaderMain {...headerProps()} />)
+    render(<RenderedHeader {...headerProps()} />)
 
     fireEvent.focus(chip(535))
     await waitFor(() => expect(panelText()).toContain('Checking GitHub…'))
@@ -141,7 +159,7 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
   })
 
   it('shows the repointed caveat on the diff', () => {
-    render(<CoreTaskHeaderMain {...headerProps({ meta: { workflow: 'review', diff: { added: 1, removed: 2, files: 1, repointed: true } } })} />)
+    render(<RenderedHeader {...headerProps({ meta: { workflow: 'review', diff: { added: 1, removed: 2, files: 1, repointed: true } } })} />)
 
     const diff = meta().querySelector('[data-slot="diff-stat"]') as HTMLElement
     expect(diff.getAttribute('data-repointed')).toBe('true')
@@ -149,7 +167,7 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
   })
 
   it('leaves out what the props do not carry', () => {
-    render(<CoreTaskHeaderMain {...headerProps({ meta: { workflow: 'quick-task' }, plan: undefined })} />)
+    render(<RenderedHeader {...headerProps({ meta: { workflow: 'quick-task' }, plan: undefined })} />)
     const row = meta()
 
     expect(row.querySelector('[data-slot="branch-chip"], [data-slot="pr-chip"], [data-slot="diff-stat"]')).toBeNull()
@@ -159,14 +177,14 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
   })
 
   it('degrades the automation chip to text without an href', () => {
-    render(<CoreTaskHeaderMain {...headerProps({ meta: { workflow: 'quick-task', automation: { automationId: 'a-1' } } })} />)
+    render(<RenderedHeader {...headerProps({ meta: { workflow: 'quick-task', automation: { automationId: 'a-1' } } })} />)
 
     expect(meta().querySelector('[data-slot="automation-origin"]')?.textContent).toBe('Automation')
     expect(within(meta()).queryByRole('link', { name: 'Automation' })).toBeNull()
   })
 
   it('shows the engine in the badge, with the breakdown and the identity in its menu', async () => {
-    render(<CoreTaskHeaderMain {...headerProps()} />)
+    render(<RenderedHeader {...headerProps()} />)
 
     const badge = within(meta()).getByRole('button', { name: 'Agent: claude, account Klaudiusz, model opus' })
     expect(badge.querySelector('[data-slot="agent-badge-summary"]')?.textContent).toBe('claude · Klaudiusz · opus')
@@ -183,7 +201,7 @@ describe('CoreTaskHeaderMain, from its props alone', () => {
 describe('CoreTaskHeaderMain, its intents', () => {
   it('the pencil asks core to rename', () => {
     const props = headerProps()
-    render(<CoreTaskHeaderMain {...props} />)
+    render(<RenderedHeader {...props} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Rename task' }))
     expect(props.onRename).toHaveBeenCalledTimes(1)
@@ -191,49 +209,49 @@ describe('CoreTaskHeaderMain, its intents', () => {
 
   it('Resolve conflicts asks for the conflicting PR, and the panel closes when the request settles', async () => {
     const props = headerProps()
-    const { rerender } = render(<CoreTaskHeaderMain {...props} />)
+    const { rerender } = render(<RenderedHeader {...props} />)
 
     fireEvent.focus(chip(534))
     fireEvent.click(await screen.findByRole('button', { name: 'Resolve conflicts' }))
     expect(props.onResolveConflicts).toHaveBeenCalledWith(534)
 
     const pending = { available: true, enabled: false, pending: true }
-    rerender(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, resolveConflicts: pending }} />)
+    rerender(<RenderedHeader {...props} actions={{ ...props.actions, resolveConflicts: pending }} />)
     expect((screen.getByRole('button', { name: 'Sending…' }) as HTMLButtonElement).disabled).toBe(true)
-    rerender(<CoreTaskHeaderMain {...props} />)
+    rerender(<RenderedHeader {...props} />)
     await waitFor(() => expect(document.querySelector('[data-slot="reference-status-card"]')).toBeNull())
   })
 
   // Review of #37: another chip's request settling must not close a card the user did not press.
   it('keeps a card open when a request it did not send settles', async () => {
     const props = headerProps()
-    const { rerender } = render(<CoreTaskHeaderMain {...props} />)
+    const { rerender } = render(<RenderedHeader {...props} />)
     fireEvent.focus(chip(534))
     await screen.findByRole('button', { name: 'Resolve conflicts' })
 
     const pending = { available: true, enabled: false, pending: true }
-    rerender(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, resolveConflicts: pending }} />)
-    rerender(<CoreTaskHeaderMain {...props} />)
+    rerender(<RenderedHeader {...props} actions={{ ...props.actions, resolveConflicts: pending }} />)
+    rerender(<RenderedHeader {...props} />)
     expect(document.querySelector('[data-slot="reference-status-card"]')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Resolve conflicts' })).not.toBeNull()
   })
 
   it('offers no Resolve conflicts while the action is not offered, and explains a refusal', async () => {
     const props = headerProps()
-    const { rerender } = render(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, resolveConflicts: idle }} />)
+    const { rerender } = render(<RenderedHeader {...props} actions={{ ...props.actions, resolveConflicts: idle }} />)
     fireEvent.focus(chip(534))
     await waitFor(() => expect(panelText()).toContain('Pull request #534'))
     expect(screen.queryByRole('button', { name: 'Resolve conflicts' })).toBeNull()
 
     const refused = { available: true, enabled: false, pending: false, reason: 'Connect an agent provider to continue.' }
-    rerender(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, resolveConflicts: refused }} />)
+    rerender(<RenderedHeader {...props} actions={{ ...props.actions, resolveConflicts: refused }} />)
     expect((screen.getByRole('button', { name: 'Resolve conflicts' }) as HTMLButtonElement).disabled).toBe(true)
     expect(panelText()).toContain('Connect an agent provider to continue.')
   })
 
   it('a plain click on the automation link asks core to navigate; a modified one does not', () => {
     const props = headerProps()
-    render(<CoreTaskHeaderMain {...props} />)
+    render(<RenderedHeader {...props} />)
     const link = within(meta()).getByRole('link', { name: 'Automation' })
 
     fireEvent.click(link, { ctrlKey: true })
@@ -246,7 +264,7 @@ describe('CoreTaskHeaderMain, its intents', () => {
 
   it('the badge menu offers the engine picker for the next continuation', async () => {
     const props = headerProps()
-    render(<CoreTaskHeaderMain {...props} />)
+    render(<RenderedHeader {...props} />)
 
     const menu = await openAgentMenu()
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Choose engine for the next continuation…' }))
@@ -255,7 +273,7 @@ describe('CoreTaskHeaderMain, its intents', () => {
 
   it('the badge menu has no engine item while choosing one is not offered', async () => {
     const props = headerProps()
-    render(<CoreTaskHeaderMain {...props} actions={{ ...props.actions, chooseEngine: idle }} />)
+    render(<RenderedHeader {...props} actions={{ ...props.actions, chooseEngine: idle }} />)
 
     const menu = await openAgentMenu()
     expect(within(menu).queryByRole('menuitem')).toBeNull()
@@ -282,7 +300,7 @@ describe('CoreTaskHeaderMain under a status provider', () => {
           <div data-slot="control">
             <ReferenceChip reference={{ kind: 'PR', number: 534, url: 'https://github.com/o/r/pull/534' }} taskTitle="control" />
           </div>
-          <CoreTaskHeaderMain {...headerProps()} />
+          <RenderedHeader {...headerProps()} />
         </ReferenceStatusProvider>
       </QueryClientProvider>,
     )

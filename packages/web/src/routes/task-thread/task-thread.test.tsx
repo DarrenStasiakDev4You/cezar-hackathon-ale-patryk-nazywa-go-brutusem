@@ -1413,7 +1413,7 @@ describe('TaskThreadRoute — read receipts', () => {
 })
 
 describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-component-host)', () => {
-  it('renders the title and meta rows through the component host, as core’s default', () => {
+  it('renders the title and metadata rows through separate component hosts, as core defaults', () => {
     renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
 
     const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
@@ -1421,7 +1421,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     expect(box?.dataset.component).toBe('cezar.task.header.main.default')
     expect(box?.dataset.state).toBe('resolved')
     expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
-    expect(box?.querySelector('[data-slot="run-meta"]')).not.toBeNull()
+    expect(document.querySelector('[data-contract="cezar.task.metadata"] [data-slot="run-meta"]')).not.toBeNull()
   })
 
   it('shows core’s title row when a chosen extension header throws, and the task stays usable', () => {

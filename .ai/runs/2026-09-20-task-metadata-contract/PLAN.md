@@ -17,7 +17,7 @@
 | 1 | 1.2 | The controller, and the header's adapter on top of it | inline | done | fb98a9ca |
 | 2 | 2.1 | One list of core's sources, and the host's header constant | inline | done | d3762a65 |
 | 2 | 2.2 | `shows-meta` leaves the header contract | inline | done | 790839ca |
-| 2 | 2.3 | The split | inline | todo | — |
+| 2 | 2.3 | The split | inline | done | c2e4a9f8 |
 | 3 | 3.1 | The second implementation | inline | todo | — |
 | 3 | 3.2 | The proof on the task page | inline | todo | — |
 | 3 | 3.3 | The conformance test | inline | todo | — |

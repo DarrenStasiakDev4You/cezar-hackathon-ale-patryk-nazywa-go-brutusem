@@ -33,6 +33,7 @@ const run = (status: RunStatus = 'done'): ApiRun => ({
   inputTokens: 100,
   outputTokens: 50,
   costUsd: 0.01,
+  tokensUsed: 150,
   archived: false,
   steps: [step()],
 })

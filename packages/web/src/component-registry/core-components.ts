@@ -1,6 +1,13 @@
-import { TaskHeaderMain, type ComponentImplementation, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import {
+  TaskHeaderMain,
+  TaskMetadata,
+  type ComponentImplementation,
+  type TaskHeaderMainProps,
+  type TaskMetadataProps,
+} from '@open-mercato/cezar-extension-api'
 
 import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'
+import { CoreTaskMetadata } from '@/routes/task-thread/core-task-metadata'
 
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
 import { createComponentRegistry, type CockpitComponentRegistry, type ComponentRegistryOptions } from './registry'
@@ -25,9 +32,18 @@ const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.
   component: CoreTaskHeaderMain,
 })
 
+const coreTaskMetadata: ComponentImplementation<TaskMetadataProps> = Object.freeze({
+  id: coreDefaultComponentId(TaskMetadata.id),
+  title: 'Task metadata',
+  description: 'Cezar’s own metadata row: workflow, branch, references, diff, usage and agent',
+  capabilities: Object.freeze(['shows-metadata', 'offers-links', 'offers-copy']),
+  component: CoreTaskMetadata,
+})
+
 /** Registers core's default of every served contract. */
 export function registerCoreComponents(registry: Pick<CockpitComponentRegistry, 'register'>): void {
   registry.register(TaskHeaderMain, coreTaskHeaderMain)
+  registry.register(TaskMetadata, coreTaskMetadata)
 }
 
 /**
