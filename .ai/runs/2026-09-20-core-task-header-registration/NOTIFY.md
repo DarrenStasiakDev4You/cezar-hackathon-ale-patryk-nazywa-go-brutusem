@@ -27,3 +27,13 @@ Resume started for PR #54 via `om-auto-continue-pr-loop`.
 - Automated review verdict: clean. GitHub cannot accept a self-approval, so the equivalent clean verdict is recorded in the PR conversation.
 - Review fix `bb8807ae` updates the generic extension-api contract example from the retired `cezar.task.header@1` spelling to `task.header@1`; focused extension-api tests passed (15 files / 247 tests).
 - Remaining blocker is the mandatory real-browser integration suite; PR stays draft, `in-progress`, and `blocked`.
+
+## 2026-09-20T03:02:35Z — om-auto-continue-pr-loop resume
+- Resumed by: @DarrenStasiakDev4You
+- Resume point: 2.3 (source: HANDOFF.md / Tasks table)
+- PR head SHA: 0ce2970fb8d11d136f0d9e3d8f9f3be91a773011
+
+## 2026-09-20T03:14:08Z — checkpoint 1 blocker
+- Targeted validation passed: typecheck, unit, build/check-pack, package tests, focused route tests, and diff check.
+- Full `npm test` remains blocked by one `EnvironmentTeardownError` from `packages/cezar/src/runs/store.test.ts`; the focused route suite passed 130 tests.
+- Browser integration was attempted after the app became healthy but returned `TEST_E2E_STATUS=skipped` because agent-browser could not launch. Step 2.3 remains todo; no source changes were made for unrelated blockers.

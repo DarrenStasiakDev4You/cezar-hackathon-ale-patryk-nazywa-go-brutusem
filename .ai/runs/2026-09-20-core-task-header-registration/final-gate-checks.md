@@ -28,3 +28,14 @@ PR: #54
 ## Gate Status
 
 Not complete. The full validation gate passes in the CI-equivalent container, but the mandatory real-browser integration suite remains blocked by the failures documented above.
+
+## Resume Verification (2026-09-20T03:14:08Z)
+
+- `npm run typecheck`: pass in the Node 24 container.
+- `npm test`: blocked in the Node 24 container. The rerun completed 445 files and 8,228 tests, but Vitest reported one `EnvironmentTeardownError` from `packages/cezar/src/runs/store.test.ts`. The focused `packages/web/src/routes.test.tsx` suite passed all 130 tests.
+- `npm run test:unit`: pass, 36 tests.
+- `npm run build`: pass, including `check:pack`.
+- `npm run test:package`: pass, 16 tests.
+- `git diff --check`: pass.
+- `npm run test:e2e`: skipped after the app became healthy because agent-browser could not launch after installation. This is not a pass.
+- Gate remains incomplete. Step 2.3 stays todo; the next action is to resolve or explicitly waive the baseline full-test and browser-gate blockers, then rerun the final gate.

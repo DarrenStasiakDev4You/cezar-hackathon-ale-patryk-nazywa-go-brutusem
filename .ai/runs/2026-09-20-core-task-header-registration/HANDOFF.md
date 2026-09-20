@@ -4,7 +4,7 @@ PR #54 remains blocked and in progress on `feat/core-task-header-registration`.
 
 ## Resume Point
 
-Task **2.3** is the remaining step. The CI-equivalent validation gate is green and the automated review is clean, but the mandatory real-browser integration suite remains blocked by baseline fixture/UI failures. Steps 2.1, 2.2, and the 2.3 review-fix are committed as separate lean commits.
+Task **2.3** is the first remaining todo row. No implementation Step landed in this resume. The targeted task-header/component-registry coverage is green, but the full Vitest gate has one unrelated teardown error and the browser provider returned `TEST_E2E_STATUS=skipped`.
 
 ## Current State
 
@@ -15,14 +15,13 @@ Task **2.3** is the remaining step. The CI-equivalent validation gate is green a
 
 ## Validation
 
-- Passed: `npm run typecheck`, `npm run test:unit`, `npm run build`, `npm run test:package`.
-- Passed: focused component/task-header tests and web/extension tests excluding `packages/web/src/routes.test.tsx`.
-- CI-equivalent gate: `npm test` passed 433 files / 8,158 tests; typecheck, node unit tests, build/check-pack, and package tests also passed.
-- Native-host Vitest remains unreliable under WSL2 and reproduced timeout failures; it is not the authoritative gate result.
-- Browser gate blocker: `npm run test:e2e` launched agent-browser but failed broad baseline fixture/UI assertions and exceeded the run budget; focused task-thread rerun passed 15/20.
-- Focused changed-code validation: 38 files and 1,067 tests passed.
+- Passed in the Node 24 container: typecheck, `test:unit` (36), build/check-pack, `test:package` (16), and focused `packages/web/src/routes.test.tsx` (130).
+- Full `npm test` rerun: 445 files and 8,228 tests passed, but Vitest reported one `EnvironmentTeardownError` from `packages/cezar/src/runs/store.test.ts`.
+- Browser integration: the app became healthy, but agent-browser could not launch after installation, so no browser scenario ran. This is not a pass.
+- Detailed checkpoint evidence is in `checkpoint-1-checks.md`; final-gate history is in `final-gate-checks.md`.
 
 ## Next Actions
 
-1. Resolve or explicitly waive the baseline browser integration failures, then rerun `npm run test:e2e`.
-2. When the browser gate is green or a maintainer records an allowed waiver, mark Step 2.3 done, refresh the final gate, and complete PR #54.
+1. Resolve or explicitly waive the unrelated full-suite teardown blocker.
+2. Re-run the browser gate on a host where agent-browser can launch, or obtain an allowed maintainer waiver.
+3. When both blockers are cleared, mark Step 2.3 done, rerun the final gate, and complete PR #54.
