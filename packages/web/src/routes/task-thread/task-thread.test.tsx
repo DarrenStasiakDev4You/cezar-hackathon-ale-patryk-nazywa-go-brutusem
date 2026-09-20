@@ -129,6 +129,22 @@ describe('ThreadView', () => {
     )
   })
 
+  it('loads the Task Page layout at the production render boundary and keeps the core fallback visible', () => {
+    renderView(
+      <ThreadView
+        run={run('done')}
+        thread={reduceThread([])}
+        layoutInput={{ page: 'task', schemaVersion: 3, zones: { header: [] } }}
+      />,
+    )
+
+    const page = document.querySelector('[data-route="task-thread"]')
+    expect(page?.getAttribute('data-task-layout-status')).toBe('fallback')
+    expect(page?.getAttribute('data-task-layout-version')).toBe('3')
+    expect(screen.getByRole('status').textContent).toContain('bezpiecznego układu domyślnego')
+    expect(document.querySelector('[data-slot="run-header"]')).not.toBeNull()
+  })
+
   it('an issue-subject closed run links its DISCOVERED issue URL, never the incidental PR (#526)', () => {
     const issueRun = run('done', {
       markerRefs: { issue: 524 },

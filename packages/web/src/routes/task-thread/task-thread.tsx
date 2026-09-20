@@ -44,6 +44,7 @@ import { useRunRecordReconcile } from './run-reconcile'
 import { ThreadLoading } from './thread-loading'
 import { threadRenderMode } from './thread-scroll'
 import { JumpToLatestPill, useThreadScroll } from './thread-scroller'
+import { defaultTaskPageLayout, LAYOUT_MIGRATION_FALLBACK_MESSAGE, loadTaskPageLayout } from './task-layout-schema'
 import {
   SessionTranscript,
   buildTranscriptRows,
@@ -154,6 +155,7 @@ export function TaskThreadRoute() {
       thread={thread}
       currentThread={currentThread}
       history={history}
+      layoutInput={defaultTaskPageLayout}
       onMarkedUnread={suppressAutoReadFor}
     />
   )
@@ -166,17 +168,25 @@ export function ThreadView({
   thread,
   currentThread = thread,
   history,
+  layoutInput,
   onMarkedUnread,
 }: {
   run: ApiRun
   thread: ThreadState
   currentThread?: ThreadState
   history?: RunHistoryState
+  /** Stored Task Page layout input. The current route supplies the built-in v1 document until the
+   * persistence adapter is added; tests and future adapters can provide persisted JSON here. */
+  layoutInput?: unknown
   /** Passed straight through to the header's "Mark unread" (#775) so the route can suppress its
    *  auto-mark-read effect. Optional: every test that drives this view with a fixture, and the
    *  header's other three tabs, have no such effect to suppress. */
   onMarkedUnread?: (runId: string) => void
 }) {
+  const taskLayout = useMemo(
+    () => loadTaskPageLayout(layoutInput === undefined ? defaultTaskPageLayout : layoutInput),
+    [layoutInput],
+  )
   const footer = threadFooter(run.status, run.error)
   const markedUnread = useCallback(() => onMarkedUnread?.(run.id), [onMarkedUnread, run.id])
   // The dock's data: the latest plan snapshot across turns (full replacement — an emptied
@@ -310,7 +320,18 @@ export function ThreadView({
   useKeyboardInsetVar(scroll.restickIfStuck)
 
   return (
-    <div data-route="task-thread" data-run-id={run.id} className="flex min-h-full flex-col">
+    <div
+      data-route="task-thread"
+      data-run-id={run.id}
+      data-task-layout-status={taskLayout.status}
+      data-task-layout-version={taskLayout.status === 'fallback' ? taskLayout.fallback.schemaVersion : taskLayout.schema.schemaVersion}
+      className="flex min-h-full flex-col"
+    >
+      {taskLayout.status === 'fallback' ? (
+        <p data-slot="task-layout-fallback" role="status" className="sr-only">
+          {LAYOUT_MIGRATION_FALLBACK_MESSAGE}
+        </p>
+      ) : null}
       <RunHeader
         run={run}
         planTally={planTally}

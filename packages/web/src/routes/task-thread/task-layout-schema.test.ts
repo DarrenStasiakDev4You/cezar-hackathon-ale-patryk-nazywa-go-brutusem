@@ -51,4 +51,29 @@ describe('default Task Page layout schema', () => {
       expect(result.original).toEqual(expect.objectContaining({ schemaVersion: 2 }))
     }
   })
+
+  it.each([
+    ['header', { main: [{ id: 'task-composer', contract: TaskComposer.id, contractVersion: TaskComposer.version, required: true }] }],
+    ['composer', { header: [{ id: 'task-header', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version, required: true }] }],
+    ['wrong zone', { header: [{ id: 'task-header', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version, required: true }], sidebar: [{ id: 'task-composer', contract: TaskComposer.id, contractVersion: TaskComposer.version, required: true }] }],
+  ] as const)('falls back when the v3 document is missing the required %s placement', (_missing, zones) => {
+    const result = loadTaskPageLayout({ page: 'task', schemaVersion: 3, zones })
+
+    expect(result.status).toBe('fallback')
+    if (result.status === 'fallback') {
+      expect(result.error.code).toBe('missing-required-placement')
+      expect(result.fallback).toEqual(defaultTaskPageLayoutV3)
+    }
+  })
+
+  it('accepts the built-in v1 document after migration when required placements are preserved', () => {
+    const result = loadTaskPageLayout(defaultTaskPageLayout)
+
+    expect(result.status).toBe('migrated')
+    if (result.status === 'migrated') {
+      expect(result.schema.schemaVersion).toBe(3)
+      expect(result.schema.zones.header?.[0]?.id).toBe('task-header')
+      expect(result.schema.zones.main?.[0]?.id).toBe('task-composer')
+    }
+  })
 })

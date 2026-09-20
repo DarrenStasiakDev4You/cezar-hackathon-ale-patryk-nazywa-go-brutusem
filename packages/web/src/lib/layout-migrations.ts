@@ -28,6 +28,7 @@ export type LayoutMigrationErrorCode =
   | 'unsupported-version'
   | 'zone-collision'
   | 'missing-required-replacement'
+  | 'missing-required-placement'
   | 'invalid-migration-output'
 
 export type LayoutMigrationError = {
@@ -221,7 +222,7 @@ const validateMigrated = (schema: LayoutSchema, expectedVersion: 2 | 3): LayoutS
 const normalizeError = (error: unknown): LayoutMigrationError => {
   if (error && typeof error === 'object' && 'code' in error && 'path' in error && 'message' in error &&
     typeof error.code === 'string' && typeof error.path === 'string' && typeof error.message === 'string') {
-    const code = ['invalid-json', 'invalid-schema', 'unsupported-version', 'zone-collision', 'missing-required-replacement', 'invalid-migration-output'].includes(error.code)
+    const code = ['invalid-json', 'invalid-schema', 'unsupported-version', 'zone-collision', 'missing-required-replacement', 'missing-required-placement', 'invalid-migration-output'].includes(error.code)
       ? error.code as LayoutMigrationErrorCode
       : 'invalid-migration-output'
     return { code, path: error.path, message: error.message }
