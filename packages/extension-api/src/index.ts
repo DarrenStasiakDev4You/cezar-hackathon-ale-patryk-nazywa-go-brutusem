@@ -86,6 +86,19 @@ export { defineExtension, type Extension } from './extension.ts'
 export { isValidContributionId, isValidExtensionId, type ContributionId, type ExtensionId } from './ids.ts'
 export type { IsJson, JsonPrimitive, JsonValue } from './json.ts'
 export type { Disposable } from './lifecycle.ts'
+export {
+  LAYOUT_SCHEMA_VERSION,
+  LayoutSchemaError,
+  parseLayoutJson,
+  parseLayoutSchema,
+  serializeLayoutSchema,
+  type LayoutPlacement,
+  type LayoutPlacementLayout,
+  type LayoutSchema,
+  type LayoutSchemaErrorCode,
+  type LayoutSchemaIssue,
+  type LayoutZone,
+} from './layout/schema.ts'
 export { validateManifest, type ExtensionManifest, type ManifestIssue } from './manifest.ts'
 export type { Notifications } from './notifications.ts'
 export type { ExtensionPermission } from './permissions.ts'

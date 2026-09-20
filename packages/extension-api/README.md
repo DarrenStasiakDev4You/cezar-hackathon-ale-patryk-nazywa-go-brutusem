@@ -91,6 +91,20 @@ that at the type level — interfaces, optional fields, arrays and recursive sha
 may carry functions. This keeps a future isolated runtime (worker or iframe) for non-UI logic
 possible without an API break. The host still treats every payload as untrusted data.
 
+### Layout schemas
+
+`LayoutSchema` is the serializable intent for a page: named zones contain ordered placements,
+each identified by a stable id and a `contract` plus its major version. V1 allows only typed layout
+hints (`collapsed`, `density` and `width`); it never stores a React component, implementation
+choice, runtime props, component settings or DOM reference. `parseLayoutSchema` validates an
+already-decoded value, `parseLayoutJson` also reports malformed JSON, and
+`serializeLayoutSchema` emits deterministic JSON.
+
+The schema is separate from `packages/web/src/lib/layout-elements.ts`: `LayoutSchema` is persisted
+layout intent, while `LayoutRegistry` is the runtime projection used by edit mode and drag-and-drop.
+Persistence, rendering, resolver selection and migration are separate consumers and are not implied
+by this contract.
+
 ### Lifecycle
 
 `activate` is awaited once per activation. Everything registered through the context is disposed
