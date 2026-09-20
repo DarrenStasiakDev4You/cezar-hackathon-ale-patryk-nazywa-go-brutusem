@@ -84,7 +84,7 @@ describe('the entry chunk check', () => {
     const lazyOnly = { ...bundle, 'assets/provider.js': chunk([CHIP]), 'assets/core.js': chunk([CORE_HEADER]) }
 
     expect(entryChunkProblems({ bundle: lazyOnly, staticImportsOf: edges({}) })).toEqual([
-      'no module matching /\\/src\\/routes\\/task-thread\\/core-task-header-main\\.tsx$/ loads with the entry',
+      'no module matching /src\\/routes\\/task-thread\\/core-task-header-main\\.tsx$/ loads with the entry',
     ])
   })
 

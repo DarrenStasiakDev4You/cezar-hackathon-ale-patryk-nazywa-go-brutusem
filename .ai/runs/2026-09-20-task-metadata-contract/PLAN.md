@@ -15,7 +15,7 @@
 |-------|------|-------|------|--------|--------|
 | 1 | 1.1 | The shared model and the contract | inline | done | 3c67690c |
 | 1 | 1.2 | The controller, and the header's adapter on top of it | inline | done | fb98a9ca |
-| 2 | 2.1 | One list of core's sources, and the host's header constant | inline | todo | — |
+| 2 | 2.1 | One list of core's sources, and the host's header constant | inline | done | d3762a65 |
 | 2 | 2.2 | `shows-meta` leaves the header contract | inline | todo | — |
 | 2 | 2.3 | The split | inline | todo | — |
 | 3 | 3.1 | The second implementation | inline | todo | — |

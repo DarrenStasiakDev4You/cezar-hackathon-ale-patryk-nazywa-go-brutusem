@@ -188,7 +188,7 @@ function HostBox(props: {
 /** The inline message when core's default itself threw. */
 function FailedNotice(props: { readonly onRetry: () => void }) {
   return (
-    <div role="alert" className="flex min-h-[30px] items-center gap-3 text-[13px] text-foreground">
+    <div role="alert" className="flex items-center gap-3 text-[13px] text-foreground">
       <span>This part of the page could not be displayed.</span>
       <Button variant="outline" size="sm" className="ml-auto" onClick={props.onRetry}>
         Try again

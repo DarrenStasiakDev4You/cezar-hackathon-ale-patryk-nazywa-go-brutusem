@@ -448,6 +448,15 @@ describe('ComponentHost: an unresolved contract', () => {
 })
 
 describe('ComponentHost: the box', () => {
+  it('lets the contract box, rather than the failure notice, reserve its height', () => {
+    const { registry } = fixture()
+    behaviour.core = 'render'
+    const { container } = render(tree(header(), { registry }))
+
+    expect(hostBox(container).getAttribute('style')).toBe('min-block-size: 30px;')
+    expect(screen.getByRole('alert').className).not.toContain('min-h-[30px]')
+  })
+
   it.each<[string, ComponentLayout | undefined, string | undefined, string | undefined]>([
     ['no layout', undefined, undefined, undefined],
     ['sticky top', { sticky: 'top' }, 'relative z-20 md:sticky md:top-0', undefined],
