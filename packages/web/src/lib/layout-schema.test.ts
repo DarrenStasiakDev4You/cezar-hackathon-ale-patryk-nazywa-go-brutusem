@@ -1,17 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  parseLayoutJson,
-  parseLayoutSchema,
-  serializeLayoutSchema,
-  tryParseLayoutSchema,
-} from './layout-schema'
+import { parseLayoutJson, parseLayoutSchema, serializeLayoutSchema, tryParseLayoutSchema } from './layout-schema'
 
 const v1 = {
   page: 'task',
   schemaVersion: 1 as const,
   zones: {
-    header: [{ id: 'header', contract: { id: 'cezar.task.header', version: 1 }, component: { id: 'cezar.task.header.default' } }],
+    header: [{ id: 'header', contract: 'cezar.task.header', contractVersion: 1 }],
     main: [],
   },
 }
@@ -20,7 +15,7 @@ const v2 = {
   page: 'task',
   schemaVersion: 2 as const,
   zones: {
-    top: [{ id: 'header', contract: { id: 'cezar.task.header', version: 1 }, component: { id: 'cezar.task.header.default' }, required: true }],
+    top: [{ id: 'header', contract: 'cezar.task.header', contractVersion: 1, required: true }],
   },
 }
 
@@ -28,67 +23,54 @@ const v3 = {
   page: 'task',
   schemaVersion: 3 as const,
   zones: {
-    top: [{ id: 'header', contract: { id: 'cezar.task.header', version: 1 }, component: { id: 'cezar.task.header.default' }, required: true }],
+    top: [{ id: 'header', contract: 'cezar.task.header', contractVersion: 1, required: true }],
   },
 }
 
-describe('LayoutSchema', () => {
-  it.each([v1, v2, v3])('parses and serializes schema version $schemaVersion as plain JSON', (schema) => {
+describe('versioned layout schema parser', () => {
+  it.each([v1, v2, v3])('parses and serializes v$schemaVersion as plain JSON', (schema) => {
     const parsed = parseLayoutSchema(schema)
     expect(JSON.parse(serializeLayoutSchema(parsed))).toEqual(schema)
   })
 
-  it('preserves zone and placement order during round-trip', () => {
+  it('preserves zone and placement order', () => {
     const schema = parseLayoutJson(JSON.stringify({
       page: 'task',
       schemaVersion: 3,
       zones: {
         sidebar: [
-          { id: 'first', contract: { id: 'cezar.first', version: 1 }, component: { id: 'cezar.first.default' }, required: false },
-          { id: 'second', contract: { id: 'cezar.second', version: 1 }, component: { id: 'cezar.second.default' }, required: true },
+          { id: 'first', contract: 'cezar.first', contractVersion: 1, required: false },
+          { id: 'second', contract: 'cezar.second', contractVersion: 1, required: true },
         ],
       },
     }))
-
     expect(Object.keys(schema.zones)).toEqual(['sidebar'])
     expect(schema.zones.sidebar!.map((placement) => placement.id)).toEqual(['first', 'second'])
   })
 
-  it('rejects duplicate placement ids atomically', () => {
-    const result = tryParseLayoutSchema({
-      ...v1,
-      zones: {
-        header: v1.zones.header,
-        main: [{ ...v1.zones.header[0], id: 'header' }],
-      },
+  it('rejects duplicate ids, unknown versions and runtime-shaped fields', () => {
+    const duplicate = tryParseLayoutSchema({
+      ...v2,
+      zones: { top: [v2.zones.top[0], { ...v2.zones.top[0], id: 'header' }] },
     })
+    expect(duplicate.success).toBe(false)
+    if (!duplicate.success) expect(duplicate.error.path).toBe('$.zones.top[1].id')
 
-    expect(result.success).toBe(false)
-    if (!result.success) expect(result.error.path).toBe('$.zones.main[0].id')
+    const unknown = tryParseLayoutSchema({ ...v1, schemaVersion: 9 })
+    expect(unknown.success).toBe(false)
+    if (!unknown.success) expect(unknown.error.code).toBe('unsupported-version')
+
+    const runtime = tryParseLayoutSchema({ ...v1, runtime: { render: () => null } })
+    expect(runtime.success).toBe(false)
   })
 
-  it('rejects unsupported versions and malformed JSON without guessing', () => {
-    const result = tryParseLayoutSchema({ ...v1, schemaVersion: 4 })
-    expect(result.success).toBe(false)
-    if (!result.success) expect(result.error.code).toBe('unsupported-version')
-    const oldResult = tryParseLayoutSchema({ ...v1, schemaVersion: 0 })
-    expect(oldResult.success).toBe(false)
-    if (!oldResult.success) expect(oldResult.error.code).toBe('invalid-schema')
+  it('requires v3 required flags and keeps malformed JSON distinct', () => {
+    const missingRequired = tryParseLayoutSchema({ ...v3, zones: { top: [{ ...v3.zones.top[0], required: undefined }] } })
+    expect(missingRequired.success).toBe(false)
+    if (!missingRequired.success) expect(missingRequired.error.path).toBe('$.zones.top[0].required')
+    const malformed = tryParseLayoutSchema('{')
+    expect(malformed.success).toBe(false)
+    if (!malformed.success) expect(malformed.error.code).toBe('invalid-schema')
     expect(() => parseLayoutJson('{')).toThrow('not valid JSON')
-  })
-
-  it('requires the required flag in v3', () => {
-    const result = tryParseLayoutSchema({
-      ...v3,
-      zones: { top: [{ ...v3.zones.top[0], required: undefined }] },
-    })
-    expect(result.success).toBe(false)
-    if (!result.success) expect(result.error.path).toBe('$.zones.top[0].required')
-  })
-
-  it('rejects runtime-shaped fields', () => {
-    const result = tryParseLayoutSchema({ ...v1, runtime: { render: () => null } })
-    expect(result.success).toBe(false)
-    if (!result.success) expect(result.error.path).toBe('$.runtime')
   })
 })
