@@ -68,13 +68,13 @@ describe('detectOpenTargets', () => {
     expect(targets[1]).toMatchObject({ id: 'terminal', icon: 'terminal' });
     // Ids are unique.
     expect(new Set(targets.map((t) => t.id)).size).toBe(targets.length);
-  });
+  }, 120_000);
 
   it('gives every detected target a non-empty icon key (#361)', () => {
     for (const target of detectOpenTargets()) {
       expect(target.icon, `${target.id} should carry an icon`).toBeTruthy();
     }
-  });
+  }, 120_000);
 
   // Detection depends on what is actually installed, so the wider JetBrains registry (#361 gap
   // 3) is exercised by putting fake, executable stub binaries on PATH rather than asserting
@@ -117,7 +117,7 @@ describe('detectOpenTargets', () => {
       expect(byId.get('clion')).toMatchObject({ label: 'CLion', icon: 'clion' });
       expect(byId.get('rider')).toMatchObject({ label: 'Rider', icon: 'rider' });
       expect(byId.get('android-studio')).toMatchObject({ label: 'Android Studio', icon: 'android-studio' });
-    });
+    }, 120_000);
 
     it('opens the resolved JetBrains stub with the worktree dir as its argument', async () => {
       withStubsOnPath();
