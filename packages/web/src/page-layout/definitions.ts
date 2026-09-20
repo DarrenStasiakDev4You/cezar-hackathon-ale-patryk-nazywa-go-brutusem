@@ -4,6 +4,7 @@ import type { AnyComponentContract } from '@/component-registry/registry'
 
 export type PageId = ContributionId
 export type ZoneId = ContributionId
+export type PlacementId = ContributionId
 export type PageComponentContract = AnyComponentContract
 
 export interface ZoneLayout {
@@ -15,7 +16,10 @@ export interface ZoneLayout {
 
 export interface ZoneDefinition {
   readonly id: ZoneId
-  readonly accepts: readonly PageComponentContract[]
+  /** Semantic placement category, not an implementation selector. */
+  readonly placement: PlacementId
+  /** Omitted means every valid contract for this placement is admitted. */
+  readonly accepts?: readonly PageComponentContract[]
   readonly cardinality: 'single' | 'many'
   readonly required: boolean
   readonly layout?: ZoneLayout
@@ -29,8 +33,9 @@ export interface PageDefinition {
 
 export interface ZoneContent {
   readonly key: string
+  readonly placement: PlacementId
   readonly contract: PageComponentContract
-  readonly props: unknown
+  readonly props: object
 }
 
 export interface PageContent {
@@ -41,6 +46,7 @@ export interface PageContent {
 export type PageContentIssue =
   | { readonly code: 'unknown-page'; readonly pageId: PageId }
   | { readonly code: 'unknown-zone'; readonly pageId: PageId; readonly zoneId: ZoneId }
+  | { readonly code: 'placement-not-accepted'; readonly zoneId: ZoneId; readonly placement: PlacementId }
   | {
       readonly code: 'contract-not-accepted'
       readonly zoneId: ZoneId
@@ -48,6 +54,7 @@ export type PageContentIssue =
       readonly version: number
     }
   | { readonly code: 'cardinality-exceeded'; readonly zoneId: ZoneId }
+  | { readonly code: 'required-zone-empty'; readonly zoneId: ZoneId }
   | { readonly code: 'invalid-content'; readonly zoneId: ZoneId }
 
 export class PageLayoutDefinitionError extends Error {
@@ -98,13 +105,16 @@ function validateDefinition(definition: PageDefinition): string[] {
     if (!isValidContributionId(zoneId)) issues.push(`${path}.id must be a valid contribution id`)
     if (zoneIds.has(zoneId)) issues.push(`${path}.id duplicates another zone`)
     zoneIds.add(zoneId)
+    if (typeof zone.placement !== 'string' || !isValidContributionId(zone.placement)) {
+      issues.push(`${path}.placement must be a valid contribution id`)
+    }
     if (zone.cardinality !== 'single' && zone.cardinality !== 'many') {
       issues.push(`${path}.cardinality must be "single" or "many"`)
     }
     if (typeof zone.required !== 'boolean') issues.push(`${path}.required must be a boolean`)
-    if (!Array.isArray(zone.accepts)) {
-      issues.push(`${path}.accepts must be an array`)
-    } else {
+    if (zone.accepts !== undefined && !Array.isArray(zone.accepts)) {
+      issues.push(`${path}.accepts must be an array when provided`)
+    } else if (zone.accepts !== undefined) {
       const contracts = new Set<string>()
       zone.accepts.forEach((contract, contractIndex) => {
         const contractPath = `${path}.accepts[${contractIndex}]`
@@ -116,9 +126,6 @@ function validateDefinition(definition: PageDefinition): string[] {
         if (contracts.has(key)) issues.push(`${contractPath} duplicates ${key}`)
         contracts.add(key)
       })
-      if (zone.required === true && zone.accepts.length === 0) {
-        issues.push(`${path}.accepts must contain at least one contract for a required zone`)
-      }
     }
     validateZoneLayout(zone.layout, path, issues)
   })
@@ -156,7 +163,8 @@ function freezeDefinition(definition: PageDefinition): PageDefinition {
     const layout = zone.layout === undefined ? undefined : Object.freeze({ ...zone.layout })
     return Object.freeze({
       id: zone.id,
-      accepts: Object.freeze([...zone.accepts]),
+      placement: zone.placement,
+      ...(zone.accepts === undefined ? {} : { accepts: Object.freeze([...zone.accepts]) }),
       cardinality: zone.cardinality,
       required: zone.required,
       ...(layout === undefined ? {} : { layout }),

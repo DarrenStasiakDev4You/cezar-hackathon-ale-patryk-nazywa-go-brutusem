@@ -11,10 +11,15 @@ import { PageLayoutProvider, PageRenderer } from './renderer'
 import { createPageLayoutRegistry } from './registry'
 
 const Card = defineComponentContract<{ readonly label: string }>('cezar.fixture.renderer-card', { version: 1 })
+const FuturePanel = defineComponentContract<{ readonly label: string }>('cezar.fixture.future-panel', { version: 1 })
 const DEFAULT_ID = 'cezar.fixture.renderer-card.default'
 
 function CardView({ label }: { readonly label: string }) {
   return <span data-testid="card">{label}</span>
+}
+
+function FuturePanelView({ label }: { readonly label: string }) {
+  return <span data-testid="future-panel">{label}</span>
 }
 
 const implementation: ComponentImplementation<{ readonly label: string }> = {
@@ -30,8 +35,8 @@ const layout = () => {
       id: 'fixture.renderer-page',
       version: 1,
       zones: [
-        { id: 'fixture.content', accepts: [Card], cardinality: 'many', required: true, layout: { minBlockSize: 24 } },
-        { id: 'fixture.empty', accepts: [Card], cardinality: 'many', required: false },
+        { id: 'fixture.content', placement: 'fixture.card', accepts: [Card], cardinality: 'many', required: true, layout: { minBlockSize: 24 } },
+        { id: 'fixture.empty', placement: 'fixture.empty-panel', accepts: [Card], cardinality: 'many', required: false },
       ],
     }),
   )
@@ -59,8 +64,8 @@ describe('PageRenderer', () => {
       pageId: 'fixture.renderer-page',
       zones: {
         'fixture.content': [
-          { key: 'a', contract: Card, props: { label: 'A' } },
-          { key: 'b', contract: Card, props: { label: 'B' } },
+          { key: 'a', placement: 'fixture.card', contract: Card, props: { label: 'A' } },
+          { key: 'b', placement: 'fixture.card', contract: Card, props: { label: 'B' } },
         ],
       },
     })
@@ -84,7 +89,7 @@ describe('PageRenderer', () => {
       definePage({
         id: 'fixture.single-page',
         version: 1,
-        zones: [{ id: 'fixture.single', accepts: [Card], cardinality: 'single', required: true }],
+        zones: [{ id: 'fixture.single', placement: 'fixture.card', accepts: [Card], cardinality: 'single', required: true }],
       }),
     )
 
@@ -96,8 +101,8 @@ describe('PageRenderer', () => {
               pageId: 'fixture.single-page',
               zones: {
                 'fixture.single': [
-                  { key: 'first', contract: Card, props: { label: 'first' } },
-                  { key: 'second', contract: Card, props: { label: 'second' } },
+                  { key: 'first', placement: 'fixture.card', contract: Card, props: { label: 'first' } },
+                  { key: 'second', placement: 'fixture.card', contract: Card, props: { label: 'second' } },
                 ],
               },
             }}
@@ -122,7 +127,7 @@ describe('PageRenderer', () => {
       </ComponentsProvider>,
     )
 
-    expect(screen.getByRole('alert').textContent).toBe('invalid-content:fixture.content')
+    expect(screen.getByRole('alert').textContent).toBe('required-zone-empty:fixture.content')
   })
 
   it('reports an unregistered page without importing or selecting a concrete component', () => {
@@ -149,13 +154,13 @@ describe('PageRenderer', () => {
     const definition = definePage({
       id: 'fixture.late-page',
       version: 1,
-      zones: [{ id: 'fixture.late-content', accepts: [Card], cardinality: 'single', required: true }],
+      zones: [{ id: 'fixture.late-content', placement: 'fixture.card', accepts: [Card], cardinality: 'single', required: true }],
     })
 
     render(
       <ComponentsProvider registry={components}>
         <PageLayoutProvider registry={pageRegistry}>
-          <PageRenderer content={{ pageId: 'fixture.late-page', zones: { 'fixture.late-content': [{ key: 'card', contract: Card, props: { label: 'late' } }] } }} />
+          <PageRenderer content={{ pageId: 'fixture.late-page', zones: { 'fixture.late-content': [{ key: 'card', placement: 'fixture.card', contract: Card, props: { label: 'late' } }] } }} />
         </PageLayoutProvider>
       </ComponentsProvider>,
     )
@@ -165,5 +170,41 @@ describe('PageRenderer', () => {
       pageRegistry.registerPage(definition)
     })
     expect(screen.getByTestId('card').textContent).toBe('late')
+  })
+
+  it('renders a future contract in a category-open zone without a page-layout import', () => {
+    const pageRegistry = createPageLayoutRegistry()
+    pageRegistry.registerPage(
+      definePage({
+        id: 'fixture.open-page',
+        version: 1,
+        zones: [{ id: 'fixture.sidebar', placement: 'fixture.sidebar.panel', cardinality: 'many', required: false }],
+      }),
+    )
+    const components = createComponentRegistry({ contracts: [FuturePanel], onDiagnostic: () => {} })
+    components.register(FuturePanel, {
+      id: 'cezar.fixture.future-panel.default',
+      title: 'Future panel',
+      component: FuturePanelView,
+    })
+
+    render(
+      <ComponentsProvider registry={components}>
+        <PageLayoutProvider registry={pageRegistry}>
+          <PageRenderer
+            content={{
+              pageId: 'fixture.open-page',
+              zones: {
+                'fixture.sidebar': [
+                  { key: 'future', placement: 'fixture.sidebar.panel', contract: FuturePanel, props: { label: 'future' } },
+                ],
+              },
+            }}
+          />
+        </PageLayoutProvider>
+      </ComponentsProvider>,
+    )
+
+    expect(screen.getByTestId('future-panel').textContent).toBe('future')
   })
 })

@@ -12,8 +12,22 @@ export const TaskPage: PageDefinition = definePage({
   id: 'task.page',
   version: 1,
   zones: [
-    { id: 'task.header', accepts: [TaskHeaderMain], cardinality: 'single', required: true, layout: { minBlockSize: 30 } },
-    { id: 'task.main', accepts: [TaskComposer], cardinality: 'many', required: true, layout: { sizing: 'fill' } },
-    { id: 'task.sidebar', accepts: [], cardinality: 'many', required: false },
+    {
+      id: 'task.header',
+      placement: 'task.header.main',
+      accepts: [TaskHeaderMain],
+      cardinality: 'single',
+      required: true,
+      layout: { minBlockSize: 30 },
+    },
+    {
+      id: 'task.main',
+      placement: 'task.main.content',
+      accepts: [TaskComposer],
+      cardinality: 'many',
+      required: true,
+      layout: { sizing: 'fill' },
+    },
+    { id: 'task.sidebar', placement: 'task.sidebar.panel', cardinality: 'many', required: false },
   ],
 })

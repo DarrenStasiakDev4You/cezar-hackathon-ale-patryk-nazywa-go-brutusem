@@ -6,6 +6,7 @@ export {
   type PageContentIssue,
   type PageDefinition,
   type PageId,
+  type PlacementId,
   type ZoneContent,
   type ZoneDefinition,
   type ZoneId,

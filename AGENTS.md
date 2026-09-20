@@ -5,10 +5,14 @@ cezar is a **parallel coding-agents orchestrator**: a local cockpit (CLI + brows
 ### Declarative page layouts
 
 The cockpit's page-and-zone catalog lives in `packages/web/src/page-layout/`: `PageLayoutRegistry`
-stores immutable page definitions, `TaskPage` is the first core catalog entry, and `PageRenderer`
-delegates accepted content to the existing `ComponentHost`. This registry is separate from the
-DOM edit-mode `LayoutRegistry` in `packages/web/src/components/layout-registry.tsx`; the latter
-continues to own draggable layout elements and edit-mode state.
+stores immutable page definitions with validated semantic placement categories, `TaskPage` is the
+first core catalog entry, and `PageRenderer` delegates accepted content to the existing
+`ComponentHost`. Omitted zone contract allowlists are category-open for future valid contracts;
+the generic renderer must not switch on component ids or import concrete implementations. This
+registry is separate from the DOM edit-mode `LayoutRegistry` in
+`packages/web/src/components/layout-registry.tsx`; the latter continues to own draggable layout
+elements and edit-mode state. The live task route is not mounted through the page registry until
+the follow-up consumer migration is specified and verified.
 
 ## Zero config
 

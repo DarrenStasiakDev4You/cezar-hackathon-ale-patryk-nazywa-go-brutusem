@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useSyncExternalStore, type ReactElement, type ReactNode } from 'react'
 
-import type { ComponentContract } from '@open-mercato/cezar-extension-api'
+import { isValidContributionId, type ComponentContract } from '@open-mercato/cezar-extension-api'
 
 import { ComponentHost } from '@/component-registry/component-host'
 
@@ -97,6 +97,7 @@ function ZoneBox(props: { readonly pageId: PageId; readonly zone: ZoneDefinition
   const minBlockSize = props.zone.layout?.minBlockSize
   return (
     <section
+      data-slot="page-layout-zone"
       data-page-id={props.pageId}
       data-zone-id={props.zone.id}
       data-zone-state={props.state}
@@ -117,19 +118,40 @@ function LayoutError(props: { readonly message: string; readonly pageId: string;
 }
 
 function accepts(zone: ZoneDefinition, content: ZoneContent): boolean {
-  return zone.accepts.some((contract) => contract.id === content.contract.id && contract.version === content.contract.version)
+  return (
+    content.placement === zone.placement &&
+    (zone.accepts === undefined ||
+      zone.accepts.some((contract) => contract.id === content.contract.id && contract.version === content.contract.version))
+  )
 }
 
 function acceptedContent(zone: ZoneDefinition, content: readonly ZoneContent[]): readonly ZoneContent[] {
   const seen = new Set<string>()
   const accepted: ZoneContent[] = []
   for (const item of content) {
-    if (!accepts(zone, item) || seen.has(item.key)) continue
+    if (!isRenderableContent(item) || !accepts(zone, item) || seen.has(item.key)) continue
     seen.add(item.key)
     accepted.push(item)
     if (zone.cardinality === 'single') break
   }
   return accepted
+}
+
+function isRenderableContent(value: ZoneContent): boolean {
+  return (
+    typeof value.key === 'string' &&
+    value.key.length > 0 &&
+    typeof value.placement === 'string' &&
+    isValidContributionId(value.placement) &&
+    value.contract.kind === 'component' &&
+    typeof value.contract.id === 'string' &&
+    isValidContributionId(value.contract.id) &&
+    typeof value.contract.version === 'number' &&
+    Number.isInteger(value.contract.version) &&
+    value.contract.version >= 1 &&
+    typeof value.props === 'object' &&
+    value.props !== null
+  )
 }
 
 export type { PageComponentContract }

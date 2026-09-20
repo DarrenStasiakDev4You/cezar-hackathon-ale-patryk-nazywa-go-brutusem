@@ -1,4 +1,4 @@
-import type { Disposable } from '@open-mercato/cezar-extension-api'
+import { isValidContributionId, type Disposable } from '@open-mercato/cezar-extension-api'
 
 import {
   normalizePageDefinition,
@@ -104,15 +104,20 @@ function validateContent(pages: ReadonlyMap<PageId, PageDefinition>, content: Pa
 
   for (const zone of page.zones) {
     const rawItems = content.zones[zone.id]
-    if (rawItems === undefined) continue
+    if (rawItems === undefined) {
+      if (zone.required) issues.push({ code: 'required-zone-empty', zoneId: zone.id })
+      continue
+    }
     if (!Array.isArray(rawItems)) {
       issues.push({ code: 'invalid-content', zoneId: zone.id })
+      if (zone.required) issues.push({ code: 'required-zone-empty', zoneId: zone.id })
       continue
     }
     if (zone.cardinality === 'single' && rawItems.length > 1) {
       issues.push({ code: 'cardinality-exceeded', zoneId: zone.id })
     }
     const keys = new Set<string>()
+    let usableCount = 0
     for (const item of rawItems) {
       if (!isZoneContent(item) || keys.has(item.key)) {
         issues.push({ code: 'invalid-content', zoneId: zone.id })
@@ -120,7 +125,11 @@ function validateContent(pages: ReadonlyMap<PageId, PageDefinition>, content: Pa
         continue
       }
       keys.add(item.key)
-      const accepted = zone.accepts.some(
+      if (item.placement !== zone.placement) {
+        issues.push({ code: 'placement-not-accepted', zoneId: zone.id, placement: item.placement })
+        continue
+      }
+      const accepted = zone.accepts === undefined || zone.accepts.some(
         (contract) => contract.id === item.contract.id && contract.version === item.contract.version,
       )
       if (!accepted) {
@@ -130,15 +139,30 @@ function validateContent(pages: ReadonlyMap<PageId, PageDefinition>, content: Pa
           contractId: typeof item.contract.id === 'string' ? item.contract.id : '',
           version: typeof item.contract.version === 'number' ? item.contract.version : 0,
         })
+        continue
       }
+      usableCount += 1
     }
+    if (zone.required && usableCount === 0) issues.push({ code: 'required-zone-empty', zoneId: zone.id })
   }
   return Object.freeze(issues.map((issue) => Object.freeze(issue)))
 }
 
 function isZoneContent(value: unknown): value is ZoneContent {
   if (!isRecord(value) || typeof value.key !== 'string' || value.key.length === 0 || !isRecord(value.contract)) return false
-  return value.contract.kind === 'component' && typeof value.contract.id === 'string' && typeof value.contract.version === 'number' && isRecord(value.props)
+  return (
+    typeof value.placement === 'string' &&
+    isValidContributionId(value.placement) &&
+    value.contract.kind === 'component' &&
+    typeof value.contract.id === 'string' &&
+    isValidContributionId(value.contract.id) &&
+    isPositiveInteger(value.contract.version) &&
+    isRecord(value.props)
+  )
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
