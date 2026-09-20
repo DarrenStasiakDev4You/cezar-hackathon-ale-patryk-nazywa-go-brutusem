@@ -6,6 +6,8 @@ import {
   agentHomePaths,
   cezarHomeDir,
   claudeStateFilePath,
+  extensionGrantsPath,
+  extensionsDir,
   instanceSlug,
   serverInstancesDir,
   serverLockPath,
@@ -49,6 +51,12 @@ describe('paths', () => {
     process.env.CEZ_HOME = '/tmp/cez-home-test';
     expect(workspaceConfigPath()).toBe('/tmp/cez-home-test/config.json');
     expect(workspaceUiStatePath()).toBe('/tmp/cez-home-test/ui-state.json');
+  });
+
+  it('extension paths share the CEZ_HOME derivation', () => {
+    process.env.CEZ_HOME = '/tmp/cez-home-test';
+    expect(extensionsDir()).toBe('/tmp/cez-home-test/extensions');
+    expect(extensionGrantsPath()).toBe('/tmp/cez-home-test/extension-grants.json');
   });
 
   it('a named instance lives under server-instances/, keyed by slug', () => {
