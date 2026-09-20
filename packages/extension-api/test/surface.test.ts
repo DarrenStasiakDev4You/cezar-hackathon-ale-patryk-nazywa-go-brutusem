@@ -16,6 +16,8 @@ describe('@open-mercato/cezar-extension-api surface', () => {
     expect(Object.keys(api).sort()).toEqual([
       'ExtensionActivated',
       'ExtensionDefinitionError',
+      'LAYOUT_SCHEMA_VERSION',
+      'LayoutSchemaError',
       'ProjectChanged',
       'TaskArchive',
       'TaskArchived',
@@ -38,6 +40,9 @@ describe('@open-mercato/cezar-extension-api surface', () => {
       'isExtensionError',
       'isValidContributionId',
       'isValidExtensionId',
+      'parseLayoutJson',
+      'parseLayoutSchema',
+      'serializeLayoutSchema',
       'validateManifest',
     ])
   })
