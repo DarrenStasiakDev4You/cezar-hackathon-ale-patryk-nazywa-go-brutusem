@@ -30,7 +30,7 @@ Risks:
 - `npm run test:unit` — passed (36 tests).
 - `npm run build` — passed, including the web build and package check.
 - `npm run test:package` — passed (16 tests).
-- `npm test` — blocked: 17 tests failed across six unrelated existing test files while 8,255 passed. Step 2.4 remains open until the repository-wide Vitest gate is green.
+- `npm test` — passed: 452 files and 8,272 tests passed after updating the stale Jira example contract and giving environment-sensitive server tests explicit budgets.
 
 ## Progress
 
@@ -51,6 +51,6 @@ PR: #68 (https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazy
 - [x] 2.2 Connect the loader to the default core layout without throwing into the root React tree. — 3026a749
 - [x] 2.3 Add regression coverage for optional resolver fallback and required-component failure to the full default. — 67b3bdcf
 - [x] Follow-up: align the migration seam with the shipped extension-api v1 contract and keep migration rules contract-based. — bbb0abb0
-- [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR.
+- [x] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR. — 816c05d3
 
-> Resume note: the validation gate, diff review and authoritative review ran on 2026-09-20. The review requested changes because `npm test` remains red; rerun `/om-auto-continue-pr 68` after the six failing test files are resolved.
+> Resume note: the full validation gate, diff review and implementation fixes ran on 2026-09-20. The Jira example now declares its component permission and compatibility result fields; slow server tests have explicit timeouts for the repository's concurrent test load.
