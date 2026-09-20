@@ -310,6 +310,15 @@ diagnostic/fallback callback; they must not echo arbitrary props or implementati
 
 ## 📝 UI/UX
 
+Prototype and evidence:
+
+- Current Task Page, desktop: `assets/layout-renderer/current-01-task-page-desktop.png`
+- Current Task Page, mobile: `assets/layout-renderer/current-02-task-page-mobile.png`
+- Proposed schema-order composition: `assets/layout-renderer/mockup-01-task-page-schema-order.html`
+  and `assets/layout-renderer/mockup-01-task-page-schema-order.png`
+- Proposed extension placement: `assets/layout-renderer/mockup-02-task-page-extension-placement.html`
+  and `assets/layout-renderer/mockup-02-task-page-extension-placement.png`
+
 The successful Task Page should be visually unchanged except where a deliberately reordered schema
 is used. Existing header shell stickiness, transcript scrolling, bottom composer docking, mobile safe
 areas, focus order and accessible landmarks remain the responsibility of the current shells and
@@ -333,10 +342,12 @@ States:
 - **Component failure:** preserve the existing `ComponentHost` behavior, including extension fallback
   to core, one diagnostic/toast and inline retry if core's default fails.
 
-Accessibility and browser evidence are part of implementation review, not this design-only change.
-No new mockup or screenshot is created now. The implementation should capture the current Task Page at
-desktop and mobile widths as a baseline, then verify unchanged landmarks, keyboard order, focus after
-schema reorder, loading/error states, extension fallback and the bottom dock. If the shared browser
+The attached current screenshots are a baseline, not proof of the proposed behavior. The static
+mockups illustrate the schema-order and extension-hosting concepts; they are not production UI. The
+implementation should recapture the Task Page at desktop and mobile widths, then verify unchanged
+landmarks, keyboard order, focus after schema reorder, loading/error states, extension fallback and
+the bottom dock. If the shared browser environment is unavailable, record that limitation rather than
+claiming QA approval.
 environment is unavailable, record that limitation rather than claiming QA approval.
 
 ## 📝 Edge Cases & Failure Scenarios
