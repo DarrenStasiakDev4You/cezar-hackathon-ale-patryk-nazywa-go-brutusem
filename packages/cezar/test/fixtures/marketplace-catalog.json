@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-20T09:00:00.000Z",
+  "extensions": [
+    {
+      "id": "acme.jira",
+      "name": "Jira Integration",
+      "description": "Issues and transitions on the task header.",
+      "publisher": {
+        "id": "acme",
+        "name": "ACME Corp"
+      },
+      "repository": "https://github.com/acme/cezar-jira",
+      "versions": [
+        {
+          "version": "1.3.0",
+          "compatibility": {
+            "apiVersion": 1,
+            "cezar": "^0.12.0"
+          },
+          "permissions": [
+            "ui.components",
+            "events"
+          ],
+          "releaseUrl": "https://github.com/acme/cezar-jira/releases/download/v1.3.0/acme.jira.tgz",
+          "checksum": {
+            "algorithm": "sha256",
+            "value": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
+        }
+      ]
+    }
+  ]
+}
