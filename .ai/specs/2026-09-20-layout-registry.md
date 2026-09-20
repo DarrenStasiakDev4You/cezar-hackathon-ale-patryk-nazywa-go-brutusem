@@ -15,24 +15,26 @@ is still assembled by `TaskThread` and `RunHeader` with concrete imports and han
 new component therefore requires editing the page consumer, even when its contract and fallback
 are already registered.
 
-This proposal adds a declarative **Page Layout Registry**. A page definition records its zones and
-the component contracts each zone accepts, for example `task.page` with `task.header`,
-`task.main` and `task.sidebar`. A generic zone renderer walks that definition and delegates each
-accepted component to the existing `ComponentHost`; it does not switch on component ids or import
-all known components. The core catalog declares `TaskPage` in this item, but the live route does
-not adopt it yet. That consumer migration is deliberately separate so the registry contract can
-ship and be tested without changing the working task UI.
+This proposal adds a declarative **Page Layout Registry**. A page definition records its zones,
+their semantic placement categories and any narrower component-contract constraints, for example
+`task.page` with `task.header`, `task.main` and `task.sidebar`. A generic zone renderer walks that
+definition and delegates each accepted contribution to the existing `ComponentHost`; it does not
+switch on component ids or import all known components. Category-open zones can host future
+extension panels whose contract is not known to core, while still resolving every item through the
+versioned component registry. The core catalog declares `TaskPage` in this item, but the live route
+does not adopt it yet. That consumer migration is deliberately separate so the registry contract
+can ship and be tested without changing the working task UI.
 
 ## Resolved assumptions (autonomous defaults)
 
 | # | Question | Applied default | Why | Confirm? |
 |---|---|---|---|---|
 | Q1 | Is this a generic registry for every cockpit page, or a Task Page feature only? | Build a reusable registry and renderer, and register the declarative `task.page` definition, but do not migrate the live Task Page route in this item. | The registry foundation and its first catalog entry can ship independently; wiring a working route is a separate consumer change with its own visual and interaction gate. | reversible |
-| Q2 | How does a zone describe the component types it accepts? | Zones reference the existing `ComponentContract` tokens by `id` and `version`; they never accept raw React components or arbitrary strings. | The component registry already owns compatibility, provenance, preference and fallback. Reusing its tokens prevents a second type/version system. | reversible |
-| Q3 | May a zone contain one component or a collection? | The definition supports `single` and `many`; Task Page uses `single` for `task.header` and `many` for extensible `task.main`/`task.sidebar` content. | A single generic renderer can cover the current header/composer hosts and future panels without making registration order an accidental selection policy. | reversible |
+| Q2 | How does a zone describe the component types it accepts? | Every zone declares a validated semantic `placement` category; it may additionally list exact `ComponentContract` id/version constraints. An omitted allowlist means the category is open to future contracts. Raw React components and arbitrary implementation ids are never accepted. | Placement categories let a sidebar host Jira, GitHub or future panels that core does not know yet, while optional contract constraints preserve typed props and the existing resolver for stricter zones. | reversible |
+| Q3 | May a zone contain one component or a collection? | `single` and `many` are cardinality constraints on the same content pipeline, not separate rendering mechanisms. Task Page uses `single` for `task.header` and `many` for extensible `task.main`/`task.sidebar` content. | Validation can reject overflow while the renderer preserves one ordering/key model, leaving later DnD and reordering independent of the renderer's component path. | reversible |
 | Q4 | Should extensions register whole pages and zones through the public extension API now? | No. The first registry is host-owned and populated by the core catalog; extension implementations continue to enter through `context.components.provide`. | Publishing page composition, zone ids and cross-extension ordering is a larger compatibility contract. The component host already enables useful replacements without expanding the public API. | reversible |
 | Q5 | Where are page definitions and user layout choices stored? | Definitions and the runtime registry are in memory. This item has no server endpoint, browser storage, `~/.cezar` file, drag/drop order or user persistence. | The registry is a runtime composition contract, not user state. Keeping it ephemeral preserves zero-config behavior and makes rollback a code change. | reversible |
-| Q6 | What happens when a required zone has no compatible component? | Keep the zone's reserved box and render a stable inline error/fallback state with one diagnostic; optional empty zones render nothing. Never select an arbitrary component from another zone. | A missing component must not collapse the task page or silently move controls. This follows `ComponentHost`'s isolation and the repository rule that every state has an explicit exit. | reversible |
+| Q6 | What happens when a required zone has no compatible component? | The registry reports a typed missing/invalid-zone state; `PageRenderer` and its fallback policy decide whether to preserve space, show an inline diagnostic or use another host-owned fallback. Optional empty zones render nothing. No content crosses into another zone. | The pure registry should not own React/error UI. Keeping presentation in the renderer preserves provider-specific fallback policy while ensuring missing controls are never silently moved. | reversible |
 
 ## 📝 Problem Statement
 
@@ -62,9 +64,10 @@ task.page
 
 Without a page-level definition:
 
-- zone ids are implicit `data-slot` strings rather than a validated contract;
-- the renderer can accidentally accept a component that was never designed for that surface;
-- required and optional regions have no shared failure semantics;
+- zone ids are implicit `data-slot` strings rather than a validated placement contract;
+- the renderer can accidentally accept a component that was never designed for that surface, or
+  prevent a valid future extension panel because core has not named its contract yet;
+- required and optional regions have no shared state reporting or fallback policy;
 - core and extensions cannot reason about the available page structure without reading route JSX;
 - the next component is hardcoded into the renderer, defeating the component platform.
 
@@ -87,18 +90,17 @@ The core catalog declares `TaskPage` once, without changing the live route in th
 
 ```text
 task.page
-├── task.header   single, required, accepts TaskHeaderMain
-├── task.main     many, required, accepts the task content contracts
-└── task.sidebar  many, optional, accepts metadata/panel contracts
+├── task.header   placement task.header.main, single, required, constrained to TaskHeaderMain
+├── task.main     placement task.main.content, many, required
+└── task.sidebar  placement task.sidebar.panel, many, optional, category-open
 ```
 
-The exact `task.main` and `task.sidebar` contracts land with their first real slot. The registry
-can validate the shape using fixture contracts, while the catalog records the accepted contract
-tokens and policies. The later Task Page consumer migration will register the existing
-`TaskHeaderMain` and `TaskComposer` where their current page owners place them. The composer is
-specified as a final, bottom-docked item in `task.main`, with its current sticky behavior retained;
-`task.sidebar` is declared as an optional extension point and is empty until a supported sidebar
-contract exists. This definition does not invent a visible sidebar or alter the current UI.
+The later Task Page consumer migration will register the existing `TaskHeaderMain` and
+`TaskComposer` where their current page owners place them. The composer is specified as a final,
+bottom-docked item in `task.main`, with its current sticky behavior retained. `task.sidebar` is an
+optional category-open extension point: its adapter can accept any valid contract contribution
+declaring the `task.sidebar.panel` placement, including a contract introduced after core ships.
+This definition does not invent a visible sidebar or alter the current UI.
 
 The renderer receives a page-specific view model adapter, not a list of imported component
 implementations:
@@ -109,9 +111,9 @@ Page consumer model (follow-up)
        ├─ generic ZoneRenderer(task.header)
        │    └─ ComponentHost(contract=TaskHeaderMain, props=...)
        ├─ generic ZoneRenderer(task.main)
-       │    └─ ComponentHost(contract=..., props=...)
+       │    └─ ComponentHost(placement=task.main.content, contract=..., props=...)
        └─ generic ZoneRenderer(task.sidebar)
-            └─ empty optional zone
+            └─ ComponentHost(placement=task.sidebar.panel, contract=..., props=...)
 ```
 
 The future adapter is the boundary where domain data becomes contract props. It may import the
@@ -123,8 +125,8 @@ fail if the generic renderer gains a component-id switch or a concrete task-comp
 
 - **Backstage frontend extensions.** Backstage models extensions as instances attached to named
   parent extension points, and blueprints package the attachment point and output together. We
-  take the explicit attachment point and parent/child composition model, but keep Cezar's simpler
-  contract-token compatibility and local registry.
+  take the explicit placement category and parent/child composition model, but keep Cezar's local
+  registry and optional contract-token constraints.
   [Frontend extension architecture](https://backstage.io/docs/next/frontend-system/architecture/extensions/)
   and [extension blueprints](https://backstage.io/docs/frontend-system/architecture/extension-blueprints/)
   are the relevant references.
@@ -148,9 +150,10 @@ fail if the generic renderer gains a component-id switch or a concrete task-comp
   mounts, work without a DOM and stay independent of editable layout state.
 - **Let a zone accept `React.ComponentType` values.** Rejected. It bypasses the component registry,
   contract versioning, fallback, compatibility checks and extension provenance.
-- **Use only string component kinds such as `"task-header"`.** Rejected. Strings do not carry the
-  `ComponentContract` major or props type. If a display kind is useful later, it can be metadata
-  on a contract rather than a second selector.
+- **Use only string component kinds such as `"task-header"`.** Rejected. A placement category is
+  intentionally a validated contribution id, but it is not an implementation selector or a props
+  type. Each content item still carries a versioned `ComponentContract`; the category answers
+  where it may render and the component registry answers how it renders.
 - **Let the renderer choose the first compatible implementation.** Rejected. The resolver's rule
   is opt-in selection with core's default fallback; registration order must never change what a
   user sees.
@@ -198,17 +201,19 @@ definition added or removed during extension/bootstrap work is observed without 
 
 The renderer has no `switch (componentId)`, no `if (zone.id === ...)` branch for component
 selection and no imports of concrete implementations. It looks up the zone definition, filters
-the supplied content by the zone's accepted contract ids/versions, and renders each item through
-`ComponentHost`. Invalid content is rejected at the adapter/registry boundary and is never
-silently rendered in a neighbouring zone.
+the supplied content by placement category and, when present, the zone's accepted contract
+ids/versions, then renders each item through `ComponentHost`. Invalid content is rejected at the
+adapter/registry boundary and is never silently rendered in a neighbouring zone. The registry
+reports typed state only; the renderer owns the visual fallback policy.
 
 ## 📝 Data Model
 
 The model is immutable and in memory:
 
 ```ts
-type PageId = string
-type ZoneId = string
+type PageId = ContributionId
+type ZoneId = ContributionId
+type PlacementId = ContributionId
 
 interface ZoneLayout {
   readonly order?: number
@@ -219,7 +224,10 @@ interface ZoneLayout {
 
 interface ZoneDefinition {
   readonly id: ZoneId
-  readonly accepts: readonly ComponentContract<unknown>[]
+  /** Semantic placement category, not an implementation id. */
+  readonly placement: PlacementId
+  /** Optional narrow contract allowlist; omitted means any contract for this placement. */
+  readonly accepts?: readonly ComponentContract<unknown>[]
   readonly cardinality: 'single' | 'many'
   readonly required: boolean
   readonly layout?: ZoneLayout
@@ -233,6 +241,7 @@ interface PageDefinition {
 
 interface ZoneContent {
   readonly key: string
+  readonly placement: PlacementId
   readonly contract: ComponentContract<unknown>
   readonly props: unknown
 }
@@ -250,21 +259,25 @@ zone-content boundary.
 
 Validation rules:
 
-- page ids, zone ids and contract ids are non-empty, normalized contribution-style ids;
+- page ids, zone ids, placement ids and contract ids are non-empty, normalized contribution-style ids;
 - a page id is unique in one registry, and its zone ids are unique within that page;
-- a zone's `accepts` list has no duplicate `(id, version)` pair;
-- `single` zones accept at most one content item; `many` zones preserve explicit adapter order;
-- a `required` zone has at least one accepted contract and a non-empty reserved error state;
+- when present, a zone's `accepts` list has no duplicate `(id, version)` pair;
+- content placement must match the zone's placement category; a non-empty `accepts` list additionally
+  requires an exact `(id, version)` contract match;
+- `single` and `many` are cardinality constraints applied by the same content pipeline; single
+  zones reject a second item and many zones preserve explicit adapter order;
+- a required zone reports an empty/invalid state when it has no usable content, but does not own a
+  React error view or fallback policy;
 - `content.pageId` must match the rendered page definition;
-- every content item must reference a contract accepted by its zone at the same major version;
+- every content item carries a valid component contract, even when its zone is category-open;
 - unknown or disposed definitions are rejected without mutating the last valid snapshot;
 - `order` and layout metadata are advisory placement rules, not persisted user geometry.
 
 The registry stores definitions, not implementation records. The Component Registry remains the
 only place that knows whether an implementation is compatible, who provided it and which default
-to use. A zone is compatible with a component contract by token identity (`id` + `version`), while
-the component implementation is compatible through `checkComponentCompatibility` and the existing
-resolver.
+to use. A zone admits content by semantic placement first and can narrow that admission by
+contract token identity (`id` + `version`); the component implementation is compatible through
+`checkComponentCompatibility` and the existing resolver.
 
 ## 📝 API Contracts
 
@@ -285,7 +298,9 @@ export interface PageLayoutRegistry {
 export type PageContentIssue =
   | { readonly code: 'unknown-page'; readonly pageId: PageId }
   | { readonly code: 'unknown-zone'; readonly pageId: PageId; readonly zoneId: ZoneId }
+  | { readonly code: 'placement-not-accepted'; readonly zoneId: ZoneId; readonly placement: PlacementId }
   | { readonly code: 'contract-not-accepted'; readonly zoneId: ZoneId; readonly contractId: string; readonly version: number }
+  | { readonly code: 'required-zone-empty'; readonly zoneId: ZoneId }
   | { readonly code: 'cardinality-exceeded'; readonly zoneId: ZoneId }
   | { readonly code: 'invalid-content'; readonly zoneId: ZoneId }
 
@@ -311,12 +326,14 @@ define namespace, lifecycle, ordering and security rules before it is added to
 1. `PageRenderer` resolves the page by `content.pageId` and subscribes to registry revision.
 2. It walks the immutable zone list in declaration order; it does not derive order from object-key
    enumeration or component registration order.
-3. It validates each content item against the zone's accepted `(contract id, version)` set.
+3. It validates each content item against the zone's placement category and, when present, its
+   accepted `(contract id, version)` set.
 4. It renders accepted items through `ComponentHost`, passing `key`, `subject` and the adapter's
    typed props. `ComponentHost` owns preference, compatibility, layout metadata, Suspense and
-   error-boundary behavior.
-5. An empty optional zone returns no DOM node. A missing required zone renders a stable diagnostic
-   box with the zone id and preserves the zone's declared minimum size.
+   implementation error-boundary behavior.
+5. The registry reports `required-zone-empty` for a required zone without usable content. The
+   default renderer policy may preserve the zone's minimum size and show a stable diagnostic box;
+   an injected `fallback` may choose another presentation. An empty optional zone returns no DOM.
 6. If a selected extension implementation fails, `ComponentHost` falls back to core's default;
    the zone remains the same zone and does not retry a different zone's content.
 7. A disposed page definition or an invalid update is ignored by the rendered snapshot after one
@@ -331,20 +348,18 @@ export const TaskPage: PageDefinition = definePage({
   id: 'task.page',
   version: 1,
   zones: [
-    { id: 'task.header', accepts: [TaskHeaderMain], cardinality: 'single', required: true },
-    { id: 'task.main', accepts: [TaskMain, TaskComposer], cardinality: 'many', required: true },
-    { id: 'task.sidebar', accepts: [TaskMetadata], cardinality: 'many', required: false },
+    { id: 'task.header', placement: 'task.header.main', accepts: [TaskHeaderMain], cardinality: 'single', required: true },
+    { id: 'task.main', placement: 'task.main.content', accepts: [TaskComposer], cardinality: 'many', required: true },
+    { id: 'task.sidebar', placement: 'task.sidebar.panel', cardinality: 'many', required: false },
   ],
 })
 ```
 
-`TaskMain` and `TaskMetadata` name the typed contract tokens that the first real consumers will
-define. The foundation tests use fixture contracts with the same shape; they are not an untyped
-string escape hatch. If the implementation PR decides the existing transcript or metadata model is
-not ready for a public extension contract, the page catalog may initially point at core-only
-contracts in `packages/web` and promote each token in the same PR as its first host. The registry
-must still validate every accepted token by `(id, version)` and never fall back to arbitrary
-component kinds.
+`task.sidebar` is deliberately category-open: a future panel contributes the same semantic
+placement and brings its own versioned contract token, even if core has never imported that
+contract. The foundation tests use fixture contracts to prove both the narrow `task.header` policy
+and the open sidebar policy; they are not an untyped component escape hatch. `TaskMain` or a future
+metadata contract can be added as a narrow allowlist when its first real host needs typed props.
 
 ## 📝 UI/UX
 
@@ -356,7 +371,8 @@ not the layout tokens or copy in this item.
 The registry foundation adds no user-visible state because it is not mounted in the live route.
 The later consumer should preserve the defensive states already implied by `ComponentHost`:
 
-- a required zone with no usable default keeps its reserved space and shows a concise inline error;
+- a required zone with no usable content is reported by the registry; the renderer's default
+  fallback policy may keep its reserved space and show a concise inline error;
 - an extension implementation failure shows the existing component-host fallback notice while the
   rest of the task page remains usable;
 - an optional empty zone contributes no empty panel, border or focus target.
@@ -373,22 +389,27 @@ implementation should compare the existing task page at mobile and desktop width
 
 - **Duplicate page or zone:** registration fails atomically with a diagnostic; the currently
   active definition keeps rendering.
-- **Unknown contract version:** content is rejected for that zone. The renderer does not coerce a
-  major, cast props or fall through to another zone.
+- **Unknown placement or contract version:** content is rejected for that zone. The renderer does
+  not coerce a placement, cast props or fall through to another zone. A category-open zone may
+  accept a contract core has never seen, but the item still needs a valid contract token and the
+  normal component resolver path.
 - **Missing core default:** the existing `missingCoreDefaults` gate catches it; once the consumer
-  is mounted, a required zone should render its reserved error box rather than blanking the route.
+  is mounted, the registry reports the required zone's unusable state and the renderer's fallback
+  policy decides whether to preserve the box or show an error rather than blanking the route.
 - **Extension activation after first paint:** the page registry is ready to notify its subscribers;
   the later consumer will combine that with component-registry notifications. This item does not
   mount the live route, so no runtime page swap is introduced here.
 - **Extension disposal:** once the consumer is mounted, a chosen implementation disappearing
   returns `ComponentHost` to the core default in the same zone. A sidebar contribution disappearing
   does not alter main content.
-- **Many-zone order:** explicit `ZoneContent.key` and adapter order are authoritative. Registration
-  order, object-key order and extension activation order are never used as layout policy.
+- **Placement and many-zone order:** the content's semantic placement must match the zone, while
+  explicit `ZoneContent.key` and adapter order are authoritative. Registration order, object-key
+  order and extension activation order are never used as layout policy.
 - **One-zone overflow:** a `single` zone rejects a second item instead of silently replacing the
   first. A `many` zone keeps all accepted items within its declared container.
 - **Props mismatch:** a typed adapter/contract failure is a test/build failure; a runtime malformed
-  content object becomes `invalid-content` and renders the zone fallback, never an unhandled throw.
+  content object becomes `invalid-content` and is handed to the renderer fallback policy, never an
+  unhandled throw.
 - **React StrictMode:** registering, subscribing and disposing twice is idempotent; no duplicate
   page or zone definitions and no duplicate diagnostics are emitted.
 - **Route transition:** page content is scoped to the current route/task subject. No registry state
@@ -400,11 +421,12 @@ implementation should compare the existing task page at mobile and desktop width
 ## 📝 Risks & Impact Review
 
 The page definition becomes a compatibility surface. Renaming `task.header`, changing a zone from
-single to many, or removing an accepted major can strand content adapters and extension choices.
-Therefore page ids, zone ids, cardinality and accepted contract versions are versioned data. A
-breaking page change increments `PageDefinition.version` and keeps an adapter for the prior shape
-until no persisted choices exist; this item has no persisted choices, so rollback is deleting the
-new catalog/renderer integration and restoring the existing JSX.
+single to many, changing its placement category, or removing an accepted major can strand content
+adapters and extension choices. Therefore page ids, zone ids, placement categories, cardinality
+and accepted contract versions are versioned data. A breaking page change increments
+`PageDefinition.version` and keeps an adapter for the prior shape until no persisted choices exist;
+this item has no persisted choices, so rollback is deleting the new catalog/renderer integration
+and restoring the existing JSX.
 
 The largest follow-up risk is migrating a working task page: `RunHeader`, transcript state,
 composer drafts, review controls and mobile scrolling have load-bearing ownership that must not be
@@ -422,21 +444,23 @@ zone contract is still documented in `AGENTS.md` as a protected cockpit conventi
 
 ### Phase 1 — Page definitions and registry
 
-Add the pure immutable definition types, validation, snapshot, disposal and subscription. Prove
-the registry with fixture pages and zones, including atomic failure and StrictMode-safe disposal.
-No route changes yet.
+Add the pure immutable definition types, placement validation, snapshot, disposal and subscription.
+Prove the registry with fixture pages and zones, including category-open zones, atomic failure and
+StrictMode-safe disposal. No route changes yet.
 
 ### Phase 2 — Generic zone renderer
 
 Add provider/context and a generic `PageRenderer`/`ZoneRenderer` that consumes page definitions and
-delegates accepted content to `ComponentHost`. Prove required/optional zones, single/many
-cardinality, accepted contract versions, fallback states and the no-hardcoded-components boundary.
+delegates placement-matching content to `ComponentHost`. Prove required/optional zones,
+single/many cardinality as one constraint, narrow and category-open acceptance, renderer-owned
+fallback states and the no-hardcoded-components boundary.
 
 ### Phase 3 — Task Page catalog
 
 Declare `task.page` and its initial zones as a core catalog entry. Do not mount it in the live
-route. Add fixture content that proves the header/main/sidebar policy and keeps missing sidebar
-content optional. The route migration is a separate follow-up.
+route. Add fixture content that proves the header/main/sidebar placement policy, admits an unknown
+future sidebar contract by category, and keeps missing sidebar content optional. The route
+migration is a separate follow-up.
 
 ### Follow-up — Task Page consumer migration
 
@@ -456,10 +480,12 @@ each phase: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build
 
 1. Add `PageId`, `ZoneId`, `ZoneDefinition`, `PageDefinition`, `PageContent` and issue types in
    `packages/web/src/page-layout/definitions.ts`, reusing existing component-contract aliases.
-   Tests reject malformed ids, duplicate accepted contracts and invalid layout metadata.
+   Tests reject malformed ids, duplicate accepted contracts, invalid placement ids and invalid
+   layout metadata.
 2. Implement `createPageLayoutRegistry` with atomic registration, `getPage`, `getZone`, ordered
-   snapshots, `validateContent`, idempotent disposal and revision subscriptions. Tests prove that
-   a failed registration cannot partially replace a working definition.
+   snapshots, placement/contract-aware `validateContent`, idempotent disposal and revision
+   subscriptions. Tests prove that a failed registration cannot partially replace a working
+   definition.
 3. Add the development/runtime diagnostic policy for duplicate or invalid definitions. A throwing
    subscriber cannot prevent another subscriber or corrupt the registry.
 
@@ -468,9 +494,10 @@ each phase: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build
 4. Add `PageLayoutProvider`, `usePageLayoutRegistry` and `PageRenderer` using
    `useSyncExternalStore`; isolated tests can inject a registry and the default app creates one
    instance.
-5. Add `ZoneRenderer` that walks definitions in declaration order and renders accepted content only
-   through `ComponentHost`. Tests use fixture contracts to prove core fallback, extension choice,
-   required-zone error state and optional-zone omission.
+5. Add `ZoneRenderer` that walks definitions in declaration order and renders placement-matching
+   content only through `ComponentHost`. Tests use fixture contracts to prove core fallback,
+   category-open extension content, cardinality validation, renderer-owned required-zone fallback
+   state and optional-zone omission.
 6. Add a static boundary test that scans `page-layout/` and fails on concrete component imports,
    component-id switches, raw `React.createElement` calls and use of the DOM edit-mode registry.
 7. Add stable `data-page-id`/`data-zone-id` attributes while preserving existing `data-slot`
@@ -479,10 +506,11 @@ each phase: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build
 ### Phase 3 — Task Page catalog
 
 8. Declare `TaskPage` in `core-pages.ts` with `task.header`, `task.main` and `task.sidebar`, and
-   add a gate that every accepted production contract has a core default or an explicit required
-   zone fallback.
+   add a gate that every narrow production contract has a core default or an explicit required
+   zone fallback; category-open optional zones remain valid extension points without a core import.
 9. Add fixture content/tests that prove `task.main` can preserve an explicit bottom-docked
-   composer item and that an empty `task.sidebar` contributes no DOM.
+   composer item, that a future contract can enter category-open `task.sidebar`, and that an empty
+   sidebar contributes no DOM.
 
 ### Follow-up handoff
 
@@ -496,12 +524,14 @@ each phase: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build
 
 - [ ] `PageLayoutRegistry` stores validated page definitions and their zones in memory.
 - [ ] `task.page` has declarative `task.header`, `task.main` and `task.sidebar` zone definitions.
-- [ ] Each zone records accepted `ComponentContract` ids/versions, cardinality, requiredness and
-      layout metadata.
+- [ ] Each zone records a semantic placement category, optional accepted `ComponentContract`
+      ids/versions, cardinality, requiredness and layout metadata.
 - [ ] The generic renderer walks page/zone definitions and contains no hardcoded component ids or
       concrete task-component imports.
 - [ ] Accepted components render through the existing `ComponentHost` and component resolver.
-- [ ] A required zone has a stable fallback/error state; an empty optional zone adds no DOM.
+- [ ] The registry reports a typed required-zone failure and the renderer/fallback policy provides
+      the stable fallback/error state; an empty optional zone adds no DOM.
+- [ ] A category-open zone can accept a future valid component contract without a core import.
 - [ ] Extension implementation failures remain isolated to their zone and fall back as today.
 - [ ] Duplicate/invalid definitions fail atomically and do not corrupt the active snapshot.
 - [ ] StrictMode, mount/unmount and registry subscription behavior are idempotent and leak-free.
