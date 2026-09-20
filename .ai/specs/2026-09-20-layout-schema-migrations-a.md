@@ -4,9 +4,9 @@
 
 Custom layouts zapisane w starszym formacie będą mogły zostać otwarte po aktualizacji Cezara.
 Proponujemy jawny, deterministyczny łańcuch migracji `v1 → v2 → v3`, z walidacją po każdym
-kroku i atomowym wynikiem: albo kompletny layout w bieżącej wersji, albo bezpieczny domyślny
-layout bez częściowo zastosowanych zmian. Migracja nie może pozwolić, aby uszkodzony lub
-niekompatybilny zapis wyłączył całą stronę.
+kroku i atomowym wynikiem: albo kompletny layout w bieżącej wersji, albo failure z zachowanym
+wejściem i diagnostyką. Osobna load/render boundary mapuje failure na bezpieczny layout domyślny,
+aby uszkodzony lub niekompatybilny zapis nie wyłączył całej strony.
 
 ## 📝 Problem Statement
 
@@ -28,8 +28,8 @@ Wprowadzić czysty, webowy moduł migracji przy granicy ładowania layoutu:
 
 ```ts
 type LayoutMigrationResult =
-  | { status: 'migrated'; schema: LayoutSchemaV3; changes: readonly LayoutChange[] }
-  | { status: 'fallback'; reason: LayoutMigrationError; original: unknown }
+  | { status: 'current' | 'migrated'; schema: LayoutSchemaV3; changes: readonly LayoutChange[] }
+  | { status: 'failed'; error: LayoutMigrationError; original: unknown }
 
 migrateLayoutSchema(input: unknown, targetVersion?: 3): LayoutMigrationResult
 ```
@@ -39,7 +39,8 @@ Migrator:
 1. parsuje i waliduje wersję wejściową;
 2. przechodzi wyłącznie po znanych, kolejnych krawędziach `v1 → v2` i `v2 → v3`;
 3. waliduje wynik po każdym kroku;
-4. zwraca nowy, pełny dokument albo wynik fallbacku — nigdy częściowo zmieniony dokument;
+4. zwraca nowy, pełny dokument albo typed failure z zachowanym wejściem — nigdy częściowo
+   zmieniony dokument ani decyzję renderera;
 5. zachowuje kolejność placementów i stabilne `placement.id`, chyba że jawna reguła splitu
    definiuje nowe, stabilne identyfikatory;
 6. raportuje zmiany diagnostyczne bez logowania treści layoutu, propsów ani danych taska.
@@ -57,7 +58,8 @@ modułu, aby były testowalne i audytowalne:
   starego wymaganego componentu do jego bieżącego core defaultu;
 - nieznany component opcjonalnego placementu pozostaje referencją w danych i jest rozwiązywany
   przez istniejący resolver/fallback; nieznany component wymaganego placementu musi mieć jawny
-  replacement albo powoduje bezpieczny fallback całego layoutu.
+  replacement albo powoduje typed failure migracji, który load/render boundary może bezpiecznie
+  zmapować na fallback całego layoutu.
 
 ### Przykładowe reguły objęte testami
 
@@ -70,7 +72,7 @@ testowego oraz tych samych kształtów, które stosuje produkcyjny registry.
 | v1 → v2 | usunięty, opcjonalny `legacy-banner` | placement znika, a wynik zawiera ostrzeżenie; pozostały layout działa |
 | v2 → v3 | `task-header` split na `task-header-summary` i `task-header-actions` | dwa deterministyczne placementy zajmują miejsce źródła, bez duplikacji przy ponownym odczycie |
 | v2 → v3 | wymagany stary component zastąpiony bieżącym core componentem | placement zachowuje stabilne `id`, ale wskazuje aktualny contract/component |
-| v2 → v3 | brak replacementu wymaganego componentu | `status: 'fallback'`, zachowany surowy zapis i domyślny layout; brak blank page |
+| v2 → v3 | brak replacementu wymaganego componentu | migrator zwraca `status: 'failed'` z zachowanym wejściem; load boundary wybiera domyślny layout, bez blank page |
 
 Alternatywa polegająca na „zgadywaniu” mapowania po nazwie albo na pomijaniu każdego
 nieznanego componentu została odrzucona. Pierwsza może zmutować layout bez intencji użytkownika,
@@ -82,7 +84,7 @@ a druga może usunąć funkcję wymaganą do działania strony.
 |---|---|---|---|---|
 | Q1 | Czy migracje mają obejmować tylko pure data, czy także zapis do storage i pełne przełączenie renderera? | Pure migrator plus loader boundary, bez nowej trasy HTTP, nowego storage ani edytora. | To najmniejszy odwracalny seam; loader może otworzyć starszy layout, a istniejący zapis może zostać podłączony bez duplikowania reguł. | reversible |
 | Q2 | Czy v2 i v3 mają mieć całkowicie nowe wire formaty? | Zachować `page` i named `zones`; v2 może dodać opcjonalne pole `required`, a v3 może zmieniać semantykę referencji przez jawne reguły. Nie dodawać otwartego `props` ani runtime objects. | Ogranicza blast radius i pozostaje zgodne z v1 z projektu Layout Schema; przykłady zmian są semantycznymi migracjami, nie niejawnie zgadywanym formatem. | reversible |
-| Q3 | Co zrobić, gdy migracja nie może zachować wymaganego componentu? | Nie częściowy layout, tylko domyślny layout core, diagnostyka i zachowanie oryginalnego zapisu do ponownej próby. | Użytkownik dostaje działającą stronę i nie traci danych; automatyczne usunięcie wymaganej funkcji byłoby nieodwracalne. | reversible |
+| Q3 | Co zrobić, gdy migracja nie może zachować wymaganego componentu? | Migrator zwraca failure z zachowanym wejściem i diagnostyką; load/render boundary niezależnie wybiera domyślny layout core. | Pure migrator zachowuje dane i raportuje problem, a boundary odpowiada za działającą stronę; żadna warstwa nie traci danych ani nie renderuje częściowego layoutu. | ✅ confirmed in PR review |
 | Q4 | Czy fallback wymaga nowego ekranu lub osobnego projektu UI? | Nie. Użyć istniejącej granicy fallbacku `ComponentHost`/shell; dodać tylko stan diagnostyczny zgodny z istniejącym wzorcem alertu, jeśli loader nie ma jeszcze miejsca na komunikat. | Migracja nie powinna tworzyć równoległego systemu błędów ani zmieniać trasy. | reversible |
 
 ## 📝 Architecture
@@ -99,23 +101,27 @@ a druga może usunąć funkcję wymaganą do działania strony.
 - `packages/web/src/component-registry/resolve.ts` pozostaje jedynym miejscem rozstrzygania,
   czy nieznany opcjonalny component może użyć core fallbacku. Migrator zna tylko jawne reguły
   zmian strukturalnych i required replacementów.
-- istniejący `ComponentHost` oraz shell zapewniają niepustą powierzchnię po awarii. Loader ma
-  przekazać domyślny layout i status diagnostyczny, zamiast rzucać wyjątek podczas renderowania.
+- istniejący `ComponentHost` oraz shell zapewniają niepustą powierzchnię po awarii. Load/render
+  boundary mapuje failure migratora na domyślny layout i status diagnostyczny, zamiast pozwalać,
+  aby błąd migracji trafił jako wyjątek do root Reacta.
 
 ```mermaid
 flowchart LR
   raw["stored JSON<br/>existing"] --> parse["parse + validate<br/>existing/new"]
   parse --> migrate["v1→v2→v3<br/>new, pure"]
   migrate -->|success| adapter["layout adapter<br/>planned consumer"]
-  migrate -->|failure| fallback["default core layout<br/>existing fallback boundary"]
+  migrate -->|failure + raw input| boundary["load/render boundary<br/>planned consumer"]
+  boundary --> fallback["default core layout<br/>existing fallback boundary"]
   adapter --> resolver["component resolver<br/>existing"]
   resolver --> host["ComponentHost<br/>existing"]
   fallback --> host
 ```
 
 Najważniejsza granica: migrator może zmienić plain data, ale nie może próbować renderować
-componentu ani naprawiać DOM. Dzięki temu test awarii migracji jest niezależny od Reacta, a awaria
-pojedynczej implementacji nadal podlega istniejącemu component hostowi.
+componentu ani wybierać fallbacku. Load/render boundary zachowuje raw input, wybiera bezpieczny
+default i przekazuje diagnostykę do istniejącego hosta. Dzięki temu test awarii migracji jest
+niezależny od Reacta, a awaria pojedynczej implementacji nadal podlega istniejącemu component
+hostowi.
 
 ### Wersje i kontrakty danych
 
@@ -184,7 +190,8 @@ wersji.
    tablicy. Replacementy są wstawiane w miejscu source, a source nie może pozostać drugi raz.
 4. **Changed required component** — zachować id placementu, zmienić contract/component na
    wskazany bieżący default i ponownie zwalidować required contract. Brak zgodnego replacementu
-   kończy migrację fallbackiem, nawet gdy reszta layoutu jest poprawna.
+   kończy migrację typed failure, nawet gdy reszta layoutu jest poprawna; dopiero load/render
+   boundary wybiera fallback.
 5. **Idempotencja** — dokument v3 nie przechodzi ponownie przez v1/v2 rules. Ponowne otwarcie
    zmigrowanego dokumentu zwraca v3 bez zdublowanych splitów, przeniesień i ostrzeżeń.
 
@@ -193,14 +200,18 @@ wersji.
 Nie powstaje nowa trasa HTTP ani publiczny export `extension-api`. Lokalny moduł udostępnia:
 
 ```ts
-parseLayoutForLoad(input: unknown):
+type LayoutLoadResult =
   | { status: 'current' | 'migrated'; schema: LayoutSchemaV3; changes: readonly LayoutChange[] }
-  | { status: 'fallback'; fallback: LayoutSchemaV3; error: LayoutMigrationError }
+  | { status: 'fallback'; fallback: LayoutSchemaV3; error: LayoutMigrationError; original: unknown }
+
+parseLayoutForLoad(input: unknown):
+  LayoutLoadResult
 ```
 
 Preferowana nazwa może zostać rozdzielona na `parseLayoutSchema` i `migrateLayoutSchema`, jeśli
 istniejący parser z projektu v1 ma już stabilnych konsumentów. Ważny jest kontrakt zachowania,
-nie jedna publiczna nazwa: parser waliduje, migrator transformuje, loader wybiera fallback.
+nie jedna publiczna nazwa: parser waliduje, migrator transformuje i raportuje failure, a loader
+wybiera fallback oraz komunikuje go hostowi.
 
 Nieznana przyszła wersja (`schemaVersion > 3`) nie jest downgradowana ani ignorowana. Stary Cezar
 nie powinien nadpisywać takiego zapisu; bieżący Cezar pokazuje domyślny layout i zachowuje raw
@@ -223,16 +234,17 @@ powodu mockupy nie są częścią tej specyfikacji.
 
 ## 📝 Edge Cases & Failure Scenarios
 
-- **Uszkodzony JSON lub zła v1/v2 shape.** Parser zwraca błąd, loader używa defaultu, raw input
-  pozostaje nienaruszony, a użytkownik dostaje komunikat zamiast blank page.
-- **Nieznana wersja.** Loader nie próbuje „najbliższej” migracji. Default jest bezpieczniejszy niż
-  cicha utrata danych.
-- **Kolizja renamed zone.** Migracja kończy się atomowym fallbackiem; nie łączy tablic bez jawnej
-  reguły, aby nie zmienić kolejności użytkownika po cichu.
+- **Uszkodzony JSON lub zła v1/v2 shape.** Parser/migrator zwraca failure, load boundary używa
+  defaultu, raw input pozostaje nienaruszony, a użytkownik dostaje komunikat zamiast blank page.
+- **Nieznana wersja.** Migrator nie próbuje „najbliższej” migracji; zwraca failure, a boundary
+  wybiera default. To bezpieczniejsze niż cicha utrata danych.
+- **Kolizja renamed zone.** Migracja zwraca failure; load boundary wybiera fallback i nie łączy
+  tablic bez jawnej reguły, aby nie zmienić kolejności użytkownika po cichu.
 - **Usunięty optional component.** Placement jest pomijany z ostrzeżeniem, a pozostałe strefy
   otwierają się.
-- **Usunięty required component.** Bez mapowania do bieżącego core/default migracja kończy się
-  fallbackiem całego layoutu. Nie renderujemy połowy wymaganej strony.
+- **Usunięty required component.** Bez mapowania do bieżącego core/default migrator zwraca
+  failure, a load/render boundary wybiera fallback całego layoutu. Nie renderujemy połowy
+  wymaganej strony.
 - **Split powtórzony po zapisaniu v3.** Wersja docelowa zatrzymuje łańcuch; nie ma drugiego
   splitu ani duplikatów.
 - **Nieznany optional extension component po udanej migracji.** Migrator zachowuje referencję,
@@ -245,15 +257,15 @@ powodu mockupy nie są częścią tej specyfikacji.
 ## 📝 Risks & Impact Review
 
 - **Wysokie ryzyko utraty layoutu przy niepełnym split.** Mitigacja: immutable result,
-  walidacja po każdym kroku, required replacement jako hard failure i fixture z częściowym
-  outputem.
+  walidacja po każdym kroku, required replacement jako hard failure z zachowanym raw inputem oraz
+  fixture z częściowym outputem; fallback pozostaje decyzją load boundary.
 - **Średnie ryzyko rozjazdu z Component Registry.** Migrator nie kopiuje resolvera; production
   rules odwołują się do katalogu contractów/defaultów przez wąski kontekst, a testy pinują
   `coreDefaultComponentId`.
 - **Średnie ryzyko nieskończonego łańcucha.** Migracje są indeksowane pojedynczymi parami wersji,
   mają jeden cel `3` i nie uruchamiają się dla dokumentu v3.
-- **Średnie ryzyko blank page w loaderze.** Acceptance test musi obejmować błąd migracji oraz
-  sprawdzać, że loader zwraca default; test komponentowy potwierdza widoczny host/alert.
+- **Średnie ryzyko blank page w loaderze.** Acceptance test musi obejmować failure migratora oraz
+  sprawdzać, że load boundary zwraca default; test komponentowy potwierdza widoczny host/alert.
 - **Koszt odwrócenia.** Po zapisaniu v3 nie ma automatycznego downgrade'u. Raw input trzeba
   zachować do czasu udanego przejęcia v3, a zmiany reguł w kolejnych wydaniach muszą dodawać
   nową krawędź migracji, nie zmieniać historycznej `v1 → v2` w sposób niedeterministyczny.
@@ -279,8 +291,8 @@ reguły oraz fixture'y. Po tej fazie dowolny loader może uzyskać atomowy wynik
 
 ### Phase 2 — Load boundary and safe fallback
 
-Podłączyć migrator w jednym miejscu ładowania LayoutSchema, zwrócić default core layout przy
-failure, zachować raw input i przekazać diagnostykę do istniejącego mechanizmu hosta. Po tej fazie
+Podłączyć migrator w jednym miejscu ładowania LayoutSchema, mapować jego failure na default core
+layout, zachować raw input i przekazać diagnostykę do istniejącego mechanizmu hosta. Po tej fazie
 starszy layout otwiera się po aktualizacji, a niekompatybilny layout nie daje blank page.
 
 ### Phase 3 — Persistence handoff (follow-up boundary)
@@ -305,21 +317,23 @@ krokiem. Ta specyfikacja definiuje wymagania dla tego handoffu, ale nie dodaje t
 ### Phase 2: Loader and fallback
 
 5. Podłączyć migrator do jednego loadera LayoutSchema i rozdzielić `migrated`, `current` oraz
-   `fallback`. *Test:* v1 otwiera defaultowy adapter jako v3, a unsupported/failed returns
-   default plus diagnostic.
-6. Zachować raw input do czasu sukcesu i użyć core/default layoutu przy `missing-required-
-   replacement` oraz błędzie walidacji. *Test:* failure nie wywołuje zapisu, nie rzuca do root
-   Reacta i nie zostawia pustej strony.
+   `failed` po stronie migratora od `fallback` po stronie load/render boundary. *Test:* v1 otwiera
+   defaultowy adapter jako v3, a unsupported/failed jest mapowany na default plus diagnostic.
+6. Zachować raw input do czasu sukcesu migratora i użyć core/default layoutu wyłącznie w boundary
+   przy `missing-required-replacement` oraz błędzie walidacji. *Test:* failure nie wywołuje zapisu,
+   nie rzuca do root Reacta i nie zostawia pustej strony.
 7. Przekazać bezpieczny komunikat do istniejącego host/boundary statusu. *Test:* component-level
    render sprawdza alert/host, działający core layout i retry zgodnie z istniejącym wzorcem.
 8. Dodać regression test na nieznany optional component, który nadal przechodzi przez resolver
-   fallback, oraz test na required component bez replacementu, który wybiera cały default.
-   *Test:* oba przypadki są rozróżnione, bez heurystycznego „best effort”.
+   fallback, oraz test na required component bez replacementu, który zwraca failure migratora,
+   po czym boundary wybiera cały default. *Test:* oba przypadki są rozróżnione, bez heurystycznego
+   „best effort”.
 
 ### Phase 3: Persistence handoff (planned follow-up)
 
-9. Zdefiniować wywołanie atomowego zapisu v3 po sukcesie loadera oraz zachowanie raw backupu.
-   *Test:* zapis następuje tylko po sukcesie, a awaria storage nie wpływa na render fallbacku.
+9. Zdefiniować wywołanie atomowego zapisu v3 po sukcesie migratora/loadera oraz zachowanie raw
+   backupu. *Test:* zapis następuje tylko po sukcesie, a awaria storage nie wpływa na render
+   fallbacku.
 10. Dodać ręczną akcję „reset layoutu” lub odpowiednik dopiero po decyzji o UI storage.
    *Test:* reset tworzy valid v3 i nie usuwa danych taska ani konfiguracji rozszerzeń.
 
@@ -329,7 +343,8 @@ krokiem. Ta specyfikacja definiuje wymagania dla tego handoffu, ale nie dodaje t
 - [ ] Migracja renamed zone zachowuje kolejność i stabilne placement ids.
 - [ ] Usunięty optional component nie blokuje pozostałego layoutu i zostawia diagnostykę.
 - [ ] Split component tworzy dokładnie zdefiniowane placementy w miejscu źródła i jest idempotentny.
-- [ ] Zmieniony required component ma jawny replacement; brak replacementu wybiera cały default.
+- [ ] Zmieniony required component ma jawny replacement; brak replacementu daje failure migratora,
+  po którym load boundary wybiera cały default.
 - [ ] Błąd migracji nie mutuje wejścia, nie zapisuje częściowego wyniku i nie rzuca do root Reacta.
 - [ ] Użytkownik widzi działający core/default layout oraz komunikat diagnostyczny, nigdy blank page.
 - [ ] Nieznany optional component korzysta z istniejącego resolver fallbacku, a nie z migracyjnego
