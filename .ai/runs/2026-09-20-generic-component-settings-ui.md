@@ -34,10 +34,10 @@ Source doc: `.ai/specs/2026-09-20-generic-component-settings-ui.md`
 
 ### Phase 1: The vocabulary
 
-- [ ] 1.1 Add the descriptors and helpers
-- [ ] 1.2 Teach `parse()` the new types
-- [ ] 1.3 Re-derive and canonicalize host-side
-- [ ] 1.4 Stop a bad definition from costing the component
+- [x] 1.1 Add the descriptors and helpers — cbe3df32
+- [x] 1.2 Teach `parse()` the new types — cbe3df32
+- [x] 1.3 Re-derive and canonicalize host-side — 7ae6c7d5
+- [x] 1.4 Stop a bad definition from costing the component — 7ae6c7d5
 
 ### Phase 2: Persistence
 
