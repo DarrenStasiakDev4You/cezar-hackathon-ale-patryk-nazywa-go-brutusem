@@ -35,9 +35,9 @@ Source doc: .ai/specs/2026-09-20-layout-constraints.md
 
 ### Phase 2: Shared validator and page admission
 
-- [ ] 2.1 Add the pure layout operation/result validator with stable issue ordering and focused unit tests.
-- [ ] 2.2 Apply shared admission checks to `PageLayoutRegistry` and `PageRenderer` without cross-zone fallback.
-- [ ] 2.3 Add page-layout and required-zone regression coverage proving rejected operations do not mutate snapshots.
+- [x] 2.1 Add the pure layout operation/result validator with stable issue ordering and focused unit tests. — 148aac7b
+- [x] 2.2 Apply shared admission checks to `PageLayoutRegistry` and `PageRenderer` without cross-zone fallback. — 148aac7b
+- [x] 2.3 Add page-layout and required-zone regression coverage proving rejected operations do not mutate snapshots. — 148aac7b
 
 ### Phase 3: Edit-mode mutation guard
 
