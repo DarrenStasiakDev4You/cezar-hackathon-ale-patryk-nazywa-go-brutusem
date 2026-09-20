@@ -54,3 +54,4 @@ PR: #66 (link: https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patry
 - [x] 1.3 Add `ExtensionPackageManifest`, `EntrypointKind`, `EXTENSION_API_VERSION`, and generation-aware `validatePackageManifest`; add manifest-format tests including strict sections, path grammar, permissions, metadata, and prototype edge cases. — 72102d05
 - [x] 1.4 Add `PackageCompatibility`, `PackageCompatibilityIssue`, `HostIdentity`, and ordered `checkPackageCompatibility`; add frozen-result, gating, entrypoint, throwing-getter, and revoked-proxy tests. — b1f32b7b
 - [x] 1.5 Re-export the specified surface, extend the exact runtime export test, document the package manifest and compatibility gates, and add `examples/hello-extension/cezar.extension.json`. — 31288e27
+- [x] Post-review fix: normalize wildcard comparison ranges and cover the behavior — 3d59b861
