@@ -44,15 +44,15 @@ Source doc: `.ai/specs/2026-09-20-layout-registry.md`
 
 ### Phase 1: Declarative model and registry
 
-- [ ] 1.1 Add page, zone, content and validation types with immutable snapshots.
-- [ ] 1.2 Implement the in-memory `PageLayoutRegistry` with atomic registration, lookup, validation, subscriptions and revisions.
+- [x] 1.1 Add page, zone, content and validation types with immutable snapshots. — af9d066d
+- [x] 1.2 Implement the in-memory `PageLayoutRegistry` with atomic registration, lookup, validation, subscriptions and revisions. — af9d066d
 
 ### Phase 2: Generic rendering and catalog
 
-- [ ] 2.1 Add `PageRenderer` and `ZoneRenderer` backed by `ComponentHost`, with required-zone error and optional-zone empty states.
-- [ ] 2.2 Add the declarative `TaskPage` catalog definition and public page-layout exports.
+- [x] 2.1 Add `PageRenderer` and `ZoneRenderer` backed by `ComponentHost`, with required-zone error and optional-zone empty states. — d14af301
+- [x] 2.2 Add the declarative `TaskPage` catalog definition and public page-layout exports. — d14af301
 
 ### Phase 3: Verification
 
-- [ ] 3.1 Add unit tests covering registry invariants, validation and renderer behavior.
+- [x] 3.1 Add unit tests covering registry invariants, validation and renderer behavior. — 624d2de8
 - [ ] 3.2 Run the repository validation gate and prepare the implementation PR.
