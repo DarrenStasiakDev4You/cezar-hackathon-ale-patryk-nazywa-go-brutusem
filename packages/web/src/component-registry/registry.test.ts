@@ -6,8 +6,13 @@ import type { ComponentType } from 'react'
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import {
+  booleanSetting,
   defineComponentContract,
+  defineSettings,
   isExtensionError,
+  numberSetting,
+  selectSetting,
+  stringSetting,
   type ComponentImplementation,
 } from '@open-mercato/cezar-extension-api'
 
@@ -20,6 +25,7 @@ import {
   type AnyComponentContract,
   type ComponentRegistration,
 } from './registry'
+import { createMemoryComponentSettingsStore } from './settings'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -821,6 +827,88 @@ describe('forExtension(scope).provide', () => {
     expect(
       thrown(() => components.provide(Header, { ...jiraHeader, capabilities: revoked() as readonly string[] })).code,
     ).toBe('invalid-input')
+  })
+
+  it('snapshots all setting descriptors and clamps display metadata', () => {
+    const registry = servedRegistry({ onDiagnostic: () => {} })
+    const definition = defineSettings({
+      scope: 'global',
+      schema: {
+        enabled: booleanSetting({ default: false, label: 'Enabled', description: 'A setting' }),
+        title: stringSetting({ default: 'Task', maxLength: 32 }),
+        count: numberSetting({ default: 2, min: 1, max: 4, integer: true }),
+        density: selectSetting({ default: 'cozy', options: [{ value: 'compact' }, { value: 'cozy' }] }),
+      },
+    })
+    const registration = registry.forExtension(fakeScope('acme.jira').scope).provide(Header, {
+      ...jiraHeader,
+      settings: { ...definition, schema: { ...definition.schema, enabled: { ...definition.schema.enabled, label: 'x'.repeat(140) } } },
+    } as unknown as ComponentImplementation<HeaderProps, unknown>).componentId
+
+    expect(registry.get(registration)?.settings?.schema).toMatchObject({
+      enabled: { type: 'boolean', default: false, label: 'x'.repeat(128), description: 'A setting' },
+      title: { type: 'string', default: 'Task', maxLength: 32 },
+      count: { type: 'number', default: 2, min: 1, max: 4, integer: true },
+      density: { type: 'select', default: 'cozy' },
+    })
+  })
+
+  it('keeps a component usable when an extension definition cannot be re-derived', () => {
+    const diagnostics: ComponentRegistration[] = []
+    const registry = servedRegistry({ onDiagnostic: (registration) => diagnostics.push(registration) })
+    const malformed = {
+      scope: 'global',
+      schema: { title: { type: 'string', default: 'too long', maxLength: 3 } },
+      defaults: { title: 'too long' },
+      parse: () => ({ title: 'too long' }),
+    }
+    registry.forExtension(fakeScope('acme.jira').scope).provide(Header, { ...jiraHeader, settings: malformed as never } as unknown as ComponentImplementation<HeaderProps, unknown>)
+
+    const registration = registry.get(jiraHeader.id)
+    expect(registration?.compatible).toBe(true)
+    expect(registration?.settings).toBeUndefined()
+    expect(registration?.settingsIssue?.code).toBe('invalid-settings-definition')
+    expect(registry.listUsable(Header)).toHaveLength(1)
+    expect(diagnostics).toEqual([registration])
+  })
+
+  it('keeps core registration strict for an invalid settings definition', () => {
+    const registry = servedRegistry()
+    expect(() => registry.register(Header, {
+      ...coreDefault,
+      settings: { scope: 'global', schema: { title: { type: 'string', default: 'long', maxLength: 2 } }, defaults: { title: 'long' }, parse: () => ({ title: 'long' }) } as never,
+    } as unknown as ComponentImplementation<HeaderProps, never>)).toThrow(/settings must be a valid settings definition/)
+  })
+
+  it('revalidates parser output before persisting it', async () => {
+    const store = createMemoryComponentSettingsStore()
+    const registry = servedRegistry({ settings: store, onDiagnostic: () => {} })
+    const definition = defineSettings({ scope: 'global', schema: { title: stringSetting({ default: 'ok', maxLength: 3 }) } })
+    const handle = registry.forExtension(fakeScope('acme.jira').scope).provide(Header, {
+      ...jiraHeader,
+      settings: { ...definition, parse: () => ({ title: 'too long' }) },
+    } as unknown as ComponentImplementation<HeaderProps, unknown>)
+
+    await expect(registry.setSettings(handle.componentId, { title: 'new' })).rejects.toMatchObject({ code: 'invalid-settings' })
+    expect(await store.get({ scope: 'global' }, handle.componentId)).toBeUndefined()
+  })
+
+  it('drops values equal to defaults for every descriptor type', async () => {
+    const store = createMemoryComponentSettingsStore()
+    const registry = servedRegistry({ settings: store, onDiagnostic: () => {} })
+    const definition = defineSettings({
+      scope: 'global',
+      schema: {
+        enabled: booleanSetting({ default: false }),
+        title: stringSetting({ default: 'Task' }),
+        count: numberSetting({ default: 2 }),
+        density: selectSetting({ default: 'cozy', options: [{ value: 'compact' }, { value: 'cozy' }] }),
+      },
+    })
+    const handle = registry.forExtension(fakeScope('acme.jira').scope).provide(Header, { ...jiraHeader, settings: definition } as unknown as ComponentImplementation<HeaderProps, unknown>)
+
+    await registry.setSettings(handle.componentId, { enabled: false, title: 'Task', count: 2, density: 'cozy' })
+    expect(await store.get({ scope: 'global' }, handle.componentId)).toBeUndefined()
   })
 })
 
