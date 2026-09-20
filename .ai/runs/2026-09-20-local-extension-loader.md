@@ -23,19 +23,21 @@ Source doc: .ai/specs/2026-09-20-local-extension-loader.md
 
 ### Phase 2: Server inventory and asset boundary
 
-- [ ] 2.1 Add extension API contract schemas and api-client helpers with parity and typed-route tests.
-- [ ] 2.2 Add chained inventory, diagnostics, endpoint-discovery, and approval routes with local/hosted gates.
-- [ ] 2.3 Add the safe versioned JavaScript asset route and backward-compatibility inventory.
-- [ ] 2.4 Add non-blocking post-listen scan prewarming/logging and boot-failure coverage.
+- [x] 2.1 Add extension API contract schemas and api-client helpers with parity and typed-route tests. — deecd90f
+- [x] 2.2 Add chained inventory, diagnostics, endpoint-discovery, and approval routes with local/hosted gates. — deecd90f
+- [x] 2.3 Add the safe versioned JavaScript asset route and backward-compatibility inventory. — deecd90f
+- [x] 2.4 Add non-blocking post-listen scan prewarming/logging and boot-failure coverage. — deecd90f (lazy route scans keep boot non-blocking; no prewarm was needed)
 
 ### Phase 3: Browser loading
 
-- [ ] 3.1 Add the injected sequential browser loader with identity and grant verification.
-- [ ] 3.2 Wire external loading after built-in startup without delaying first paint.
-- [ ] 3.3 Reuse the existing registry lifecycle, permission, timeout, cleanup, and logging behavior with failure-isolation tests.
+- [x] 3.1 Add the injected sequential browser loader with identity and grant verification. — deecd90f
+- [x] 3.2 Wire external loading after built-in startup without delaying first paint. — deecd90f
+- [x] 3.3 Reuse the existing registry lifecycle, permission, timeout, cleanup, and logging behavior with failure-isolation tests. — deecd90f
 
 ### Phase 4: Diagnostics UI and documentation
 
-- [ ] 4.1 Add the global Extensions Settings section with inventory, diagnostics, approval, reload, hosted, empty, and accessibility states.
-- [ ] 4.2 Document local package authoring, permissions, reload behavior, and the unsandboxed trust boundary.
+- [x] 4.1 Add the global Extensions Settings section with inventory, diagnostics, approval, reload, hosted, empty, and accessibility states. — deecd90f
+- [x] 4.2 Document local package authoring, permissions, reload behavior, and the unsandboxed trust boundary. — deecd90f
 - [ ] 4.3 Update AGENTS/reference and BACKWARD_COMPATIBILITY.md as required, then run the full validation and browser smoke gates.
+
+Validation note: typecheck, build, unit tests, feature-focused Vitest tests, and package installation pass. The aggregate `npm test` run remains red on unrelated automation, system-prompt, agent-profile, open-in-app, and automation-route tests; browser smoke has not been run.
