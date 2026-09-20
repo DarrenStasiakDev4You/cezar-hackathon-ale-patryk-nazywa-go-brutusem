@@ -16,14 +16,16 @@ Non-goals:
 - No implementation of the Phase 3 persistence handoff from the spec.
 
 Source doc: .ai/specs/2026-09-20-layout-schema-migrations-a.md
-Spec PR: #1037 (https://github.com/open-mercato/cezar/pull/1037)
+Spec PR: #65 (https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/65)
 
 Risks:
 
 - A partial split or required-component removal could silently lose user layout intent; validators, immutable transforms and fail-closed fallback guard this boundary.
-- The base branch does not yet contain the prerequisite v1 LayoutSchema module, so the implementation must establish that seam in the web package without widening it into a public package contract.
+- The v1 LayoutSchema is owned by `@open-mercato/cezar-extension-api`; the web migration seam must consume it without duplicating its wire shape or importing runtime component implementations.
 
 ## Progress
+
+PR: #68 (https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/68)
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
@@ -39,4 +41,5 @@ Risks:
 - [x] 2.1 Add a pure load result that distinguishes current, migrated and fallback layouts while retaining raw input. — 3026a749
 - [x] 2.2 Connect the loader to the default core layout without throwing into the root React tree. — 3026a749
 - [x] 2.3 Add regression coverage for optional resolver fallback and required-component failure to the full default. — 67b3bdcf
-- [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR. — review complete; full `npm test` is blocked by five pre-existing failures in `extension-api/test/plain-task-composer.test.ts` and `web/src/routes/task-thread/external-task-header.test.tsx`; other gate commands pass.
+- [x] Follow-up: align the migration seam with the shipped extension-api v1 contract and keep migration rules contract-based. — bbb0abb0
+- [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR.
