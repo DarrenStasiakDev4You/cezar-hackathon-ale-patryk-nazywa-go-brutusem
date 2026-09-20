@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
  * `<Toaster />` instance (mounted at the app root) renders whatever the store holds.
  */
 
-export type ToastTone = 'default' | 'danger'
+export type ToastTone = 'default' | 'warning' | 'danger'
 
 export interface ToastItem {
   id: number
@@ -109,6 +109,8 @@ export function Toaster() {
             'motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:fade-out-0 motion-safe:data-[state=closed]:slide-out-to-right-4',
             item.tone === 'danger'
               ? 'bg-danger text-danger-foreground'
+              : item.tone === 'warning'
+                ? 'bg-warning text-warning-foreground'
               : 'bg-contrast text-contrast-foreground',
           )}
         >

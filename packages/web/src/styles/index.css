@@ -119,6 +119,8 @@
   /* status */
   --danger: #ef4444;
   --danger-foreground: #ffffff;
+  --warning: #fbbf24;
+  --warning-foreground: #171717;
   --success: #10b981; /* emerald-500 */
   --pending: #fbbf24; /* amber-400 — dots/spinners only, never text */
   /* Waiting on a PERSON — a reference that needs a reviewer, as opposed to one that is done
@@ -213,6 +215,8 @@
   /* orange-700, for the same reason the amber above darkens: orange-400 as ink on white is ~2:1.
    * Far enough from `--pending-strong` (amber-700) to stay a different colour, not a shade. */
   --conflict: #c2410c;
+  --warning: #b45309;
+  --warning-foreground: #ffffff;
 
   --shadow-modal: 0 16px 48px 0 rgba(0, 0, 0, 0.12);
 
@@ -320,6 +324,8 @@
 
   --color-danger: var(--danger);
   --color-danger-foreground: var(--danger-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-pending: var(--pending);
   --color-pending-strong: var(--pending-strong);

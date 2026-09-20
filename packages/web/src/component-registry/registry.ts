@@ -73,6 +73,11 @@ export interface ComponentRegistration {
   /** What the host may rely on: the check's `capabilities` (every required one, then the declared
    *  optional ones, in contract order). `[]` when not compatible. */
   readonly capabilities: readonly ComponentCapability[]
+  /** The check's `missingCapabilities`. `[]` when compatible or when the misfit is not a missing
+   *  capability. */
+  readonly missingCapabilities: readonly ComponentCapability[]
+  /** The check's `customCapabilities`. `[]` for `unknown-contract`. */
+  readonly customCapabilities: readonly ComponentCapability[]
   readonly metadata: ComponentMetadata
   /** `true` exactly when `issues` is empty. Only a compatible registration may be rendered. */
   readonly compatible: boolean
@@ -85,6 +90,7 @@ export interface UsableComponent<Props> extends Omit<ComponentRegistration, 'com
   readonly component: ComponentType<Props>
   readonly compatible: true
   readonly issues: readonly []
+  readonly missingCapabilities: readonly []
 }
 
 /**
@@ -244,7 +250,12 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
         message: `${input.componentId} implements ${input.contractId}@${input.contractVersion}, which this Cezar does not serve`,
         contractId: input.contractId,
       })
-      return Object.freeze({ capabilities: Object.freeze([]), issues: Object.freeze([issue]) })
+      return Object.freeze({
+        capabilities: Object.freeze([]),
+        missingCapabilities: Object.freeze([]),
+        customCapabilities: Object.freeze([]),
+        issues: Object.freeze([issue]),
+      })
     }
     return checkComponentCompatibility(
       host.token,
@@ -383,6 +394,8 @@ interface PreparedImplementation {
 /** A fit: the check's outcome, or the host's own `unknown-contract`. Frozen. */
 interface Fit {
   readonly capabilities: readonly ComponentCapability[]
+  readonly missingCapabilities: readonly ComponentCapability[]
+  readonly customCapabilities: readonly ComponentCapability[]
   readonly issues: readonly ComponentRegistrationIssue[]
 }
 
@@ -444,6 +457,8 @@ function registrationOf(input: PreparedImplementation, extensionId: ExtensionId 
     component: input.component,
     declaredCapabilities: input.declaredCapabilities,
     capabilities: fit.capabilities,
+    missingCapabilities: fit.missingCapabilities,
+    customCapabilities: fit.customCapabilities,
     metadata: input.metadata,
     compatible: fit.issues.length === 0,
     issues: fit.issues,

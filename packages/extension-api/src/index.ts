@@ -73,4 +73,6 @@ export { isValidContributionId, isValidExtensionId, type ContributionId, type Ex
 export type { IsJson, JsonPrimitive, JsonValue } from './json.ts'
 export type { Disposable } from './lifecycle.ts'
 export { validateManifest, type ExtensionManifest, type ManifestIssue } from './manifest.ts'
+export type { Notifications } from './notifications.ts'
+export type { ExtensionPermission } from './permissions.ts'
 export type { ExtensionStorage } from './storage.ts'

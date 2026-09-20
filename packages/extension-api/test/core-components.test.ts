@@ -25,7 +25,7 @@ describe('core component contracts', () => {
       id: 'cezar.task.header.main',
       version: 1,
       requiredCapabilities: ['shows-title', 'shows-status'],
-      optionalCapabilities: ['shows-meta'],
+      optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
       layout: { minBlockSize: 30 },
     })
     expect(Object.isFrozen(TaskHeaderMain)).toBe(true)
@@ -60,6 +60,23 @@ describe('core component contracts', () => {
     expectTypeOf<TaskHeaderMainProps['actions'][keyof TaskHeaderMainProps['actions']]>().toEqualTypeOf<TaskHeaderActionState>()
   })
 
+  it('lets an implementation offer Continue, Stop and Archive one by one', () => {
+    const offering = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderMainProps> => ({
+      id: 'acme.compact.row',
+      title: 'Compact row',
+      capabilities,
+      component: () => null,
+    })
+
+    expect(
+      checkComponentCompatibility(TaskHeaderMain, offering(['shows-title', 'shows-status', 'offers-stop', 'offers-continue'])).capabilities,
+    ).toEqual(['shows-title', 'shows-status', 'offers-continue', 'offers-stop'])
+    // A name the contract does not know is ignored, never an offer.
+    expect(
+      checkComponentCompatibility(TaskHeaderMain, offering(['shows-title', 'shows-status', 'offers-delete'])).capabilities,
+    ).toEqual(['shows-title', 'shows-status'])
+  })
+
   it('needs shows-title and shows-status, and takes shows-meta as optional', () => {
     const Header = () => null
     const implementation = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderMainProps> => ({
@@ -73,6 +90,8 @@ describe('core component contracts', () => {
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
     expect(
       checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,

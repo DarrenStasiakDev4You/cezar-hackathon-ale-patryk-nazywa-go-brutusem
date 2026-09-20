@@ -63,20 +63,45 @@ function revoked(): object {
 describe('checkComponentCompatibility — compatible', () => {
   it('passes when every required capability is declared', () => {
     const outcome = checkComponentCompatibility(Composer, implementation(['submits.on-enter', 'restores-draft']))
-    expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['restores-draft', 'submits.on-enter'] })
+    expect(outcome).toEqual({
+      compatible: true,
+      issues: [],
+      capabilities: ['restores-draft', 'submits.on-enter'],
+      missingCapabilities: [],
+      customCapabilities: [],
+    })
   })
 
-  it('ignores declared names that are neither required nor optional', () => {
+  it('keeps custom names without changing the compatible result', () => {
     const declared = implementation(['restores-draft', 'submits.on-enter', 'glows'])
     const outcome = checkComponentCompatibility(Composer, declared)
     expect(outcome.compatible).toBe(true)
     expect(outcome.issues).toEqual([])
     expect(outcome.capabilities).toEqual(['restores-draft', 'submits.on-enter'])
+    expect(outcome.customCapabilities).toEqual(['glows'])
+  })
+
+  it('deduplicates custom names in implementation order and excludes known names', () => {
+    const outcome = checkComponentCompatibility(
+      Composer,
+      implementation([
+        'glows',
+        'attachments',
+        'glows',
+        'restores-draft',
+        'submits.on-enter',
+        'newer.capability',
+        'attachments',
+      ]),
+    )
+
+    expect(outcome.compatible).toBe(true)
+    expect(outcome.customCapabilities).toEqual(['glows', 'newer.capability'])
   })
 
   it('passes a contract with no requirements and an implementation with no declarations', () => {
     const Plain = defineComponentContract<ComposerProps>('cezar.test.plain', { version: 3 })
-    const nothing = { compatible: true, issues: [], capabilities: [] }
+    const nothing = { compatible: true, issues: [], capabilities: [], missingCapabilities: [], customCapabilities: [] }
     expect(checkComponentCompatibility(Plain, implementation())).toEqual(nothing)
     expect(checkComponentCompatibility(Plain, implementation([]))).toEqual(nothing)
   })
@@ -104,11 +129,13 @@ describe('checkComponentCompatibility — compatible', () => {
   })
 
   it('returns a frozen result', () => {
-    const outcome = checkComponentCompatibility(Composer, implementation(['restores-draft']))
+    const outcome = checkComponentCompatibility(Composer, implementation(['restores-draft', 'custom']))
     expect(Object.isFrozen(outcome)).toBe(true)
     expect(Object.isFrozen(outcome.issues)).toBe(true)
     expect(Object.isFrozen(outcome.issues[0])).toBe(true)
     expect(Object.isFrozen(outcome.capabilities)).toBe(true)
+    expect(Object.isFrozen(outcome.missingCapabilities)).toBe(true)
+    expect(Object.isFrozen(outcome.customCapabilities)).toBe(true)
   })
 })
 
@@ -130,6 +157,8 @@ describe('checkComponentCompatibility — issues', () => {
         },
       ],
       capabilities: [],
+      missingCapabilities: ['restores-draft', 'submits.on-enter'],
+      customCapabilities: [],
     })
   })
 
@@ -147,6 +176,8 @@ describe('checkComponentCompatibility — issues', () => {
         },
       ],
       capabilities: [],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
   })
 
@@ -167,6 +198,8 @@ describe('checkComponentCompatibility — issues', () => {
         },
       ],
       capabilities: [],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
   })
 
@@ -191,7 +224,13 @@ describe('checkComponentCompatibility — shapes from an older copy of the packa
   it('treats a contract without capability lists as requiring and offering nothing', () => {
     const older = { kind: 'component', id: 'cezar.test.composer', version: 1 } as const
     const outcome = checkComponentCompatibility(older, implementation(['restores-draft', 'attachments']))
-    expect(outcome).toEqual({ compatible: true, issues: [], capabilities: [] })
+    expect(outcome).toEqual({
+      compatible: true,
+      issues: [],
+      capabilities: [],
+      missingCapabilities: [],
+      customCapabilities: ['restores-draft', 'attachments'],
+    })
   })
 
   it('treats an implementation without capabilities as declaring none', () => {
@@ -379,7 +418,13 @@ describe('checkComponentCompatibility — hostile input', () => {
       booby({ ...good, capabilities: booby(['restores-draft', 'dictation']) }),
       booby({ ...Composer }),
     )
-    expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['restores-draft', 'dictation'] })
+    expect(outcome).toEqual({
+      compatible: true,
+      issues: [],
+      capabilities: ['restores-draft', 'dictation'],
+      missingCapabilities: [],
+      customCapabilities: [],
+    })
   })
 })
 
@@ -417,8 +462,20 @@ describe('core and extension on one contract', () => {
       checkComponentCompatibility(hostGreeting, implementation, token),
     )
     expect(outcomes).toEqual([
-      { compatible: true, issues: [], capabilities: ['greets-by-name', 'waves'] },
-      { compatible: true, issues: [], capabilities: ['greets-by-name'] },
+      {
+        compatible: true,
+        issues: [],
+        capabilities: ['greets-by-name', 'waves'],
+        missingCapabilities: [],
+        customCapabilities: [],
+      },
+      {
+        compatible: true,
+        issues: [],
+        capabilities: ['greets-by-name'],
+        missingCapabilities: [],
+        customCapabilities: [],
+      },
     ])
   })
 

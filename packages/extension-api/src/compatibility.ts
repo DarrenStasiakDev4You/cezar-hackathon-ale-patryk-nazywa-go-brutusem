@@ -36,6 +36,13 @@ export interface ComponentCompatibility {
    *  contract's optional ones the implementation declares, in the contract's order. `[]` when
    *  not compatible. */
   readonly capabilities: readonly ComponentCapability[]
+  /** Every required capability the implementation does not declare, in the contract's order. `[]`
+   *  when there is none, and when an earlier rule stopped the check. */
+  readonly missingCapabilities: readonly ComponentCapability[]
+  /** Declared names the contract neither requires nor lists as optional, de-duplicated in the
+   *  implementation's order. These are never an issue and may include names from a newer
+   *  revision of this major. `[]` when an earlier rule stopped the check. */
+  readonly customCapabilities: readonly ComponentCapability[]
 }
 
 /**
@@ -51,9 +58,9 @@ export interface ComponentCompatibility {
  * 4. each required capability the implementation does not declare is one `missing-capability`.
  *
  * A missing capability list, on either side, counts as `[]`. Declared names that are neither
- * required nor optional are ignored. A capability list is read up to 256 names: a longer one (or a
- * `length` that lies) is `malformed` rather than walked, and each list reports at most one
- * `malformed` issue.
+ * required nor optional are kept as `customCapabilities` and never affect the fit. A capability
+ * list is read up to 256 names: a longer one (or a `length` that lies) is `malformed` rather than
+ * walked, and each list reports at most one `malformed` issue.
  *
  * @param contract       the contract as the checker knows it (a host passes its own token)
  * @param implementation its `id` and `capabilities` — a `ComponentImplementation` fits, written
@@ -143,8 +150,12 @@ export function checkComponentCompatibility(
 
   const declaredSet = new Set(declared)
   const requiredSet = new Set(required)
+  const optionalSet = new Set(optional)
+  const customCapabilities = [...new Set(declared.filter((capability) => !requiredSet.has(capability) && !optionalSet.has(capability)))]
+  const missingCapabilities: ComponentCapability[] = []
   for (const capability of requiredSet) {
     if (!declaredSet.has(capability)) {
+      missingCapabilities.push(capability)
       issues.push({
         code: 'missing-capability',
         message: `${implementationId} does not declare "${capability}", required by ${contractId}@${contractVersion}`,
@@ -152,23 +163,27 @@ export function checkComponentCompatibility(
       })
     }
   }
-  if (issues.length > 0) return result(issues)
+  if (issues.length > 0) return result(issues, [], missingCapabilities, customCapabilities)
 
   const reliable = new Set(requiredSet)
   for (const capability of optional) {
     if (declaredSet.has(capability)) reliable.add(capability)
   }
-  return result([], [...reliable])
+  return result([], [...reliable], [], customCapabilities)
 }
 
 function result(
   issues: readonly ComponentCompatibilityIssue[],
   capabilities: readonly ComponentCapability[] = [],
+  missingCapabilities: readonly ComponentCapability[] = [],
+  customCapabilities: readonly ComponentCapability[] = [],
 ): ComponentCompatibility {
   return Object.freeze({
     compatible: issues.length === 0,
     issues: Object.freeze(issues.map((issue) => Object.freeze(issue))),
     capabilities: Object.freeze(capabilities),
+    missingCapabilities: Object.freeze(missingCapabilities),
+    customCapabilities: Object.freeze(customCapabilities),
   })
 }
 

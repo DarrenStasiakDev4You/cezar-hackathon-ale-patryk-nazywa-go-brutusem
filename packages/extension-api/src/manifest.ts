@@ -1,4 +1,5 @@
 import { isValidExtensionId, type ExtensionId } from './ids.ts'
+import type { ExtensionPermission } from './permissions.ts'
 
 /**
  * Who an extension is and which Cezar releases it runs on. Identity and compatibility only —
@@ -15,6 +16,8 @@ export interface ExtensionManifest {
   readonly author?: string
   /** Semver range over the Cezar release version, e.g. `^0.12.0`. The host refuses to activate outside it. */
   readonly engines: { readonly cezar: string }
+  /** Permissions this extension requests. A request is not a grant; omitted means none. */
+  readonly permissions?: readonly ExtensionPermission[]
 }
 
 /** One broken manifest rule. `path` is the dotted key path (`engines.cezar`); `''` is the manifest itself. */
@@ -25,10 +28,14 @@ export interface ManifestIssue {
 
 const MAX_NAME_LENGTH = 80
 const MAX_ENGINE_RANGE_LENGTH = 64
+const MAX_PERMISSIONS = 32
+const MAX_PERMISSION_NAME_LENGTH = 64
 
 // The grammar from semver.org (§ "Is there a suggested regular expression"), verbatim.
 const SEMVER =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
+
+const PERMISSION_NAME = /^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*$/
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -59,7 +66,7 @@ function collectIssues(value: unknown): ManifestIssue[] {
     issues.push({ path, message })
   }
 
-  const { id, name, version, description, author, engines } = value
+  const { id, name, version, description, author, engines, permissions } = value
 
   if (typeof id !== 'string') {
     issue('id', 'must be a string')
@@ -94,6 +101,33 @@ function collectIssues(value: unknown): ManifestIssue[] {
       issue('engines.cezar', 'must be a non-empty semver range, e.g. ^0.12.0')
     } else if (range.length > MAX_ENGINE_RANGE_LENGTH) {
       issue('engines.cezar', `must be at most ${MAX_ENGINE_RANGE_LENGTH} characters`)
+    }
+  }
+
+  if (permissions !== undefined) {
+    if (!Array.isArray(permissions)) {
+      issue('permissions', 'must be an array of permission names when present')
+    } else {
+      if (permissions.length > MAX_PERMISSIONS) issue('permissions', `must have at most ${MAX_PERMISSIONS} entries`)
+      const seen = new Map<string, number>()
+      permissions.forEach((permission, index) => {
+        const path = `permissions[${index}]`
+        if (
+          typeof permission !== 'string' ||
+          permission.length === 0 ||
+          permission.length > MAX_PERMISSION_NAME_LENGTH ||
+          !PERMISSION_NAME.test(permission)
+        ) {
+          issue(
+            path,
+            `must be one or more dot-separated segments of [a-z][a-z0-9-]*, at most ${MAX_PERMISSION_NAME_LENGTH} characters`,
+          )
+          return
+        }
+        const previous = seen.get(permission)
+        if (previous !== undefined) issue(path, `must be unique — it repeats permissions[${previous}]`)
+        else seen.set(permission, index)
+      })
     }
   }
 
