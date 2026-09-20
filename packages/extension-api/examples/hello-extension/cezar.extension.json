@@ -1,0 +1,11 @@
+{
+  "id": "example.hello",
+  "name": "Hello Extension",
+  "version": "1.0.0",
+  "description": "A minimal extension package manifest.",
+  "author": "Example",
+  "cezar": { "apiVersion": 1 },
+  "engines": { "cezar": "^0.12.0" },
+  "entrypoints": { "frontend": "./dist/frontend.js" },
+  "permissions": ["ui.components", "commands.execute"]
+}

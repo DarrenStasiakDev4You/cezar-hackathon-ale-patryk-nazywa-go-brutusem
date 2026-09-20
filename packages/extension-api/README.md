@@ -18,6 +18,37 @@ manifest, lifecycle, commands, events, storage, the component registry and error
 else. An extension that reaches past it into `packages/web` or the api-client is programming
 against internals that move with every refactor.
 
+## Package Manifest
+
+An installable extension describes itself at the package root with `cezar.extension.json`. The
+document is the distribution form of `ExtensionManifest`; it adds the API generation, entrypoint
+paths and package metadata without requiring an installer to execute the extension:
+
+```json
+{
+  "id": "acme.jira",
+  "name": "Jira Integration",
+  "version": "1.3.0",
+  "homepage": "https://acme.example/jira",
+  "cezar": { "apiVersion": 1 },
+  "engines": { "cezar": "^0.12.0" },
+  "entrypoints": { "frontend": "./dist/frontend.js" },
+  "permissions": ["ui.components", "commands.execute"]
+}
+```
+
+`validatePackageManifest(value)` is the format gate. It keeps the existing identity, semver and
+permission grammar, requires `cezar.apiVersion` and `entrypoints.frontend`, and validates an
+optional backend entrypoint for a future host. At API generation 1, `cezar`, `entrypoints` and
+`permissions` are strict; unknown top-level metadata remains forward-compatible. Entrypoints are
+package-relative `.js` or `.mjs` paths, and package URLs must be absolute `https:` URLs.
+
+`checkPackageCompatibility(manifest, host)` is the host gate. It first rejects malformed data,
+then checks the API generation, the supported `engines.cezar` range and finally each declared
+entrypoint kind. Unsupported ranges and release candidates are refused unless the range explicitly
+opts into the prerelease. Both functions are pure and do not read the filesystem or execute an
+extension.
+
 ## Rules
 
 1. **One entry point.** `exports` has exactly `.` (plus `./package.json`), and `src/index.ts` only
