@@ -28,33 +28,24 @@ visibility rules, a test-only configurable-header extension, end-to-end coverage
 
 Source doc: `.ai/specs/2026-09-20-generic-component-settings-ui.md`
 
-## Progress
+## Tasks
 
-> Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
+> Authoritative status table. `Status` is `todo` or `done`; the first non-`done` row is the resume point.
 
-### Phase 1: The vocabulary
-
-- [x] 1.1 Add the descriptors and helpers — cbe3df32
-- [x] 1.2 Teach `parse()` the new types — cbe3df32
-- [x] 1.3 Re-derive and canonicalize host-side — 7ae6c7d5
-- [x] 1.4 Stop a bad definition from costing the component — 7ae6c7d5
-
-### Phase 2: Persistence
-
-- [x] 2.1 Widen the contract schema — 2cb07a0f
-- [x] 2.2 Widen the store, add atomic updates, and deduplicate reads — 2cb07a0f
-- [x] 2.3 Prove reload persistence for the new types — 2cb07a0f
-
-### Phase 3: The section
-
-- [x] 3.1 Build the renderer table — c1b68fd1
-- [x] 3.2 Build the Components settings section — c1b68fd1
-- [x] 3.3 Show the entry only when something is configurable — c1b68fd1
-- [x] 3.4 Wire writes, resets, and failures — c1b68fd1
-
-### Phase 4: The worked example and docs
-
-- [x] 4.1 Add the test-fixture extension — c1b68fd1
-- [ ] 4.2 Prove the Definition of Done end to end
-- [ ] 4.3 Document the durable contract
-- [ ] 4.4 Run the full validation gate
+| Phase | Step | Title | Exec | Status | Commit |
+|-------|------|-------|------|--------|--------|
+| 1 | 1.1 | Add the descriptors and helpers | inline | done | cbe3df32 |
+| 1 | 1.2 | Teach `parse()` the new types | inline | done | cbe3df32 |
+| 1 | 1.3 | Re-derive and canonicalize host-side | inline | done | 7ae6c7d5 |
+| 1 | 1.4 | Stop a bad definition from costing the component | inline | done | 7ae6c7d5 |
+| 2 | 2.1 | Widen the contract schema | inline | done | 2cb07a0f |
+| 2 | 2.2 | Widen the store, add atomic updates, and deduplicate reads | inline | done | 2cb07a0f |
+| 2 | 2.3 | Prove reload persistence for the new types | inline | done | 2cb07a0f |
+| 3 | 3.1 | Build the renderer table | inline | done | c1b68fd1 |
+| 3 | 3.2 | Build the Components settings section | inline | done | c1b68fd1 |
+| 3 | 3.3 | Show the entry only when something is configurable | inline | done | c1b68fd1 |
+| 3 | 3.4 | Wire writes, resets, and failures | inline | done | c1b68fd1 |
+| 4 | 4.1 | Add the test-fixture extension | inline | done | c1b68fd1 |
+| 4 | 4.2 | Prove the Definition of Done end to end | inline | todo | - |
+| 4 | 4.3 | Document the durable contract | inline | todo | - |
+| 4 | 4.4 | Run the full validation gate | inline | todo | - |
