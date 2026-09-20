@@ -45,6 +45,8 @@ Source doc: `.ai/specs/2026-09-19-create-layout-schema.md`
 
 ## Progress
 
+PR: #62 (https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/62)
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Pure schema
@@ -58,3 +60,11 @@ Source doc: `.ai/specs/2026-09-19-create-layout-schema.md`
 - [x] 2.1 Add the immutable default Task Page layout for header, composer, and empty sidebar. — 1af9c144
 - [x] 2.2 Add boundary tests proving the default is JSON-safe, contract-backed, and free of runtime implementation/settings data. — 1af9c144
 - [x] 2.3 Document the intent/runtime-registry boundary and verify the full repository gate. — 1af9c144
+
+## Validation note
+
+The configured gate ran in order. `npm run typecheck`, `npm run build`, and `npm run test:package`
+passed. `npm test` and `npm run test:unit` remain red on existing environment/process-discovery,
+automations loading, Jira fixture compatibility, and home-safety failures outside this diff; the
+changed extension-api and Task Page tests are green. The PR remains draft until a non-author review
+can be submitted and the required gate is green.
