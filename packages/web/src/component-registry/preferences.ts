@@ -100,11 +100,13 @@ export function createComponentPreferences(options: {
 
   const queueWrite = (
     contractId: ContributionId,
-    next: Snapshot,
+    update: (current: Snapshot) => Snapshot,
     reason: 'set' | 'reset',
   ): Promise<void> => {
     const operation = writeChain.then(async () => {
       const previous = snapshot
+      const next = update(previous)
+      if (next === previous) return
       snapshot = next
       notify({ changed: [contractId], reason })
       try {
@@ -152,10 +154,10 @@ export function createComponentPreferences(options: {
 
       return queueWrite(
         contractId,
-        {
-          siblings: snapshot.siblings,
-          implementations: { ...snapshot.implementations, [contractId]: componentId },
-        },
+        (current) => ({
+          siblings: current.siblings,
+          implementations: { ...current.implementations, [contractId]: componentId },
+        }),
         'set',
       )
     },
@@ -168,10 +170,12 @@ export function createComponentPreferences(options: {
       if (!hydrated || hydrationFailed) {
         throw new ComponentPreferenceError('not-ready', 'Component preferences are not available yet.')
       }
-      if (!(contractId in snapshot.implementations)) return
-      const implementations = { ...snapshot.implementations }
-      delete implementations[contractId]
-      return queueWrite(contractId, { siblings: snapshot.siblings, implementations }, 'reset')
+      return queueWrite(contractId, (current) => {
+        if (!(contractId in current.implementations)) return current
+        const implementations = { ...current.implementations }
+        delete implementations[contractId]
+        return { siblings: current.siblings, implementations }
+      }, 'reset')
     },
 
     subscribe(listener) {

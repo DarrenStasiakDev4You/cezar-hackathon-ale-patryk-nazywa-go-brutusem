@@ -77,4 +77,28 @@ describe('component preferences', () => {
     await expect(broken.set(TaskHeaderMain.id, 'acme.jira.task-header')).rejects.toBeInstanceOf(ComponentPreferenceError)
     expect(broken.get(TaskHeaderMain.id)).toBeUndefined()
   })
+
+  it('serializes a rapid set and reset from the latest snapshot', async () => {
+    let releaseFirst: (() => void) | undefined
+    const firstSave = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const saved: Record<string, unknown>[] = []
+    const { preferences } = setup({}, async (value) => {
+      saved.push(value)
+      if (saved.length === 1) await firstSave
+    })
+    await preferences.ready
+
+    const first = preferences.set(TaskHeaderMain.id, 'acme.jira.task-header')
+    const second = preferences.reset(TaskHeaderMain.id)
+    releaseFirst?.()
+    await Promise.all([first, second])
+
+    expect(saved).toEqual([
+      { implementations: { [TaskHeaderMain.id]: 'acme.jira.task-header' } },
+      { implementations: {} },
+    ])
+    expect(preferences.get(TaskHeaderMain.id)).toBeUndefined()
+  })
 })
