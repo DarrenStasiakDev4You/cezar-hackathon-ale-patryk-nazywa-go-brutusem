@@ -4,6 +4,7 @@ import type { LayoutPlacement } from '@open-mercato/cezar-extension-api'
 
 import type { LayoutRenderIssue, LayoutRendererProps, ValidatedLayoutBinding } from './layout-types'
 import type { PageDefinition, ZoneDefinition } from './definitions'
+import { admitPagePlacement, type PagePlacementAdmissionState } from './registry'
 import { usePageLayoutRegistry } from './renderer'
 
 /**
@@ -83,15 +84,21 @@ function renderSchemaZone<Context>(input: {
     return <LayoutIssueFallback issue={{ code: 'unknown-zone', schemaZone, pageId, pageZone: pageZoneId }} fallback={fallback} />
   }
 
-  const seenIds = new Set<string>()
   const accepted: ReactElement[] = []
+  const admission: PagePlacementAdmissionState = { seenKeys: new Set<string>(), acceptedCount: 0 }
   let issue: LayoutRenderIssue | undefined
   for (const placement of placements) {
-    if (seenIds.has(placement.id)) {
-      issue = { code: 'duplicate-placement', schemaZone, pageId, pageZone: zone.id, placementId: placement.id }
+    const acceptedByPage = admitPagePlacement(zone, {
+      key: placement.id,
+      placement: zone.placement,
+      contractId: placement.contract,
+      contractVersion: placement.contractVersion,
+    }, admission)
+    if (!acceptedByPage.accepted) {
+      issue = issueFromAdmission(acceptedByPage.issue, schemaZone, pageId, zone.id, placement)
       continue
     }
-    seenIds.add(placement.id)
+    admission.acceptedCount += 1
 
     const binding = bindings.find((candidate) =>
       candidate.schemaZone === schemaZone &&
@@ -101,10 +108,9 @@ function renderSchemaZone<Context>(input: {
       candidate.contractVersion === placement.contractVersion,
     )
     if (binding === undefined) {
+      const scopedBindings = bindings.filter((candidate) => candidate.schemaZone === schemaZone && candidate.pageZone === zone.id && candidate.placement === zone.placement)
       issue = {
-        code: bindings.some((candidate) => candidate.schemaZone === schemaZone && candidate.contractId === placement.contract)
-          ? 'placement-not-accepted'
-          : 'missing-placement-adapter',
+        code: scopedBindings.some((candidate) => candidate.contractId === placement.contract) ? 'contract-not-served' : 'missing-placement-adapter',
         schemaZone,
         pageId,
         pageZone: zone.id,
@@ -112,14 +118,6 @@ function renderSchemaZone<Context>(input: {
         contractId: placement.contract,
         contractVersion: placement.contractVersion,
       }
-      continue
-    }
-    if (zone.accepts !== undefined && !zone.accepts.some((contract) => contract.id === placement.contract && contract.version === placement.contractVersion)) {
-      issue = { code: 'contract-not-served', schemaZone, pageId, pageZone: zone.id, placementId: placement.id, contractId: placement.contract, contractVersion: placement.contractVersion }
-      continue
-    }
-    if (zone.cardinality === 'single' && accepted.length > 0) {
-      issue = { code: 'cardinality-exceeded', schemaZone, pageId, pageZone: zone.id, placementId: placement.id }
       continue
     }
     const subject = `task:${identity}:${schemaZone}:${placement.id}`
@@ -141,6 +139,21 @@ function renderSchemaZone<Context>(input: {
   }
 
   return <ZoneBox pageId={pageId} zone={zone} schemaZone={schemaZone} state="ready">{accepted}</ZoneBox>
+}
+
+function issueFromAdmission(
+  issue: { readonly code: string; readonly placement?: string; readonly contractId?: string; readonly version?: number },
+  schemaZone: string,
+  pageId: string,
+  pageZone: string,
+  placement: LayoutPlacement,
+): LayoutRenderIssue {
+  const base = { schemaZone, pageId, pageZone, placementId: placement.id, contractId: placement.contract, contractVersion: placement.contractVersion }
+  if (issue.code === 'duplicate-content') return { ...base, code: 'duplicate-placement' }
+  if (issue.code === 'cardinality-exceeded') return { ...base, code: 'cardinality-exceeded' }
+  if (issue.code === 'contract-not-accepted') return { ...base, code: 'contract-not-served' }
+  if (issue.code === 'placement-not-accepted') return { ...base, code: 'placement-not-accepted' }
+  return { ...base, code: 'invalid-placement' }
 }
 
 function ZoneBox(props: {

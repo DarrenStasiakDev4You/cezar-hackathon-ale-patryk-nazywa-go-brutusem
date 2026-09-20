@@ -21,6 +21,42 @@ export interface PageLayoutRegistry {
   revision(): number
 }
 
+export interface PagePlacementCandidate {
+  readonly key: string
+  readonly placement: string
+  readonly contractId: string
+  readonly contractVersion: number
+}
+
+export interface PagePlacementAdmissionState {
+  readonly seenKeys: Set<string>
+  acceptedCount: number
+}
+
+export type PagePlacementAdmissionIssue =
+  | { readonly code: 'invalid-content' }
+  | { readonly code: 'placement-not-accepted'; readonly placement: string }
+  | { readonly code: 'contract-not-accepted'; readonly contractId: string; readonly version: number }
+  | { readonly code: 'duplicate-content' }
+  | { readonly code: 'cardinality-exceeded' }
+
+/** Shared admission predicate for declarative page content and schema-backed placement adapters. */
+export function admitPagePlacement(
+  zone: ZoneDefinition,
+  candidate: PagePlacementCandidate,
+  state: PagePlacementAdmissionState,
+): { readonly accepted: true } | { readonly accepted: false; readonly issue: PagePlacementAdmissionIssue } {
+  if (!isValidPlacementCandidate(candidate)) return { accepted: false, issue: { code: 'invalid-content' } }
+  if (state.seenKeys.has(candidate.key)) return { accepted: false, issue: { code: 'duplicate-content' } }
+  state.seenKeys.add(candidate.key)
+  if (candidate.placement !== zone.placement) return { accepted: false, issue: { code: 'placement-not-accepted', placement: candidate.placement } }
+  if (zone.accepts !== undefined && !zone.accepts.some((contract) => contract.id === candidate.contractId && contract.version === candidate.contractVersion)) {
+    return { accepted: false, issue: { code: 'contract-not-accepted', contractId: candidate.contractId, version: candidate.contractVersion } }
+  }
+  if (zone.cardinality === 'single' && state.acceptedCount > 0) return { accepted: false, issue: { code: 'cardinality-exceeded' } }
+  return { accepted: true }
+}
+
 /** A small store rather than a singleton: previews, tests and future app shells need isolation. */
 export function createPageLayoutRegistry(): PageLayoutRegistry {
   const pages = new Map<PageId, PageDefinition>()
@@ -116,34 +152,25 @@ function validateContent(pages: ReadonlyMap<PageId, PageDefinition>, content: Pa
     if (zone.cardinality === 'single' && rawItems.length > 1) {
       issues.push({ code: 'cardinality-exceeded', zoneId: zone.id })
     }
-    const keys = new Set<string>()
-    let usableCount = 0
+    const state: PagePlacementAdmissionState = { seenKeys: new Set<string>(), acceptedCount: 0 }
     for (const item of rawItems) {
-      if (!isZoneContent(item) || keys.has(item.key)) {
-        issues.push({ code: 'invalid-content', zoneId: zone.id })
-        if (isZoneContent(item)) keys.add(item.key)
+      const candidate = isZoneContent(item) ? {
+        key: item.key,
+        placement: item.placement,
+        contractId: item.contract.id,
+        contractVersion: item.contract.version,
+      } : item as PagePlacementCandidate
+      const admission = admitPagePlacement(zone, candidate, state)
+      if (!admission.accepted) {
+        if (admission.issue.code === 'placement-not-accepted') issues.push({ code: admission.issue.code, zoneId: zone.id, placement: admission.issue.placement })
+        else if (admission.issue.code === 'contract-not-accepted') issues.push({ code: admission.issue.code, zoneId: zone.id, contractId: admission.issue.contractId, version: admission.issue.version })
+        else if (admission.issue.code === 'cardinality-exceeded') issues.push({ code: admission.issue.code, zoneId: zone.id })
+        else issues.push({ code: 'invalid-content', zoneId: zone.id })
         continue
       }
-      keys.add(item.key)
-      if (item.placement !== zone.placement) {
-        issues.push({ code: 'placement-not-accepted', zoneId: zone.id, placement: item.placement })
-        continue
-      }
-      const accepted = zone.accepts === undefined || zone.accepts.some(
-        (contract) => contract.id === item.contract.id && contract.version === item.contract.version,
-      )
-      if (!accepted) {
-        issues.push({
-          code: 'contract-not-accepted',
-          zoneId: zone.id,
-          contractId: typeof item.contract.id === 'string' ? item.contract.id : '',
-          version: typeof item.contract.version === 'number' ? item.contract.version : 0,
-        })
-        continue
-      }
-      usableCount += 1
+      state.acceptedCount += 1
     }
-    if (zone.required && usableCount === 0) issues.push({ code: 'required-zone-empty', zoneId: zone.id })
+    if (zone.required && state.acceptedCount === 0) issues.push({ code: 'required-zone-empty', zoneId: zone.id })
   }
   return Object.freeze(issues.map((issue) => Object.freeze(issue)))
 }
@@ -158,6 +185,17 @@ function isZoneContent(value: unknown): value is ZoneContent {
     isValidContributionId(value.contract.id) &&
     isPositiveInteger(value.contract.version) &&
     isRecord(value.props)
+  )
+}
+
+function isValidPlacementCandidate(value: unknown): value is PagePlacementCandidate {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return (
+    typeof candidate.key === 'string' && candidate.key.length > 0 &&
+    typeof candidate.placement === 'string' && isValidContributionId(candidate.placement) &&
+    typeof candidate.contractId === 'string' && isValidContributionId(candidate.contractId) &&
+    typeof candidate.contractVersion === 'number' && Number.isInteger(candidate.contractVersion) && candidate.contractVersion >= 1
   )
 }
 

@@ -12,7 +12,14 @@ export {
   type ZoneId,
   type ZoneLayout,
 } from './definitions'
-export { createPageLayoutRegistry, type PageLayoutRegistry } from './registry'
+export {
+  admitPagePlacement,
+  createPageLayoutRegistry,
+  type PageLayoutRegistry,
+  type PagePlacementAdmissionIssue,
+  type PagePlacementAdmissionState,
+  type PagePlacementCandidate,
+} from './registry'
 export {
   PageLayoutProvider,
   PageRenderer,
