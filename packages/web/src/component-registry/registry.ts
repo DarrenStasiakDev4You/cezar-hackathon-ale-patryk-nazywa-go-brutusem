@@ -376,14 +376,29 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       const registration = registrations.get(componentId); const definition = registration?.settings
       if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
       if (!isRecord(patch)) throw new ComponentSettingsError('invalid-settings', 'Component settings patch must be an object')
-      let existing: unknown; try { existing = await rawSettings(registration, settingsStore, resolveProjectId) } catch (error) { throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
-      let parsed: unknown; try { parsed = definition.parse({ ...(isRecord(existing) ? existing : {}), ...patch }) } catch (error) { throw new ComponentSettingsError('invalid-settings', error instanceof Error ? error.message : 'Invalid component settings') }
-      try { const canonical = sparseSettings(definition, parsed); const target = targetForScope(definition.scope, resolveProjectId); if (Object.keys(canonical).length === 0) await settingsStore.clear(target, componentId); else await settingsStore.set(target, componentId, canonical as unknown as JsonValue) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+      const target = targetForScope(definition.scope, resolveProjectId)
+      try {
+        await settingsStore.update(target, componentId, (existing) => {
+          let parsed: unknown
+          try { parsed = definition.parse({ ...(isRecord(existing) ? existing : {}), ...patch }) }
+          catch (error) { throw new ComponentSettingsError('invalid-settings', error instanceof Error ? error.message : 'Invalid component settings') }
+          const canonical = sparseSettings(definition, parsed)
+          return Object.keys(canonical).length === 0 ? undefined : canonical as unknown as JsonValue
+        })
+      } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
     },
     async resetSettings(componentId, key) {
       const registration = registrations.get(componentId); const definition = registration?.settings
       if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
-      try { const target = targetForScope(definition.scope, resolveProjectId); if (key === undefined) return await settingsStore.clear(target, componentId); const existing = await rawSettings(registration, settingsStore, resolveProjectId); if (!isRecord(existing)) return; const next = { ...existing }; delete next[key]; if (Object.keys(next).length === 0) await settingsStore.clear(target, componentId); else await settingsStore.set(target, componentId, next as unknown as JsonValue) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+      try {
+        const target = targetForScope(definition.scope, resolveProjectId)
+        await settingsStore.update(target, componentId, (existing) => {
+          if (key === undefined || !isRecord(existing)) return undefined
+          const next = { ...existing }
+          delete next[key]
+          return Object.keys(next).length === 0 ? undefined : next as JsonValue
+        })
+      } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
     },
   }
 }

@@ -128,10 +128,14 @@ const taskTableUiStateSchema = z.looseObject({
   expandedColumns: z.record(z.string(), z.boolean()).optional(),
 });
 
-export const componentSettingsSchema = z.record(
-  z.string().min(1).max(128),
-  z.record(z.string().min(1).max(64), z.boolean()).refine((value) => Object.keys(value).length <= 64),
-).refine((value) => Object.keys(value).length <= 200);
+const componentSettingValueSchema = z.union([z.boolean(), z.string().max(256), z.number().finite()]);
+export const componentSettingsSchema = z
+  .record(
+    z.string().min(1).max(128),
+    z.record(z.string().min(1).max(64), componentSettingValueSchema).refine((value) => Object.keys(value).length <= 64),
+  )
+  .refine((value) => Object.keys(value).length <= 200)
+  .refine((value) => JSON.stringify(value).length <= 32 * 1024);
 
 /**
  * `GET/PUT /api/v1/ui-state` — the per-repo GUI prefs in `.ai/cezar/ui-state.json`.
