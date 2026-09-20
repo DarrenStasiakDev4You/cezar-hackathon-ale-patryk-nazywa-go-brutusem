@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponentContract } from '@open-mercato/cezar-extension-api'
 
 import { definePage, PageLayoutDefinitionError } from './definitions'
+import { TaskPage } from './core-pages'
 import { createPageLayoutRegistry } from './registry'
 
 const Card = defineComponentContract<{ readonly label: string }>('cezar.fixture.card', { version: 1 })
@@ -19,6 +20,13 @@ const page = () =>
   })
 
 describe('page layout definitions', () => {
+  it('declares Task Page zones and accepted contract metadata', () => {
+    expect(TaskPage.zones.map((zone) => zone.id)).toEqual(['task.header', 'task.main', 'task.sidebar'])
+    expect(TaskPage.zones[0]?.accepts[0]).toMatchObject({ id: 'cezar.task.header.main', version: 1 })
+    expect(TaskPage.zones[1]?.accepts[0]).toMatchObject({ id: 'cezar.task.composer', version: 1 })
+    expect(TaskPage.zones[2]?.required).toBe(false)
+  })
+
   it('freezes the page, zones and accepted contract metadata', () => {
     const definition = page()
 
