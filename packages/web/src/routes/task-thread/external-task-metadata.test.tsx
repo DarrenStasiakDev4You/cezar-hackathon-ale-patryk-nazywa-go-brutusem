@@ -81,7 +81,7 @@ describe('an independent task metadata implementation on the task page', () => {
     const metadataHost = document.querySelector<HTMLElement>('[data-contract="cezar.task.metadata"]')
     expect(metadataHost?.dataset.component).toBe(compactTaskMetadata.id)
     expect(metadataHost?.textContent).toContain('quick-task · cez/r1 · +2 -1 · claude/opus')
-    expect(document.querySelector('[data-contract="cezar.task.header.main"] h1')?.textContent).toBe('Do the thing')
+    expect(document.querySelector<HTMLElement>('[data-contract="cezar.task.header.main"] h1')?.textContent).toBe('Do the thing')
 
     await waitFor(() => expect((screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement).disabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: 'Choose engine' }))
@@ -101,8 +101,8 @@ describe('an independent task metadata implementation on the task page', () => {
 
     renderTaskPage(run('done'), throwing)
 
-    await waitFor(() => expect(document.querySelector('[data-contract="cezar.task.metadata"]')?.dataset.component).toBe('cezar.task.metadata.default'))
-    expect(document.querySelector('[data-contract="cezar.task.header.main"]')?.dataset.component).toBe('cezar.task.header.main.default')
+    await waitFor(() => expect(document.querySelector<HTMLElement>('[data-contract="cezar.task.metadata"]')?.dataset.component).toBe('cezar.task.metadata.default'))
+    expect(document.querySelector<HTMLElement>('[data-contract="cezar.task.header.main"]')?.dataset.component).toBe('cezar.task.header.main.default')
     expect(consoleError).toHaveBeenCalled()
   })
 })
