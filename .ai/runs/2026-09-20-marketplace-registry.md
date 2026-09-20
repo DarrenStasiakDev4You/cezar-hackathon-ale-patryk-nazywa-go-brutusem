@@ -15,9 +15,9 @@ Spec PR: #73 (merged)
 
 ### Phase 1: Contract And Pure Catalog Logic
 
-- [ ] 1.1 Define the bounded external catalog and HTTP response schemas, export inferred types, and add contract-focused fixtures/tests.
-- [ ] 1.2 Implement pure catalog normalization with envelope validation, per-entry salvage, duplicate rejection, deterministic semver ordering, and bounded input handling.
-- [ ] 1.3 Validate compatibility metadata with the existing extension API range grammar while preserving declarations without making host compatibility decisions.
+- [x] 1.1 Define the bounded external catalog and HTTP response schemas, export inferred types, and add contract-focused fixtures/tests. — 681cd7ed
+- [x] 1.2 Implement pure catalog normalization with envelope validation, per-entry salvage, duplicate rejection, deterministic semver ordering, and bounded input handling. — 681cd7ed
+- [x] 1.3 Validate compatibility metadata with the existing extension API range grammar while preserving declarations without making host compatibility decisions. — 681cd7ed
 
 ### Phase 2: On-Demand Service Endpoint
 
