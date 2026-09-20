@@ -20,6 +20,7 @@ Source doc: `.ai/specs/2026-09-20-layout-registry.md`
 
 - The page-layout registry is a new shared web abstraction; malformed definitions must be rejected atomically and snapshots must not be mutable.
 - The generic renderer must preserve the existing component registry's compatibility and fallback behavior.
+- The final gate remains blocked by six unrelated failures in `npm test` (extension-api compatibility expectation, four external task-header tests and one system-prompt timeout); the implementation tests and all other configured commands pass.
 
 ## Implementation Plan
 
