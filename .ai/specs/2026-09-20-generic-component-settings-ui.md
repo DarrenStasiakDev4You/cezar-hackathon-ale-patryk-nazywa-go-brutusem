@@ -367,7 +367,21 @@ file written by the current release still parses.
 
 ## 📝 UI/UX
 
-**Prototype:** `.ai/specs/assets/generic-component-settings-ui/`
+**Prototype:** `.ai/specs/assets/generic-component-settings-ui/` — illustrative statics, not a build.
+
+![Proposed: Settings → Components with the generated controls](assets/generic-component-settings-ui/mockup-01-components-section.png)
+
+*Proposed.* The section as it would render with two configurable implementations. Today the same
+place looks like this — the project settings nav has no Components entry:
+[current settings index](assets/generic-component-settings-ui/current-01-settings-index.png),
+[current Agents section](assets/generic-component-settings-ui/current-02-settings-agents.png), whose
+label/hint/control rhythm the generated rows follow.
+
+![Proposed: rejected, unavailable and empty states, and the live reaction](assets/generic-component-settings-ui/mockup-02-states-and-reaction.png)
+
+*Proposed.* Left to right: a rejected value (inline, nothing written), a card whose scope target is
+unavailable (defaults, disabled), and the empty state. Below them, the DoD's third guarantee — the
+header re-rendering after the setting changed, with no reload.
 
 **Where.** Settings → Components, `/p/:projectId/settings/components`, between "Agent config" and
 "Worktrees" in the project nav. Title "Components", description "Settings the installed component
