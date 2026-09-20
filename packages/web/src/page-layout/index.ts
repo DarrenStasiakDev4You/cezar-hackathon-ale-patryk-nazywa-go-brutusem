@@ -14,6 +14,17 @@ export {
 } from './definitions'
 export { createPageLayoutRegistry, type PageLayoutRegistry } from './registry'
 export {
+  contractAdmissionIssue,
+  isZoneAdmissionAllowed,
+  normalizeLayoutPolicy,
+  validateLayoutOperation,
+  zoneAdmissionIssue,
+  type LayoutConstraintIssue,
+  type LayoutConstraintPolicy,
+  type LayoutOperation,
+  type LayoutOperationResult,
+} from './constraints'
+export {
   PageLayoutProvider,
   PageRenderer,
   ZoneRenderer,

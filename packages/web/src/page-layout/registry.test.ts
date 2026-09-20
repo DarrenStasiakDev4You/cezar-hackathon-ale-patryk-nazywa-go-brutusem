@@ -39,7 +39,7 @@ describe('page layout definitions', () => {
   it('keeps every narrow Task Page contract backed by a core default', () => {
     const narrowContracts = TaskPage.zones.flatMap((zone) => zone.accepts ?? [])
 
-    expect(narrowContracts.map((contract) => contract.id)).toEqual(CORE_COMPONENT_CONTRACTS.map((contract) => contract.id))
+    expect(narrowContracts.map((contract) => contract.id).sort()).toEqual(CORE_COMPONENT_CONTRACTS.map((contract) => contract.id).sort())
     expect(missingCoreDefaults(createCoreComponentRegistry(), narrowContracts)).toEqual([])
   })
 
