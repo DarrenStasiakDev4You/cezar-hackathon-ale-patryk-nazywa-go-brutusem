@@ -6,13 +6,17 @@ cezar is a **parallel coding-agents orchestrator**: a local cockpit (CLI + brows
 
 The cockpit's page-and-zone catalog lives in `packages/web/src/page-layout/`: `PageLayoutRegistry`
 stores immutable page definitions with validated semantic placement categories, `TaskPage` is the
-first core catalog entry, and `PageRenderer` delegates accepted content to the existing
-`ComponentHost`. Omitted zone contract allowlists are category-open for future valid contracts;
-the generic renderer must not switch on component ids or import concrete implementations. This
-registry is separate from the DOM edit-mode `LayoutRegistry` in
+first core catalog entry, and `PageRenderer`/`LayoutRenderer` delegate accepted content to the
+existing `ComponentHost`. Omitted zone contract allowlists are category-open for future valid
+contracts; the generic renderers must not switch on component ids or import concrete
+implementations. The live Task Page consumes the v1 schema through
+`packages/web/src/routes/task-thread/task-layout.tsx`: its header and composer bindings own the
+typed model-to-props bridge, while the renderer owns schema order and admission. The transcript,
+task shell, actions, footer/review surfaces, drafts and edit-mode interaction remain with their
+existing consumers. This registry is separate from the DOM edit-mode `LayoutRegistry` in
 `packages/web/src/components/layout-registry.tsx`; the latter continues to own draggable layout
-elements and edit-mode state. The live task route is not mounted through the page registry until
-the follow-up consumer migration is specified and verified.
+elements and edit-mode state. Layout schema data is ephemeral in the route instance and is not
+persisted or migrated by the renderer.
 
 ## Zero config
 

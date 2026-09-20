@@ -1,12 +1,11 @@
-import { TaskComposer, TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, TaskHeaderMain, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 import { definePage, type PageDefinition } from './definitions'
 
 /**
- * The first core page catalog entry. The task route is intentionally not wired to it yet: the
- * follow-up consumer will add the typed transcript and metadata contracts alongside its adapter.
- * Keeping the catalog declarative now makes the future route a data decision instead of a renderer
- * switch statement.
+ * The first core page catalog entry. The live task route consumes only the schema-backed header and
+ * composer boundaries; transcript, metadata and shell-owned controls remain outside this catalog
+ * renderer. Keeping that split declarative prevents the generic renderer from becoming task-aware.
  */
 export const TaskPage: PageDefinition = definePage({
   id: 'task.page',
@@ -15,7 +14,7 @@ export const TaskPage: PageDefinition = definePage({
     {
       id: 'task.header',
       placement: 'task.header.main',
-      accepts: [TaskHeaderMain],
+      accepts: [TaskHeaderMain, TaskMetadata],
       cardinality: 'single',
       required: true,
       layout: { minBlockSize: 30 },
