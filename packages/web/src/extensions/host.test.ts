@@ -16,6 +16,7 @@ import {
 } from '@open-mercato/cezar-extension-api'
 import { registerCoreCommands } from '../commands/core-commands'
 import { createCommandRegistry } from '../commands/registry'
+import { listComponentChoices } from '../component-registry/choices'
 import { createCoreComponentRegistry } from '../component-registry/core-components'
 import { createComponentRegistry, type CockpitComponentRegistry } from '../component-registry/registry'
 import { resolveComponent, type ComponentResolution } from '../component-registry/resolve'
@@ -429,6 +430,69 @@ describe('the components service', () => {
       'Compact header',
     ])
     expect(components.listUsable(TaskHeader)).toEqual(components.list('cezar.fixture.task-header'))
+  })
+
+  it('DoD, capability choices expose complete implementations and explain incomplete ones', async () => {
+    interface CapabilityHeaderProps {
+      readonly title: string
+    }
+    const CapabilityHeader = defineComponentContract<CapabilityHeaderProps>('cezar.fixture.capability-header', {
+      version: 1,
+      requiredCapabilities: ['task.status', 'task.continue'],
+    })
+    const implementation = (id: string, capabilities: readonly string[]): ComponentImplementation<CapabilityHeaderProps> => ({
+      id,
+      title: id,
+      capabilities,
+      component: () => null,
+    })
+    const components = createComponentRegistry({ contracts: [CapabilityHeader], onDiagnostic: () => {} })
+    components.register(
+      CapabilityHeader,
+      implementation('cezar.fixture.capability-header.default', ['task.status', 'task.continue']),
+    )
+    const { registry, ready } = bootCockpit(
+      [
+        fixture('acme.jira', {
+          activate(context) {
+            context.components.provide(
+              CapabilityHeader,
+              implementation('acme.jira.capability-header', ['task.status', 'task.continue', 'jira.issue.create']),
+            )
+          },
+        }),
+        fixture('acme.partial', {
+          activate(context) {
+            context.components.provide(
+              CapabilityHeader,
+              implementation('acme.partial.capability-header', ['task.status']),
+            )
+          },
+        }),
+      ],
+      {},
+      components,
+    )
+
+    await ready
+
+    const choices = listComponentChoices(components, CapabilityHeader)
+    expect(choices.status).toBe('resolved')
+    if (choices.status !== 'resolved') throw new Error('expected resolved choices')
+    expect(choices.overrides.map((entry) => entry.componentId)).toEqual(['acme.jira.capability-header'])
+    expect(choices.overrides[0]?.customCapabilities).toEqual(['jira.issue.create'])
+    expect(choices.unavailable.map((entry) => entry.componentId)).toEqual(['acme.partial.capability-header'])
+    expect(choices.unavailable[0]?.missingCapabilities).toEqual(['task.continue'])
+
+    const fallback = resolveComponent(components, CapabilityHeader, 'acme.partial.capability-header')
+    expect(fallback).toMatchObject({
+      status: 'resolved',
+      source: 'default',
+      component: components.get('cezar.fixture.capability-header.default'),
+      rejected: { reason: 'incompatible', componentId: 'acme.partial.capability-header' },
+    })
+    expect(registry.get('acme.jira')?.status).toBe('active')
+    expect(registry.get('acme.partial')?.status).toBe('active')
   })
 
   it('removes an extension’s implementation when that extension deactivates', async () => {

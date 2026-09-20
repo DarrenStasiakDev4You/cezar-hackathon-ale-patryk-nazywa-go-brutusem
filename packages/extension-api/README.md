@@ -325,7 +325,9 @@ A contract made with `defineComponentContract<Props>(id, options)` has three par
   are the ones every implementation must declare; `optionalCapabilities` are the ones it may
   declare, and the host relies on one only for an implementation that declares it (otherwise it
   hides that feature, for example). An implementation lists what it honours in `capabilities`;
-  names the contract does not know are ignored. Names are one or more dot-separated segments of
+  names the contract does not know are kept as custom capabilities and never affect the fit. An
+  extension should prefix custom names with its id (for example `example.hello.preview`) so a
+  custom capability stays clear of names core may add later. Names are one or more dot-separated segments of
   `[a-z0-9][a-z0-9-]*`, at most 64 characters, unique, and at most 32 across both lists.
 - **Layout**, optional and advisory: the box the host gives every implementation.
   `sizing: 'content' | 'fill'` (`fill` means stretch into the remaining space), `sticky: 'top' |
@@ -337,11 +339,14 @@ issue. Capabilities are **declared, not verified**: the check below compares dec
 behaviour that is wrong without throwing is the implementation author's responsibility.
 
 **Checking an implementation.** `checkComponentCompatibility(contract, implementation, implemented?)`
-never throws and never touches React. It returns `{ compatible, issues, capabilities }`. `issues`
+never throws and never touches React. It returns `{ compatible, issues, capabilities,
+missingCapabilities, customCapabilities }`. `issues`
 holds whatever stops the check first: every `malformed` field (at most one per capability list,
 and a list over 256 names is not read), else one `contract-id-mismatch`, else one
 `contract-version-mismatch`, else every `missing-capability` at once. `capabilities` is what the
-host may rely on: the required ones plus the optional ones you declare. The host passes its own
+host may rely on: the required ones plus the optional ones you declare. `missingCapabilities`
+lists required names not declared, and `customCapabilities` lists declared names this contract does
+not know. The host passes its own
 token, your implementation and the token `provide` received; in your tests the third argument
 defaults to the contract. From the example extension (`examples/hello-extension/index.ts`):
 
@@ -362,7 +367,13 @@ test context only. Its test (`test/example.test.ts`) checks it as a host does:
 
 ```ts
 const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
-expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['greets-by-name'] })
+expect(outcome).toEqual({
+  compatible: true,
+  issues: [],
+  capabilities: ['greets-by-name'],
+  missingCapabilities: [],
+  customCapabilities: [],
+})
 ```
 
 A contract is named `id@version` (`example.hello.greeting@1`) in docs, messages and issues.

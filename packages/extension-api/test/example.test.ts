@@ -82,7 +82,13 @@ describe('the hello example extension', () => {
 
     // As a host checks it: its own token, the implementation, then the token `provide` received.
     const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
-    expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['greets-by-name'] })
+    expect(outcome).toEqual({
+      compatible: true,
+      issues: [],
+      capabilities: ['greets-by-name'],
+      missingCapabilities: [],
+      customCapabilities: [],
+    })
 
     // Not vacuous: without its declaration the same implementation fails.
     const { capabilities: _declared, ...undeclared } = loud.implementation

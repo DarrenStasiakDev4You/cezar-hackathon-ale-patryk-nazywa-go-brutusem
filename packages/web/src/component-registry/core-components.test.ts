@@ -84,6 +84,8 @@ describe('core’s task header main part', () => {
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status', 'shows-meta'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
   })
 
