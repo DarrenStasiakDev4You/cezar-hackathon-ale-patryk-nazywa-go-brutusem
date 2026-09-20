@@ -16,10 +16,11 @@ export type ComparatorSet = readonly Comparator[]
 
 const MAX_RANGE_LENGTH = 64
 const MAX_COMPARATOR_SETS = 8
-const IDENTIFIER = '[0-9A-Za-z-]+'
+const BUILD_IDENTIFIER = '[0-9A-Za-z-]+'
+const PRE_RELEASE_IDENTIFIER = '(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
 const VERSION_PART = '(?:0|[1-9][0-9]*)'
-const PRE_RELEASE = `(?:-${IDENTIFIER}(?:[.]${IDENTIFIER})*)?`
-const BUILD = `(?:[+]${IDENTIFIER}(?:[.]${IDENTIFIER})*)?`
+const PRE_RELEASE = `(?:-${PRE_RELEASE_IDENTIFIER}(?:[.]${PRE_RELEASE_IDENTIFIER})*)?`
+const BUILD = `(?:[+]${BUILD_IDENTIFIER}(?:[.]${BUILD_IDENTIFIER})*)?`
 const FULL_VERSION = new RegExp(`^(${VERSION_PART})[.](${VERSION_PART})[.](${VERSION_PART})${PRE_RELEASE}${BUILD}$`)
 const RANGE_VERSION = new RegExp(
   `^(0|[1-9][0-9]*|[xX*])(?:[.](0|[1-9][0-9]*|[xX*]))?(?:[.](0|[1-9][0-9]*|[xX*]))?${PRE_RELEASE}${BUILD}$`,
@@ -103,9 +104,9 @@ function parseComparator(text: string): ComparatorSet | null {
   const operator = match[1] as '^' | '~' | '>=' | '<=' | '>' | '<' | '=' | undefined
   const version = parseRangeVersion(match[2] ?? '')
   if (version === null) return null
+  if (version.wildcard && version.specified === 0) return []
 
   if (operator === '^' || operator === '~') {
-    if (version.wildcard && version.specified === 0) return []
     const upper = operator === '^'
       ? version.major > 0
         ? boundary(version, 0)
