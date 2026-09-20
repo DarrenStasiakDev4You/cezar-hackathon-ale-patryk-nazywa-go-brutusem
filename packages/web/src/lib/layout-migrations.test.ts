@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LayoutMigrationOptions } from './layout-migrations'
-import { migrateLayoutSchema, parseLayoutForLoad } from './layout-migrations'
+import { loadLayoutSchema, migrateLayoutSchema } from './layout-migrations'
 import type { LayoutSchemaV2, LayoutSchemaV3 } from './layout-schema'
 
 const placement = (id: string, componentId = `${id}.default`, required = false) => ({
@@ -120,7 +120,7 @@ describe('migrateLayoutSchema', () => {
   })
 
   it('is idempotent for v3 and does not duplicate migration changes', () => {
-    const result = parseLayoutForLoad(fallback, fallback, options)
+    const result = loadLayoutSchema(fallback, fallback, options)
     expect(result).toEqual({ status: 'current', schema: fallback, changes: [] })
   })
 

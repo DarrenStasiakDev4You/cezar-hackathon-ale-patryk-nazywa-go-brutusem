@@ -193,7 +193,9 @@ const migrateEdge = (input: LayoutSchemaV1 | LayoutSchemaV2, rules: LayoutMigrat
   return { schema: { ...schema, schemaVersion: 3, zones: schema.zones }, changes }
 }
 
-const validateMigrated = (schema: LayoutSchema, expectedVersion: 2 | 3): LayoutSchemaV2 | LayoutSchemaV3 => {
+function validateMigrated(schema: LayoutSchema, expectedVersion: 2): LayoutSchemaV2
+function validateMigrated(schema: LayoutSchema, expectedVersion: 3): LayoutSchemaV3
+function validateMigrated(schema: LayoutSchema, expectedVersion: 2 | 3): LayoutSchemaV2 | LayoutSchemaV3 {
   try {
     const parsed = parseLayoutSchema(schema)
     if (parsed.schemaVersion !== expectedVersion) throw new Error(`expected schema version ${expectedVersion}`)
@@ -230,14 +232,15 @@ export function migrateLayoutSchema(
 
   try {
     if (parsed.schemaVersion === 3) return { status: 'current', schema: cloneLayoutSchema(parsed) as LayoutSchemaV3, changes }
-    const v2 = parsed.schemaVersion === 1
-      ? validateMigrated(migrateEdge(parsed, options.v1ToV2 ?? EMPTY_RULES, 2).schema, 2)
-      : parsed
+    let v2: LayoutSchemaV2
     if (parsed.schemaVersion === 1) {
       const edge = migrateEdge(parsed, options.v1ToV2 ?? EMPTY_RULES, 2)
       changes.push(...edge.changes)
+      v2 = validateMigrated(edge.schema, 2)
+    } else {
+      v2 = parsed as LayoutSchemaV2
     }
-    const v3Edge = migrateEdge(v2 as LayoutSchemaV2, options.v2ToV3 ?? EMPTY_RULES, 3)
+    const v3Edge = migrateEdge(v2, options.v2ToV3 ?? EMPTY_RULES, 3)
     changes.push(...v3Edge.changes)
     const schema = validateMigrated(v3Edge.schema, 3)
     return { status: 'migrated', schema: schema as LayoutSchemaV3, changes }
@@ -253,3 +256,9 @@ export function migrateLayoutSchema(
 }
 
 export const parseLayoutForLoad = migrateLayoutSchema
+
+/**
+ * Load boundary for a persisted layout. A caller supplies the current core/default layout; a
+ * failed migration returns it without throwing and keeps the original input for a later retry.
+ */
+export const loadLayoutSchema = migrateLayoutSchema
