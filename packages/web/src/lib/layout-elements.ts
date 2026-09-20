@@ -1,5 +1,13 @@
 export const LAYOUT_ELEMENT_KINDS = ['widget', 'group'] as const
 
+import type { PageComponentContract } from '@/page-layout/definitions'
+import {
+  normalizeLayoutPolicy,
+  type LayoutConstraintIssue,
+  type LayoutConstraintPolicy,
+  type LayoutOperationResult,
+} from '@/page-layout/constraints'
+
 export type LayoutElementKind = (typeof LAYOUT_ELEMENT_KINDS)[number]
 
 /** The canonical node stored by the layout tree. */
@@ -8,6 +16,9 @@ export type LayoutNode = {
   parentId: string | null
   children: string[]
   kind: LayoutElementKind
+  zoneId?: string
+  policy?: LayoutConstraintPolicy
+  requiredZone?: boolean
 }
 
 /** Component registration input. Root nodes may omit parentId for compatibility. */
@@ -15,6 +26,9 @@ export type LayoutElementDescriptor = {
   id: string
   kind: LayoutElementKind
   parentId?: string | null
+  zoneId?: string
+  contract?: PageComponentContract
+  requiredZone?: boolean
 }
 
 /** A node plus the projection metadata needed by the React layout surface. */
@@ -22,6 +36,8 @@ export type RegisteredLayoutElement = LayoutNode & {
   order: number
   domNode?: Element
 }
+
+export type LayoutRegistryOperationResult = LayoutOperationResult<readonly RegisteredLayoutElement[]>
 
 /** Legacy move shape retained for the dnd surface while it migrates to index operations. */
 export type LayoutMove = {
@@ -64,6 +80,14 @@ const assertDescriptor = (descriptor: LayoutElementDescriptor): void => {
 const cloneElement = (element: RegisteredLayoutElement): RegisteredLayoutElement => ({
   ...element,
   children: [...element.children],
+  ...(element.policy === undefined
+    ? {}
+    : {
+        policy: Object.freeze({
+          ...element.policy,
+          ...(element.policy.allowedZones === undefined ? {} : { allowedZones: Object.freeze([...element.policy.allowedZones]) }),
+        }),
+      }),
 })
 
 /**
@@ -159,7 +183,7 @@ export class LayoutRegistry {
   /** Read the canonical tree node without exposing mutable registry state. */
   getNode(id: string): LayoutNode | undefined {
     const node = this.nodes.get(id)
-    return node ? { ...node, children: [...node.children] } : undefined
+    return node ? cloneNode(node) : undefined
   }
 
   /** Returns true after an explicit delete until the same id is mounted again. */
@@ -167,11 +191,24 @@ export class LayoutRegistry {
     return this.removedIds.has(id)
   }
 
+  /** Return the policy issues that would reject removing the selected subtree. */
+  getRemovalIssues(id: string): readonly LayoutConstraintIssue[] {
+    const ids = this.getSubtreeIds(id)
+    if (ids.size === 0 || (!this.nodes.has(id) && !this.pendingElements.has(id))) return Object.freeze([])
+    return this.removeIssues(ids)
+  }
+
   /** Remove the selected node and its complete registered subtree in one notification. */
   removeNode(id: string): boolean {
-    if (!this.nodes.has(id) && !this.pendingElements.has(id)) return false
+    return this.tryRemoveNode(id).applied
+  }
+
+  tryRemoveNode(id: string): LayoutRegistryOperationResult {
+    if (!this.nodes.has(id) && !this.pendingElements.has(id)) return { applied: false, issues: Object.freeze([]) }
 
     const ids = this.getSubtreeIds(id)
+    const issues = this.removeIssues(ids)
+    if (issues.length > 0) return { applied: false, issues }
     for (const removedId of ids) this.removedIds.add(removedId)
 
     const root = this.nodes.get(id)
@@ -183,7 +220,7 @@ export class LayoutRegistry {
       this.pendingRemovals.delete(removedId)
     }
     this.rebuildSnapshot()
-    return true
+    return { applied: true, snapshot: this.getSnapshot() }
   }
 
   /** Compatibility alias for callers that used the earlier subtree-specific name. */
@@ -193,30 +230,59 @@ export class LayoutRegistry {
 
   /** Move a node to an exact sibling index under a new parent (or at the root for null). */
   moveNode(id: string, newParentId: string | null, index: number): boolean {
+    return this.tryMoveNode(id, newParentId, index).applied
+  }
+
+  tryMoveNode(id: string, newParentId: string | null, index: number, destinationZoneId?: string): LayoutRegistryOperationResult {
     const source = this.nodes.get(id)
     const parent = newParentId === null ? undefined : this.nodes.get(newParentId)
-    if (!source || (newParentId !== null && !parent)) return false
-    if (!Number.isInteger(index) || index < 0) return false
-    if (newParentId !== null && this.getSubtreeIds(id).has(newParentId)) return false
+    if (!source || (newParentId !== null && !parent)) return { applied: false, issues: Object.freeze([]) }
+    if (!Number.isInteger(index) || index < 0) return { applied: false, issues: Object.freeze([]) }
+    if (newParentId !== null && this.getSubtreeIds(id).has(newParentId)) return { applied: false, issues: Object.freeze([]) }
 
     const sourceSiblings = this.siblingsFor(source.parentId)
     const destinationSiblings = this.siblingsFor(newParentId)
     const nextDestination = source.parentId === newParentId
       ? sourceSiblings.filter((siblingId) => siblingId !== id)
       : [...destinationSiblings]
-    if (index > nextDestination.length) return false
+    if (index > nextDestination.length) return { applied: false, issues: Object.freeze([]) }
     nextDestination.splice(index, 0, id)
 
     const unchanged = source.parentId === newParentId && nextDestination.every((siblingId, position) => siblingId === sourceSiblings[position])
-    if (unchanged) return false
+    if (unchanged) return { applied: false, issues: Object.freeze([]) }
 
+    const destinationZone = destinationZoneId ?? parent?.zoneId ?? source.zoneId
+    const issues: LayoutConstraintIssue[] = []
+    for (const element of this.getSubtree(id)) {
+      if (element.policy === undefined) continue
+      if (!element.policy.movable) issues.push(Object.freeze({ code: 'not-movable', key: element.id, zone: element.zoneId ?? '' }))
+      if (destinationZone !== undefined && element.policy.allowedZones !== undefined && !element.policy.allowedZones.includes(destinationZone)) {
+        issues.push(Object.freeze({ code: 'zone-not-allowed', key: element.id, zone: destinationZone }))
+      }
+    }
+    const uniqueIssues = freezeRegistryIssues(issues)
+    if (uniqueIssues.length > 0) return { applied: false, issues: uniqueIssues }
+
+    this.applyMove(source, newParentId, sourceSiblings, nextDestination)
+    return { applied: true, snapshot: this.getSnapshot() }
+  }
+
+  canMoveToZone(id: string, zoneId: string): boolean {
+    const source = this.nodes.get(id)
+    if (!source) return false
+    return this.getSubtree(id).every((element) => {
+      if (element.policy === undefined) return true
+      return element.policy.movable && (element.policy.allowedZones === undefined || element.policy.allowedZones.includes(zoneId))
+    })
+  }
+
+  private applyMove(source: LayoutNode, newParentId: string | null, sourceSiblings: string[], nextDestination: string[]): void {
     if (source.parentId !== newParentId) {
-      this.setSiblings(source.parentId, sourceSiblings.filter((siblingId) => siblingId !== id))
+      this.setSiblings(source.parentId, sourceSiblings.filter((siblingId) => siblingId !== source.id))
     }
     this.setSiblings(newParentId, nextDestination)
-    this.nodes.set(id, { ...source, parentId: newParentId })
+    this.nodes.set(source.id, { ...source, parentId: newParentId })
     this.rebuildSnapshot()
-    return true
   }
 
   /** Reorder a node within its existing parent. */
@@ -304,7 +370,18 @@ export class LayoutRegistry {
     if (parentId !== null && !this.nodes.has(parentId)) {
       throw new Error(`Layout element parent "${parentId}" is not registered`)
     }
-    const node: LayoutNode = { id: descriptor.id, parentId, children: [], kind: descriptor.kind }
+    const policy = 'contract' in descriptor && descriptor.contract !== undefined
+      ? normalizeLayoutPolicy(descriptor.contract)
+      : (descriptor as LayoutNode).policy
+    const node: LayoutNode = {
+      id: descriptor.id,
+      parentId,
+      children: [],
+      kind: descriptor.kind,
+      ...(descriptor.zoneId === undefined ? {} : { zoneId: descriptor.zoneId }),
+      ...(policy === undefined ? {} : { policy }),
+      ...(descriptor.requiredZone === undefined ? {} : { requiredZone: descriptor.requiredZone }),
+    }
     this.nodes.set(node.id, node)
     this.setSiblings(parentId, [...this.siblingsFor(parentId), node.id])
     this.removedIds.delete(node.id)
@@ -413,6 +490,41 @@ export class LayoutRegistry {
     this.snapshotCache = next
     for (const listener of this.listeners) listener()
   }
+
+  private removeIssues(ids: Set<string>): readonly LayoutConstraintIssue[] {
+    const issues: LayoutConstraintIssue[] = []
+    for (const id of ids) {
+      const node = this.nodes.get(id)
+      if (!node?.policy) continue
+      if (!node.policy.removable) issues.push(Object.freeze({ code: 'not-removable', key: node.id, zone: node.zoneId ?? '' }))
+      if (node.requiredZone && node.zoneId !== undefined) {
+        const remaining = [...this.nodes.values()].some((candidate) => candidate.id !== id && !ids.has(candidate.id) && candidate.zoneId === node.zoneId)
+        if (!remaining) issues.push(Object.freeze({ code: 'required-component', key: node.id, zone: node.zoneId }))
+      }
+    }
+    return freezeRegistryIssues(issues)
+  }
+}
+
+function cloneNode(node: LayoutNode): LayoutNode {
+  return {
+    ...node,
+    children: [...node.children],
+    ...(node.policy === undefined ? {} : { policy: clonePolicy(node.policy) }),
+  }
+}
+
+function clonePolicy(policy: LayoutConstraintPolicy): LayoutConstraintPolicy {
+  return Object.freeze({
+    ...policy,
+    ...(policy.allowedZones === undefined ? {} : { allowedZones: Object.freeze([...policy.allowedZones]) }),
+  })
+}
+
+function freezeRegistryIssues(issues: readonly LayoutConstraintIssue[]): readonly LayoutConstraintIssue[] {
+  const unique = new Map<string, LayoutConstraintIssue>()
+  for (const issue of issues) unique.set(`${issue.code}:${issue.key}:${issue.zone}`, issue)
+  return Object.freeze([...unique.values()])
 }
 
 export const createLayoutRegistry = (): LayoutRegistry => new LayoutRegistry()

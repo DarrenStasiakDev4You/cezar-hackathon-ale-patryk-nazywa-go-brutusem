@@ -1,9 +1,17 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { defineComponentContract } from '@open-mercato/cezar-extension-api'
+
 import { LayoutElementContextMenu, type LayoutContextMenuTarget } from './layout-context-menu'
 import { LayoutElement } from './layout-element'
 import { LayoutRegistryProvider } from './layout-registry'
+
+const Protected = defineComponentContract('cezar.fixture.protected-layout', {
+  version: 1,
+  movable: true,
+  allowedZones: ['task.main'],
+})
 
 function renderLayout(props: { enabled?: boolean; onDelete?: (target: LayoutContextMenuTarget) => void; confirmDelete?: (target: LayoutContextMenuTarget) => boolean | Promise<boolean> } = {}) {
   return render(
@@ -107,6 +115,24 @@ describe('LayoutElementContextMenu', () => {
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(onDelete).not.toHaveBeenCalled()
     expect(confirmDelete).not.toHaveBeenCalled()
+  })
+
+  it('keeps a protected Delete action visible but disabled with an explanation', async () => {
+    render(
+      <LayoutRegistryProvider>
+        <LayoutElementContextMenu enabled onDelete={vi.fn()}>
+          <LayoutElement id="protected" kind="widget" zoneId="task.main" contract={Protected} requiredZone>
+            Protected
+          </LayoutElement>
+        </LayoutElementContextMenu>
+      </LayoutRegistryProvider>,
+    )
+    await waitFor(() => expect(document.querySelector('[data-layout-id="protected"]')).not.toBeNull())
+    fireEvent.contextMenu(screen.getByText('Protected'))
+
+    const deleteButton = screen.getByRole('menuitem', { name: 'Delete layout element' }) as HTMLButtonElement
+    expect(deleteButton.disabled).toBe(true)
+    expect(screen.getAllByText('This layout element cannot be removed.')).not.toHaveLength(0)
   })
 
   it('clamps the menu to the viewport when the pointer is near an edge', async () => {

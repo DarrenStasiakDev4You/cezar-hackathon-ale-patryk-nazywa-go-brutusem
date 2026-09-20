@@ -6,26 +6,31 @@ import { CSS } from '@dnd-kit/utilities'
 import { useOptionalLayoutRegistry } from '@/components/layout-registry'
 import { useLayoutSortableContext, type LayoutDragMode } from '@/components/layout-sortable-surface'
 import type { LayoutElementKind } from '@/lib/layout-elements'
+import type { PageComponentContract } from '@/page-layout/definitions'
 
 export type LayoutElementProps = React.HTMLAttributes<HTMLElement> & {
   id: string
   kind: LayoutElementKind
   parentId?: string | null
+  zoneId?: string
+  contract?: PageComponentContract
+  requiredZone?: boolean
   as?: 'article' | 'div' | 'section'
   /** Use a stable draggable/droppable node for full shell containers instead of sortable transforms. */
   dragMode?: LayoutDragMode
 }
 
 /** Declares a dashboard widget/group and projects the declaration onto its DOM representative. */
-export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: requestedDragMode, children, ...props }: LayoutElementProps) {
+export function LayoutElement({ id, kind, parentId, zoneId, contract, requiredZone, as = 'div', dragMode: requestedDragMode, children, ...props }: LayoutElementProps) {
   const registry = useOptionalLayoutRegistry()
   const { enabled, activeId, dragMode: surfaceDragMode, placeholder } = useLayoutSortableContext()
   const dragMode = requestedDragMode ?? surfaceDragMode
-  const sortable = useSortable({ id, disabled: !enabled || dragMode !== 'sortable' })
-  const draggable = useDraggable({ id, disabled: !enabled || dragMode !== 'container' })
+  const registered = registry?.get(id)
+  const canMove = registered?.policy === undefined || registered.policy.movable
+  const sortable = useSortable({ id, disabled: !enabled || !canMove || dragMode !== 'sortable' })
+  const draggable = useDraggable({ id, disabled: !enabled || !canMove || dragMode !== 'container' })
   const droppable = useDroppable({ id, disabled: !enabled || dragMode !== 'container' })
   const removed = registry?.isRemoved(id) ?? false
-  const registered = registry?.get(id)
   const order = registered?.order ?? -1
   const nodeRef = React.useRef<HTMLElement | null>(null)
 
@@ -44,13 +49,20 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
 
   React.useEffect(() => {
     if (!registry) return
-    const unregister = registry.registerDeferred({ id, kind, ...(parentId === undefined ? {} : { parentId }) })
+    const unregister = registry.registerDeferred({
+      id,
+      kind,
+      ...(parentId === undefined ? {} : { parentId }),
+      ...(zoneId === undefined ? {} : { zoneId }),
+      ...(contract === undefined ? {} : { contract }),
+      ...(requiredZone === undefined ? {} : { requiredZone }),
+    })
     const detach = nodeRef.current ? registry.attachDomNode(id, nodeRef.current) : undefined
     return () => {
       detach?.()
       unregister()
     }
-  }, [id, kind, parentId, registry])
+  }, [contract, id, kind, parentId, registry, requiredZone, zoneId])
 
   if (removed) return null
 
@@ -74,13 +86,13 @@ export function LayoutElement({ id, kind, parentId, as = 'div', dragMode: reques
       'data-layout-element': 'true',
       'data-layout-id': id,
       'data-layout-kind': kind,
-      'data-layout-sortable': enabled && dragMode === 'sortable' ? 'true' : 'false',
+       'data-layout-sortable': enabled && canMove && dragMode === 'sortable' ? 'true' : 'false',
       'data-layout-drag-mode': dragMode,
       'data-layout-dragging': isDragging ? 'true' : 'false',
       'data-layout-placeholder': activePlaceholder?.visible ? 'true' : undefined,
       ...(registered?.parentId ? { 'data-layout-parent-id': registered.parentId } : {}),
     },
-    enabled ? (
+     enabled && canMove ? (
       <button
         type="button"
         className="layout-drag-handle"
