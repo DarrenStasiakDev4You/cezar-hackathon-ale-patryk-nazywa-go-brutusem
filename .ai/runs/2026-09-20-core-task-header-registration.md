@@ -17,9 +17,9 @@ Non-goals: changing commands or events, adding preference storage, changing HTTP
 
 ### Phase 1: Declared defaults
 
-- [ ] 1.1 Add core registration options, `isDefault`, duplicate-default validation, and register the core default.
-- [ ] 1.2 Resolve fallbacks from `isDefault`, rename the missing-default check and diagnostics, and add regression coverage.
-- [ ] 1.3 Add the task-thread guard for an absent default and update repository guidance.
+- [x] 1.1 Add core registration options, `isDefault`, duplicate-default validation, and register the core default. — 18aa6da4
+- [x] 1.2 Resolve fallbacks from `isDefault`, rename the missing-default check and diagnostics, and add regression coverage. — 18aa6da4
+- [x] 1.3 Add the task-thread guard for an absent default and update repository guidance. — 18aa6da4
 
 ### Phase 2: Provider-neutral task header
 
@@ -39,9 +39,9 @@ Non-goals: changing commands or events, adding preference storage, changing HTTP
 
 ### Phase 1: Declared defaults
 
-- [ ] 1.1 Add core registration options, `isDefault`, duplicate-default validation, and register the core default.
-- [ ] 1.2 Resolve fallbacks from `isDefault`, rename the missing-default check and diagnostics, and add regression coverage.
-- [ ] 1.3 Add the task-thread guard for an absent default and update repository guidance.
+- [x] 1.1 Add core registration options, `isDefault`, duplicate-default validation, and register the core default. — 18aa6da4
+- [x] 1.2 Resolve fallbacks from `isDefault`, rename the missing-default check and diagnostics, and add regression coverage. — 18aa6da4
+- [x] 1.3 Add the task-thread guard for an absent default and update repository guidance. — 18aa6da4
 
 ### Phase 2: Provider-neutral task header
 
