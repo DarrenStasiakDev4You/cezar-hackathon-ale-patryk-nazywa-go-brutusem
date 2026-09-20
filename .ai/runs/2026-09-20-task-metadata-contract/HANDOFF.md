@@ -4,7 +4,7 @@
 **Branch:** `feat/task-metadata-contract`  
 **PR:** draft #55 — https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/55  
 **Current phase/step:** Complete; final gate blocked, awaiting configured-gate resolution and manual QA
-**Last commit:** `7c952ab1` — docs(runs): complete task metadata implementation plan
+**Last commit:** `4ca6d9a5` — docs(runs): record final gate blocker
 
 ## What just happened
 - Completed Steps 1.1, 1.2, 2.1, 2.2, and 2.3.
