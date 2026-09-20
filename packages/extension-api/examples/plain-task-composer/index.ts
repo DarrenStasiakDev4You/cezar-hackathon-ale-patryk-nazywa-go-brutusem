@@ -39,6 +39,7 @@ export default defineExtension({
     name: 'Plain task composer',
     version: '1.0.0',
     engines: { cezar: '>=0.11.1' },
+    permissions: ['ui.components'],
   },
   activate(context) {
     context.components.provide(TaskComposer, {

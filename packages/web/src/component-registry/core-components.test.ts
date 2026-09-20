@@ -5,6 +5,7 @@ import {
   checkComponentCompatibility,
   TaskComposer,
   TaskHeaderMain,
+  TaskMetadata,
   type ComponentContract,
   type ComponentImplementation,
   type TaskHeaderMainProps,
@@ -28,7 +29,7 @@ function registered(): Registered[] {
   const seen: Registered[] = []
   registerCoreComponents({
     register<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<P, Settings>) {
-      // Only `TaskHeaderMain` is served; the first test pins that.
+      // Keep the implementation objects private while checking every served default.
       seen.push({ contract, implementation: implementation as unknown as ComponentImplementation<TaskHeaderMainProps> })
       return { dispose() {} }
     },
@@ -37,8 +38,8 @@ function registered(): Registered[] {
 }
 
 describe('core defaults: the gate', () => {
-  it('serves the task header’s main part', () => {
-    expect(CORE_COMPONENT_CONTRACTS).toEqual([TaskHeaderMain, TaskComposer])
+  it('serves the task header, metadata and composer parts', () => {
+    expect(CORE_COMPONENT_CONTRACTS).toEqual([TaskHeaderMain, TaskMetadata, TaskComposer])
   })
 
   it('leaves no served contract without core’s default on the registry main.tsx builds', () => {
@@ -48,7 +49,11 @@ describe('core defaults: the gate', () => {
   it('fails without registerCoreComponents, so the check is shown to fail', () => {
     const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
 
-    expect(missingCoreDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['cezar.task.header.main', 'cezar.task.composer'])
+    expect(missingCoreDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual([
+      'cezar.task.header.main',
+      'cezar.task.metadata',
+      'cezar.task.composer',
+    ])
   })
 
   it('gives a ComponentsProvider without a registry the same catalog, with core’s default for the header', () => {
@@ -76,17 +81,30 @@ describe('core defaults: the gate', () => {
 })
 
 describe('core’s task header main part', () => {
-  it('is registered once, for TaskHeaderMain, and fits it with all three capabilities', () => {
-    const [only, ...others] = registered()
+  it('is registered once, for TaskHeaderMain, and fits it with its two capabilities', () => {
+    const entries = registered()
+    const only = entries.find((entry) => entry.contract.id === TaskHeaderMain.id)
+    const metadata = entries.find((entry) => entry.contract.id === TaskMetadata.id)
+    const composer = entries.find((entry) => entry.contract.id === TaskComposer.id)
 
-    expect(others).toHaveLength(1)
+    expect(entries).toHaveLength(3)
     expect(only?.contract).toBe(TaskHeaderMain)
     expect(checkComponentCompatibility(TaskHeaderMain, only!.implementation)).toEqual({
       compatible: true,
       issues: [],
-      capabilities: ['shows-title', 'shows-status', 'shows-meta'],
+      capabilities: ['shows-title', 'shows-status'],
       missingCapabilities: [],
       customCapabilities: [],
+    })
+    expect(metadata?.contract).toBe(TaskMetadata)
+    expect(metadata?.implementation).toMatchObject({
+      id: 'cezar.task.metadata.default',
+      capabilities: ['shows-metadata', 'offers-links', 'offers-copy'],
+    })
+    expect(composer?.contract).toBe(TaskComposer)
+    expect(composer?.implementation).toMatchObject({
+      id: 'cezar.task.composer.default',
+      capabilities: ['edits-draft', 'sends', 'shows-availability', 'attaches-files', 'chooses-engine'],
     })
   })
 

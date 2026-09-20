@@ -44,6 +44,7 @@ export {
   type TaskComposerRunnerChoice,
   type TaskComposerSkill,
   type TaskComposerStatus,
+  TaskMetadata,
   TaskHeaderMain,
   type TaskHeaderActions,
   type TaskHeaderActionState,
@@ -53,6 +54,13 @@ export {
   type TaskHeaderMeta,
   type TaskHeaderReference,
   type TaskHeaderTask,
+  type TaskMetadataActions,
+  type TaskMetadataEngine,
+  type TaskMetadataIntents,
+  type TaskMetadataModel,
+  type TaskMetadataProps,
+  type TaskMetadataReference,
+  type TaskMetadataTaskRef,
 } from './core-components.ts'
 export {
   TaskArchive,

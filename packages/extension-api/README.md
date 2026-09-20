@@ -323,7 +323,8 @@ the exact implementation id in global or active-project UI state, fills defaults
 and exposes them only through the implementation-only `useComponentSettings()` reader. The returned
 registration handle can read or observe its own settings, but has no setter or cross-implementation access.
 
-**Status.** The cockpit serves one core contract, the task header's main part (below). It keeps
+**Status.** The cockpit serves two core contracts: the task header's main part and task metadata
+(below). It keeps
 every implementation per contract with the id of the extension that provided it, and renders a
 contract through its component host. Choosing an implementation arrives with the picker item, so
 until then core's default renders everywhere.
@@ -369,8 +370,8 @@ Core checks the action's state again on every call, so a call does nothing unles
 do more than the user could with core's own buttons. Core keeps everything else around your part
 and renders it itself: Finish, Open in, Notes, Mark unread, Pin, Delete, the tabs, the monitoring
 and dispatch lines, the step rail, the resume hint and the title editor. `shows-title` and
-`shows-status` are required, `shows-meta` (you show `meta` and `engine`) is optional, and the host
-reserves 30 px (one title row) while an implementation loads, fails or is swapped. Provide it like
+`shows-status` are required, and the host reserves 30 px (one title row) while an implementation
+loads, fails or is swapped. Provide it like
 any contract, with an id under your prefix and at least the two required capabilities.
 
 **Taking over an action.** Continue, Cancel and Archive stay in core's action bar unless you take
@@ -411,6 +412,16 @@ and React; the cockpit test exercises it through the real extension registry.
 The contract intentionally does not expose a query client, draft store, router, command token or
 React node. A minimal implementation can render `draft.text` and call `onSubmit()` without
 knowing how a task is delivered or persisted.
+
+**Task metadata.** `TaskMetadata` (`cezar.task.metadata@1`) is the separate contract for workflow,
+branch, references, diff, automation, usage/cost and engine metadata. Its props are `task`,
+`metadata`, `actions` and optional callback `intents`; the model is shared with the header, but the
+metadata implementation never depends on the header's adapter. `shows-metadata` is required;
+`offers-links` and `offers-copy` are optional. Core places this 20 px slot and owns its visibility,
+spacing and mobile details toggle. An implementation should wrap or truncate at any width and must
+not assume where the slot sits. Core's `CoreTaskMetadata` is the default; a replacement that throws
+falls back independently to that row. The task page hosts metadata below the title part even when a
+replacement header is selected.
 
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a
