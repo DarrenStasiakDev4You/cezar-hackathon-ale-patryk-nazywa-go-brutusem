@@ -46,6 +46,7 @@ Source doc: `.ai/specs/2026-09-20-layout-registry.md`
 
 - [x] 1.1 Add page, zone, content and validation types with immutable snapshots. — af9d066d
 - [x] 1.2 Implement the in-memory `PageLayoutRegistry` with atomic registration, lookup, validation, subscriptions and revisions. — af9d066d
+- [x] Post-review fix: reject array-shaped records and validate scalar layout metadata. — b26997db
 
 ### Phase 2: Generic rendering and catalog
 
