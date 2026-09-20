@@ -146,6 +146,11 @@ export function useComponentRegistry(): CockpitComponentRegistry {
   return useComponentsRuntime().registry
 }
 
+/** Routes can be rendered in isolation in tests before the app provider is mounted. */
+export function useOptionalComponentRegistry(): CockpitComponentRegistry | null {
+  return useContext(ComponentsContext)?.registry ?? null
+}
+
 /** Everything `ComponentHost` reads. Throws outside `ComponentsProvider`. */
 export function useComponentsRuntime(): ComponentsRuntime {
   const runtime = useContext(ComponentsContext)

@@ -2,7 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-import config, { entryChunkGuard, entryChunkProblems, reactRuntimeChunk, type BundledFile } from '../vite.config'
+import config, { entryChunkGuard, entryChunkProblems, fixtureBundleGuard, reactRuntimeChunk, type BundledFile } from '../vite.config'
 
 describe('production chunking', () => {
   it('keeps the coupled React runtime in a focused vendor chunk', () => {
@@ -124,6 +124,16 @@ describe('the entry chunk check', () => {
 
   it('runs as a build-only plugin of the production config', () => {
     const guard = entryChunkGuard()
+    expect(guard.apply).toBe('build')
+    expect(
+      config.plugins
+        ?.flat()
+        .some((plugin) => plugin !== null && typeof plugin === 'object' && 'name' in plugin && plugin.name === guard.name),
+    ).toBe(true)
+  })
+
+  it('keeps the configurable-header fixture out of release assets', () => {
+    const guard = fixtureBundleGuard()
     expect(guard.apply).toBe('build')
     expect(
       config.plugins

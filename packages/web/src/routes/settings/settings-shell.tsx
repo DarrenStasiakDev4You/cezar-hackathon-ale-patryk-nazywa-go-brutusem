@@ -1,11 +1,17 @@
 import { ChevronRightIcon, SlidersHorizontalIcon } from 'lucide-react'
 import { Link as RouterLink, NavLink as RouterNavLink } from 'react-router'
+import { useSyncExternalStore } from 'react'
 import type { Capabilities } from '@open-mercato/cezar-api-client'
 import { Link as ScopedLink, NavLink as ScopedNavLink } from '@/lib/project-router'
 import { cn } from '@/lib/utils'
 import { ProjectGeneral } from './project-general'
 import { ProjectLocationNav } from './project-location'
-import { visibleSettingsSections, type SettingsScope, type SettingsSection } from './registry'
+import { hasConfigurableComponent } from './component-settings-section'
+import { useOptionalComponentRegistry } from '@/component-registry/provider'
+import { visibleSettingsSections, type SettingsScope, type SettingsSection, type SettingsSectionId } from './registry'
+
+const NOOP_SUBSCRIBE = () => () => {}
+const ZERO_REVISION = () => 0
 
 /**
  * The registry-driven Settings shell (R6 Step 1.3, spec §"Settings").
@@ -44,6 +50,14 @@ function settingsIndexPath(scope: SettingsScope): string {
   return scope === 'global' ? '/settings/global' : '/settings'
 }
 
+function useOmittedSections(): readonly SettingsSectionId[] {
+  const registry = useOptionalComponentRegistry()
+  const subscribe = registry?.subscribe ?? NOOP_SUBSCRIBE
+  const snapshot = registry?.revision ?? ZERO_REVISION
+  useSyncExternalStore(subscribe, snapshot)
+  return registry !== null && hasConfigurableComponent(registry) ? [] : ['components']
+}
+
 /** Global links bypass the project prefix; project links get it. See the header comment. */
 function navComponents(scope: SettingsScope) {
   return scope === 'global'
@@ -55,10 +69,12 @@ function SectionNav({
   scope,
   activeId,
   capabilities,
+  omit,
 }: {
   scope: SettingsScope
   activeId: SettingsSection['id'] | null
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>
+  omit: readonly SettingsSectionId[]
 }) {
   const { NavLink } = navComponents(scope)
   return (
@@ -83,7 +99,7 @@ function SectionNav({
         <SlidersHorizontalIcon aria-hidden="true" className="size-4 shrink-0" />
         General
       </NavLink>
-      {visibleSettingsSections(scope, capabilities).map((section) => (
+      {visibleSettingsSections(scope, capabilities, { omit }).map((section) => (
         <NavLink
           key={section.id}
           to={settingsSectionPath(scope, section.id)}
@@ -117,10 +133,12 @@ function SectionPills({
   scope,
   activeId,
   capabilities,
+  omit,
 }: {
   scope: SettingsScope
   activeId: SettingsSection['id']
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>
+  omit: readonly SettingsSectionId[]
 }) {
   const { NavLink } = navComponents(scope)
   return (
@@ -139,7 +157,7 @@ function SectionPills({
       >
         General
       </NavLink>
-      {visibleSettingsSections(scope, capabilities).map((section) => (
+      {visibleSettingsSections(scope, capabilities, { omit }).map((section) => (
         <NavLink
           key={section.id}
           to={settingsSectionPath(scope, section.id)}
@@ -170,6 +188,7 @@ export function SettingsSectionRoute({
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>
 }) {
   const Body = section.component
+  const omit = useOmittedSections()
   return (
     <div
       data-route={scope === 'global' ? `settings-global-${section.id}` : `settings-${section.id}`}
@@ -187,8 +206,8 @@ export function SettingsSectionRoute({
         ) : null}
       </header>
       <div className="flex flex-1 flex-col md:flex-row">
-        <SectionNav scope={scope} activeId={section.id} capabilities={capabilities} />
-        <SectionPills scope={scope} activeId={section.id} capabilities={capabilities} />
+        <SectionNav scope={scope} activeId={section.id} capabilities={capabilities} omit={omit} />
+        <SectionPills scope={scope} activeId={section.id} capabilities={capabilities} omit={omit} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Body />
         </div>
@@ -203,6 +222,7 @@ export function SettingsIndexRoute({ scope, capabilities }: {
   scope: SettingsScope
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>
 }) {
+  const omit = useOmittedSections()
   const { Link } = navComponents(scope)
   const global = scope === 'global'
   return (
@@ -216,7 +236,7 @@ export function SettingsIndexRoute({ scope, capabilities }: {
         </p>
       </header>
       <div className="flex flex-1 flex-col md:flex-row">
-        <SectionNav scope={scope} activeId={null} capabilities={capabilities} />
+        <SectionNav scope={scope} activeId={null} capabilities={capabilities} omit={omit} />
         {/* No second h1 for small screens: the app shell's mobile top bar already titles the
             page "Settings" from the nav registry. */}
         <div className="flex min-w-0 flex-1 flex-col p-3 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-5 md:pb-5">
@@ -235,7 +255,7 @@ export function SettingsIndexRoute({ scope, capabilities }: {
               global ? null : 'mt-7 md:hidden',
             )}
           >
-            {visibleSettingsSections(scope, capabilities).map((section) => (
+            {visibleSettingsSections(scope, capabilities, { omit }).map((section) => (
               <li key={section.id}>
                 <Link
                   to={settingsSectionPath(scope, section.id)}
