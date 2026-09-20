@@ -20,9 +20,18 @@ Implement `.ai/specs/2026-09-20-layout-constraints.md` against `main`: add immut
 
 ## Risks
 
-The public component-definition shape and layout mutation seams are compatibility-sensitive. Validator drift between page admission, rendering, and edit-mode operations is the primary correctness risk. Existing legacy descriptors must remain behaviorally compatible, while constrained descriptors must reject stale or unsupported mutations atomically. The exact full `npm test` gate remains blocked by unrelated environment-sensitive timeouts in server/process fixtures; the implementation-specific suite, typecheck, unit gate, build and package gate pass.
+The public component-definition shape and layout mutation seams are compatibility-sensitive. Validator drift between page admission, rendering, and edit-mode operations is the primary correctness risk. Existing legacy descriptors must remain behaviorally compatible, while constrained descriptors must reject stale or unsupported mutations atomically. The full validation gate passes after merging the current `main` branch. Browser verification is not part of this run; the PR remains `needs-qa` for a separate browser QA pass.
 
 Source doc: .ai/specs/2026-09-20-layout-constraints.md
+
+## Verification handoff
+
+- `npm run typecheck` — passed.
+- `npm test` — passed: 472 test files and 8,455 tests.
+- `npm run test:unit` — passed: 36 tests.
+- `npm run build` — passed, including `check:pack`.
+- `npm run test:package` — passed: 16 tests.
+- Browser verification — not run in this resume; defer to the separate QA pass.
 
 ## Progress
 
