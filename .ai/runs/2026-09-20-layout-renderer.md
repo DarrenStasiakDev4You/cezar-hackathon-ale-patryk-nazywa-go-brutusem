@@ -51,22 +51,22 @@ must never replace the last valid snapshot.
 
 ### Phase 1: Schema-to-runtime adapter
 
-- [ ] 1.1 Define the snapshot, binding, context and bounded issue types
-- [ ] 1.2 Implement default initialization and atomic last-valid replacement
-- [ ] 1.3 Adapt Task Page zones and exact served contracts
+- [x] 1.1 Define the snapshot, binding, context and bounded issue types — b93fc889
+- [x] 1.2 Implement default initialization and atomic last-valid replacement — b93fc889
+- [x] 1.3 Adapt Task Page zones and exact served contracts — b93fc889
 
 ### Phase 2: Generic schema renderer
 
-- [ ] 2.1 Walk normalized schema order through page admission and ComponentHost
-- [ ] 2.2 Define malformed, missing and visual fallback policy
-- [ ] 2.3 Add architectural boundary coverage
+- [x] 2.1 Walk normalized schema order through page admission and ComponentHost — b93fc889
+- [x] 2.2 Define malformed, missing and visual fallback policy — b93fc889
+- [x] 2.3 Add architectural boundary coverage — b93fc889
 
 ### Phase 3: Task Page consumer migration
 
-- [ ] 3.1 Mount the page-layout provider and TaskPage catalog at the task consumer
-- [ ] 3.2 Replace only schema-backed hardcoded slots
-- [ ] 3.3 Prove route order, extension fallback and shell regressions
+- [x] 3.1 Mount the page-layout provider and TaskPage catalog at the task consumer — b93fc889
+- [x] 3.2 Replace only schema-backed hardcoded slots — b93fc889
+- [x] 3.3 Prove route order, extension fallback and shell regressions — b93fc889
 
 ### Phase 4: Handoff documentation
 
-- [ ] 4.1 Update repository layout-renderer ownership guidance
+- [x] 4.1 Update repository layout-renderer ownership guidance — b93fc889
