@@ -11,16 +11,18 @@ aby uszkodzony lub niekompatybilny zapis nie wyłączył całej strony.
 ## 📝 Problem Statement
 
 `LayoutSchema` z projektu `2026-09-19-create-layout-schema` jest przeznaczony do zapisu jako
-plain JSON i ma jawne `schemaVersion`. Gdy kolejne wersje Cezara zmienią nazwę strefy, usuną
-component, rozdzielą jeden component na kilka albo zmienią wymagany component, bez migratora
+plain JSON, ma jawne `schemaVersion` i jest obecnie właścicielem typów/parsera w
+`@open-mercato/cezar-extension-api`. Gdy kolejne wersje Cezara zmienią nazwę strefy, usuną
+placement, rozdzielą jeden placement na kilka albo zmienią wymagany contract, bez migratora
 stary layout będzie albo odrzucony, albo doprowadzi do próby renderowania nieistniejącej
-implementacji.
+roli.
 
 To jest kontrakt kompatybilności danych użytkownika: użytkownik może aktualizować Cezara bez
 ręcznego przepisywania własnego layoutu. Repozytorium traktuje pliki JSON jako dane, które można
-czytać i naprawiać ręcznie; layout nie może być wyjątkiem. Jednocześnie brak komponentu rozszerzenia
-nie jest sam w sobie błędem parsera — istniejący resolver ma już core fallback dla replaceable
-componentów.
+czytać i naprawiać ręcznie; layout nie może być wyjątkiem. Schema v1 przechowuje rolę contractu,
+nie konkretną implementację componentu. Dlatego brak implementacji dla nadal obsługiwanego
+contractu pozostaje decyzją resolvera, który ma core fallback; usunięty contract wymaga jawnej
+reguły migracji albo bezpiecznego failure.
 
 ## 📝 Proposed Solution
 
@@ -54,12 +56,13 @@ modułu, aby były testowalne i audytowalne:
 - `removePlacement` usuwa znany, niepotrzebny placement i zapisuje ostrzeżenie;
 - `splitPlacement` zastępuje jeden placement listą nowych placementów o określonych referencjach,
   zachowując miejsce źródła w strefie;
-- `replaceComponent` aktualizuje contract/component reference, w szczególności przejście ze
-  starego wymaganego componentu do jego bieżącego core defaultu;
-- nieznany component opcjonalnego placementu pozostaje referencją w danych i jest rozwiązywany
-  przez istniejący resolver/fallback; nieznany component wymaganego placementu musi mieć jawny
-  replacement albo powoduje typed failure migracji, który load/render boundary może bezpiecznie
-  zmapować na fallback całego layoutu.
+- `replaceContract` aktualizuje `contract` i `contractVersion` placementu, w szczególności
+  przejście ze starego wymaganego contractu do bieżącej roli; wybór konkretnej implementacji
+  pozostaje po stronie resolvera;
+- brak implementacji dla opcjonalnego placementu, którego contract nadal jest obsługiwany,
+  pozostaje referencją i jest rozwiązywany przez istniejący resolver/core fallback; usunięty
+  contract wymaga jawnego replacementu dla placementu wymaganego albo powoduje typed failure
+  migracji, który load/render boundary może bezpiecznie zmapować na fallback całego layoutu.
 
 ### Przykładowe reguły objęte testami
 
@@ -69,14 +72,15 @@ testowego oraz tych samych kształtów, które stosuje produkcyjny registry.
 | Przejście | Zmiana | Oczekiwany wynik |
 |---|---|---|
 | v1 → v2 | `header` renamed to `top` | wszystkie placementy przechodzą do `top` w tej samej kolejności |
-| v1 → v2 | usunięty, opcjonalny `legacy-banner` | placement znika, a wynik zawiera ostrzeżenie; pozostały layout działa |
-| v2 → v3 | `task-header` split na `task-header-summary` i `task-header-actions` | dwa deterministyczne placementy zajmują miejsce źródła, bez duplikacji przy ponownym odczycie |
-| v2 → v3 | wymagany stary component zastąpiony bieżącym core componentem | placement zachowuje stabilne `id`, ale wskazuje aktualny contract/component |
-| v2 → v3 | brak replacementu wymaganego componentu | migrator zwraca `status: 'failed'` z zachowanym wejściem; load boundary wybiera domyślny layout, bez blank page |
+| v1 → v2 | usunięty, opcjonalny `legacy-banner` placement | placement znika, a wynik zawiera ostrzeżenie; pozostały layout działa |
+| v2 → v3 | `task-header` placement split na `task-header-summary` i `task-header-actions` | dwa deterministyczne placementy z jawnymi contract refs zajmują miejsce źródła, bez duplikacji przy ponownym odczycie |
+| v2 → v3 | wymagany stary contract zastąpiony bieżącą rolą | placement zachowuje stabilne `id`, ale wskazuje aktualny `contract` i `contractVersion`; resolver wybiera implementację |
+| v2 → v3 | brak replacementu wymaganego contractu | migrator zwraca `status: 'failed'` z zachowanym wejściem; load boundary wybiera domyślny layout, bez blank page |
 
 Alternatywa polegająca na „zgadywaniu” mapowania po nazwie albo na pomijaniu każdego
-nieznanego componentu została odrzucona. Pierwsza może zmutować layout bez intencji użytkownika,
-a druga może usunąć funkcję wymaganą do działania strony.
+nieznanego contractu została odrzucona. Pierwsza może zmutować layout bez intencji użytkownika,
+a druga może usunąć funkcję wymaganą do działania strony. Konkretne implementation ids nie są
+częścią v1, więc ich wybór nie może zostać dopisany do migratora jako ukryty kontrakt.
 
 ## Resolved assumptions (autonomous defaults)
 
@@ -91,16 +95,16 @@ a druga może usunąć funkcję wymaganą do działania strony.
 
 ### Granice modułów
 
-- `packages/web/src/lib/layout-schema.ts` pozostaje właścicielem typów, walidacji i wersji
-  dokumentu z poprzedniej specyfikacji.
+- `packages/extension-api/src/layout/schema.ts` pozostaje właścicielem v1 typów, walidacji,
+  serializacji i literalnej wersji dokumentu; migrator używa tego node-free/DOM-free kontraktu.
 - `packages/web/src/lib/layout-migrations.ts` będzie właścicielem typów błędów, map reguł,
-  migracji `v1ToV2`/`v2ToV3` i funkcji `migrateLayoutSchema`. Moduł jest pure: bez Reacta, DOM,
-  registry, storage i efektów ubocznych.
+  wersjonowanych validatorów, migracji `v1ToV2`/`v2ToV3` i funkcji `migrateLayoutSchema`. Moduł
+  jest pure: bez Reacta, DOM, registry, storage i efektów ubocznych.
 - loader layoutu (planowany konsument schema) wywołuje migrator przed adapterem strony. Nie wolno
   uruchamiać migracji w `LayoutRegistry`, który jest runtime projection drzewa DOM.
-- `packages/web/src/component-registry/resolve.ts` pozostaje jedynym miejscem rozstrzygania,
-  czy nieznany opcjonalny component może użyć core fallbacku. Migrator zna tylko jawne reguły
-  zmian strukturalnych i required replacementów.
+- `packages/web/src/component-registry/resolve.ts` pozostaje miejscem rozstrzygania, czy brak
+  wybranej implementacji dla znanego contractu może użyć core fallbacku. Migrator zna tylko
+  jawne reguły zmian strukturalnych i required contract replacements; nie kopiuje resolvera.
 - istniejący `ComponentHost` oraz shell zapewniają niepustą powierzchnię po awarii. Load/render
   boundary mapuje failure migratora na domyślny layout i status diagnostyczny, zamiast pozwalać,
   aby błąd migracji trafił jako wyjątek do root Reacta.
@@ -125,15 +129,16 @@ hostowi.
 
 ### Wersje i kontrakty danych
 
-Wersje są wersjami całego dokumentu, nie wersjami contractów componentów.
+Wersje są wersjami całego dokumentu, nie wersjami contractów ani implementacji componentów.
 
 - **v1**: obecny model `page`, `schemaVersion: 1`, `zones: Record<string, LayoutPlacement[]>`,
-  placement `{ id, contract: { id, version }, component: { id } }`.
+  placement `{ id, contract: string, contractVersion: number, layout? }`, zgodny z
+  `@open-mercato/cezar-extension-api`.
 - **v2**: ten sam model stref i referencji; opcjonalne `required: boolean` przy placement może
   zaznaczać, że brak zamiennika nie może zostać przemilczany. Brak pola oznacza `false` po
   normalizacji.
 - **v3**: bieżący model dla tego etapu, z tymi samymi plain-data polami i pełnym zestawem
-  jawnych reguł zmian componentów/stref. Wprowadzenie dodatkowych wymaganych pól jest możliwe
+  jawnych reguł zmian contractów/stref. Wprowadzenie dodatkowych wymaganych pól jest możliwe
   wyłącznie razem z walidatorem v3 i regułą `v2 → v3`; nie wolno rozszerzać formatu przez
   passthrough nieznanych obiektów runtime.
 
@@ -143,7 +148,7 @@ nowa specyfikacja i nowa migracja; `v3` nie powinno stać się luźnym workiem n
 ### Wynik migracji i zachowanie atomowe
 
 `LayoutChange` zawiera tylko bezpieczne metadane: kod (`renamed-zone`, `removed-placement`,
-`split-placement`, `replaced-component`), stabilny identyfikator placementu/strefy oraz ścieżkę
+`split-placement`, `replaced-contract`), stabilny identyfikator placementu/strefy oraz ścieżkę
 w dokumencie. Nie zawiera propsów, promptów, treści taska ani całego raw JSON.
 
 `LayoutMigrationError` rozróżnia co najmniej: `invalid-json`, `invalid-schema`,
@@ -157,6 +162,13 @@ tylko po udanej migracji i po przejęciu wyniku przez loader; migrator sam nicze
 ## 📝 Data Model
 
 ```ts
+type LayoutPlacementV1 = {
+  id: string
+  contract: string
+  contractVersion: number
+  layout?: LayoutPlacementLayout
+}
+
 type LayoutPlacementV2 = LayoutPlacementV1 & { required?: boolean }
 
 type LayoutSchemaV2 = {
@@ -179,25 +191,27 @@ wersji.
 
 ### Reguły szczegółowe
 
-1. **Rename zone** — zwykłe przeniesienie nie zmienia `placement.id`, order ani referencji.
+1. **Rename zone** — zwykłe przeniesienie nie zmienia `placement.id`, order ani contract refs.
    Jeśli źródło nie istnieje, reguła kończy się no-opem tylko wtedy, gdy fixture/version policy
    oznacza ją jako opcjonalną; brak obowiązkowej strefy jest błędem. Jeśli cel już istnieje,
    migrator odrzuca wynik, chyba że reguła ma jawny merge order.
-2. **Remove component** — optional placement może zostać usunięty z ostrzeżeniem. Required
-   placement musi wskazać replacement przez mapę reguły; samo usunięcie jest błędem.
-3. **Split component** — source może zostać zastąpiony wyłącznie przez listę kompletnych,
+2. **Remove placement/contract** — optional placement może zostać usunięty z ostrzeżeniem.
+   Required placement musi wskazać replacement contract przez mapę reguły; samo usunięcie jest
+   błędem.
+3. **Split placement** — source może zostać zastąpiony wyłącznie przez listę kompletnych,
    poprawnych placementów. Nowe ids są częścią reguły, nie są generowane losowo ani z indeksu
    tablicy. Replacementy są wstawiane w miejscu source, a source nie może pozostać drugi raz.
-4. **Changed required component** — zachować id placementu, zmienić contract/component na
-   wskazany bieżący default i ponownie zwalidować required contract. Brak zgodnego replacementu
-   kończy migrację typed failure, nawet gdy reszta layoutu jest poprawna; dopiero load/render
-   boundary wybiera fallback.
+4. **Changed required contract** — zachować id placementu, zmienić `contract` i
+   `contractVersion` na wskazaną bieżącą rolę oraz ponownie zwalidować required placement. Brak
+   zgodnego replacementu kończy migrację typed failure, nawet gdy reszta layoutu jest poprawna;
+   dopiero load/render boundary wybiera fallback.
 5. **Idempotencja** — dokument v3 nie przechodzi ponownie przez v1/v2 rules. Ponowne otwarcie
    zmigrowanego dokumentu zwraca v3 bez zdublowanych splitów, przeniesień i ostrzeżeń.
 
 ## 📝 API Contracts
 
-Nie powstaje nowa trasa HTTP ani publiczny export `extension-api`. Lokalny moduł udostępnia:
+Nie powstaje nowa trasa HTTP ani nowy publiczny export `extension-api`; migrator pozostaje hostowym
+modułem web. Lokalny moduł udostępnia:
 
 ```ts
 type LayoutLoadResult =
@@ -240,15 +254,15 @@ powodu mockupy nie są częścią tej specyfikacji.
   wybiera default. To bezpieczniejsze niż cicha utrata danych.
 - **Kolizja renamed zone.** Migracja zwraca failure; load boundary wybiera fallback i nie łączy
   tablic bez jawnej reguły, aby nie zmienić kolejności użytkownika po cichu.
-- **Usunięty optional component.** Placement jest pomijany z ostrzeżeniem, a pozostałe strefy
-  otwierają się.
-- **Usunięty required component.** Bez mapowania do bieżącego core/default migrator zwraca
-  failure, a load/render boundary wybiera fallback całego layoutu. Nie renderujemy połowy
-  wymaganej strony.
+- **Brak implementacji optional contractu.** Placement pozostaje w danych; jeśli contract nadal
+  jest obsługiwany, resolver wybiera core fallback, a pozostałe strefy otwierają się.
+- **Usunięty required contract.** Bez jawnego mapowania do bieżącej roli migrator zwraca failure,
+  a load/render boundary wybiera fallback całego layoutu. Nie renderujemy połowy wymaganej strony.
 - **Split powtórzony po zapisaniu v3.** Wersja docelowa zatrzymuje łańcuch; nie ma drugiego
   splitu ani duplikatów.
-- **Nieznany optional extension component po udanej migracji.** Migrator zachowuje referencję,
-  a resolver wybiera core fallback zgodnie z istniejącym kontraktem. To nie jest migration failure.
+- **Nieznana optional implementation po udanej migracji.** Migrator zachowuje contract reference,
+  a resolver wybiera core fallback, jeśli host nadal serwuje ten contract. To nie jest migration
+  failure; usunięcie samego contractu wymaga jawnej reguły placementu.
 - **Awaria renderowania fallbacku.** Odpowiada za nią istniejący `ComponentHost`/boundary; plan
   implementacji musi zachować jego niepusty `HostBox` i akcję retry.
 - **Równoległy zapis.** Migrator nie wykonuje zapisów. Jeśli loader później zapisuje v3, musi użyć
@@ -260,8 +274,8 @@ powodu mockupy nie są częścią tej specyfikacji.
   walidacja po każdym kroku, required replacement jako hard failure z zachowanym raw inputem oraz
   fixture z częściowym outputem; fallback pozostaje decyzją load boundary.
 - **Średnie ryzyko rozjazdu z Component Registry.** Migrator nie kopiuje resolvera; production
-  rules odwołują się do katalogu contractów/defaultów przez wąski kontekst, a testy pinują
-  `coreDefaultComponentId`.
+  rules odwołują się do katalogu contractów i ich wersji przez wąski kontekst, a testy pinują
+  replacement contract/version zamiast konkretnego implementation id.
 - **Średnie ryzyko nieskończonego łańcucha.** Migracje są indeksowane pojedynczymi parami wersji,
   mają jeden cel `3` i nie uruchamiają się dla dokumentu v3.
 - **Średnie ryzyko blank page w loaderze.** Acceptance test musi obejmować failure migratora oraz
@@ -304,11 +318,13 @@ krokiem. Ta specyfikacja definiuje wymagania dla tego handoffu, ale nie dodaje t
 
 ### Phase 1: Migration engine
 
-1. Dodać wersjonowane typy v2/v3 i wspólne błędy/zmiany migracji w `packages/web/src/lib`.
-   *Test:* typecheck nie dopuszcza React/DOM/runtime props w modelu.
+1. W `packages/web/src/lib` dodać wersjonowane typy v2/v3 oraz wspólne błędy/zmiany migracji,
+   używając v1 `LayoutSchema` z `packages/extension-api/src/layout/schema.ts`.
+   *Test:* typecheck nie dopuszcza React/DOM/runtime props w migratorze, a v1 pozostaje zgodne z
+   istniejącym parserem extension-api.
 2. Zaimplementować atomowe `v1 → v2` i `v2 → v3` z walidacją wejścia i outputu po każdej
    krawędzi. *Test:* poprawny v1 dociera do v3; nieudany krok nie zwraca częściowego modelu.
-3. Dodać fixture'y: renamed zone, optional removed component, split component, required
+3. Dodać fixture'y: renamed zone, optional removed placement, split placement, required contract
    replacement, missing required replacement, duplicate ids, zone collision i unknown version.
    *Test:* wynik/diagnostyka pinują kolejność, stabilne ids i brak cichej utraty.
 4. Dodać testy idempotencji oraz niemutowania wejścia. *Test:* v3 nie przechodzi przez stare
@@ -324,8 +340,8 @@ krokiem. Ta specyfikacja definiuje wymagania dla tego handoffu, ale nie dodaje t
    nie rzuca do root Reacta i nie zostawia pustej strony.
 7. Przekazać bezpieczny komunikat do istniejącego host/boundary statusu. *Test:* component-level
    render sprawdza alert/host, działający core layout i retry zgodnie z istniejącym wzorcem.
-8. Dodać regression test na nieznany optional component, który nadal przechodzi przez resolver
-   fallback, oraz test na required component bez replacementu, który zwraca failure migratora,
+8. Dodać regression test na brak implementacji optional contractu, który nadal przechodzi przez
+   resolver fallback, oraz test na required contract bez replacementu, który zwraca failure migratora,
    po czym boundary wybiera cały default. *Test:* oba przypadki są rozróżnione, bez heurystycznego
    „best effort”.
 
@@ -341,13 +357,13 @@ krokiem. Ta specyfikacja definiuje wymagania dla tego handoffu, ale nie dodaje t
 
 - [ ] Poprawny zapis v1 można otworzyć po aktualizacji jako valid v3 przez jawny łańcuch `v1 → v2 → v3`.
 - [ ] Migracja renamed zone zachowuje kolejność i stabilne placement ids.
-- [ ] Usunięty optional component nie blokuje pozostałego layoutu i zostawia diagnostykę.
-- [ ] Split component tworzy dokładnie zdefiniowane placementy w miejscu źródła i jest idempotentny.
-- [ ] Zmieniony required component ma jawny replacement; brak replacementu daje failure migratora,
+- [ ] Usunięty optional placement/contract nie blokuje pozostałego layoutu i zostawia diagnostykę.
+- [ ] Split placement tworzy dokładnie zdefiniowane placementy w miejscu źródła i jest idempotentny.
+- [ ] Zmieniony required contract ma jawny replacement; brak replacementu daje failure migratora,
   po którym load boundary wybiera cały default.
 - [ ] Błąd migracji nie mutuje wejścia, nie zapisuje częściowego wyniku i nie rzuca do root Reacta.
 - [ ] Użytkownik widzi działający core/default layout oraz komunikat diagnostyczny, nigdy blank page.
-- [ ] Nieznany optional component korzysta z istniejącego resolver fallbacku, a nie z migracyjnego
-  usuwania danych.
-- [ ] Moduł migracji nie dodaje trasy HTTP, publicznego exportu extension-api ani nowego formatu
+- [ ] Brak implementacji optional contractu korzysta z istniejącego resolver fallbacku, a nie z
+  migracyjnego usuwania danych.
+- [ ] Moduł migracji nie dodaje trasy HTTP, nowego publicznego exportu extension-api ani nowego formatu
   runtime props.
