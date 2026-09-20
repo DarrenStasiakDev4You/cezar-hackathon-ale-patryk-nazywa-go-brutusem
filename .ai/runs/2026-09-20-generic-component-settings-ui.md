@@ -47,14 +47,14 @@ Source doc: `.ai/specs/2026-09-20-generic-component-settings-ui.md`
 
 ### Phase 3: The section
 
-- [ ] 3.1 Build the renderer table
-- [ ] 3.2 Build the Components settings section
-- [ ] 3.3 Show the entry only when something is configurable
-- [ ] 3.4 Wire writes, resets, and failures
+- [x] 3.1 Build the renderer table — c1b68fd1
+- [x] 3.2 Build the Components settings section — c1b68fd1
+- [x] 3.3 Show the entry only when something is configurable — c1b68fd1
+- [x] 3.4 Wire writes, resets, and failures — c1b68fd1
 
 ### Phase 4: The worked example and docs
 
-- [ ] 4.1 Add the test-fixture extension
+- [x] 4.1 Add the test-fixture extension — c1b68fd1
 - [ ] 4.2 Prove the Definition of Done end to end
 - [ ] 4.3 Document the durable contract
 - [ ] 4.4 Run the full validation gate
