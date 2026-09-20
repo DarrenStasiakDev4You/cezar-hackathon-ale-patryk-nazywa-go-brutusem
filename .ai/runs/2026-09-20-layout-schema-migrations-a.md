@@ -29,10 +29,10 @@ Risks:
 
 ### Phase 1: Pure schema and migration engine
 
-- [ ] 1.1 Add the plain-data LayoutSchema v1/v2/v3 types, validators, serializer and typed load errors.
-- [ ] 1.2 Implement atomic `v1 → v2` and `v2 → v3` migration rules with deterministic change diagnostics.
-- [ ] 1.3 Add fixtures/tests for rename, remove, split, required replacement, missing replacement, collision and unknown version.
-- [ ] 1.4 Prove idempotency, input immutability and validation after every migration edge.
+- [x] 1.1 Add the plain-data LayoutSchema v1/v2/v3 types, validators, serializer and typed load errors. — 67b3bdcf
+- [x] 1.2 Implement atomic `v1 → v2` and `v2 → v3` migration rules with deterministic change diagnostics. — 67b3bdcf
+- [x] 1.3 Add fixtures/tests for rename, remove, split, required replacement, missing replacement, collision and unknown version. — 67b3bdcf
+- [x] 1.4 Prove idempotency, input immutability and validation after every migration edge. — 67b3bdcf
 
 ### Phase 2: Load boundary and safe fallback
 
