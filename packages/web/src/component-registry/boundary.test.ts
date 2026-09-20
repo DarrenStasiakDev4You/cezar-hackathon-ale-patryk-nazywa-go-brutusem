@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
-import type { SourceFile } from '@/lib/import-scan'
+import { importSites, type SourceFile } from '@/lib/import-scan'
 
 import { findCoreImplementationImports } from './boundary'
 
@@ -73,5 +73,25 @@ describe('the cockpit', () => {
 
     expect(sources.length).toBeGreaterThan(100)
     expect(findCoreImplementationImports(sources)).toEqual([])
+  })
+
+  it('mounts StoredComponentsProvider at the app root and keeps ComponentsProvider private to its binding', () => {
+    const sources = cockpitSources()
+    const directProviderImports = sources.flatMap((file) =>
+      importSites(file)
+        .filter(({ target, typeOnly }) => !typeOnly && target === 'src/component-registry/provider')
+        .map(() => file.path),
+    )
+    const storedProviderImports = sources.flatMap((file) =>
+      importSites(file)
+        .filter(({ target, typeOnly }) => !typeOnly && target === 'src/component-registry/stored-components-provider')
+        .map(() => file.path),
+    )
+
+    expect(directProviderImports).toEqual([
+      'src/component-registry/component-host.tsx',
+      'src/component-registry/stored-components-provider.tsx',
+    ])
+    expect(storedProviderImports).toContain('src/app.tsx')
   })
 })
