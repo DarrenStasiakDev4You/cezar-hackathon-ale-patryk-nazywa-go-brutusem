@@ -42,5 +42,5 @@ If the separation is described inconsistently, an implementation could make the 
 
 ### Phase 2: Apply reviewer feedback
 
-- [x] 2.1 Separate migration diagnostics/data preservation from loader/render fallback throughout the spec. — bbe4353e
+- [x] 2.1 Separate migration diagnostics/data preservation from loader/render fallback throughout the spec and align it with the shipped extension-api v1 layout shape. — bbe4353e, dd499f84
 - [ ] 2.2 Verify the docs-only diff, update PR metadata/comments and release the PR lock.
