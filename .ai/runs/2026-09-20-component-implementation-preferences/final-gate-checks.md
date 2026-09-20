@@ -1,9 +1,9 @@
 # Final Gate Checks — component implementation preferences
 
-- **Recorded:** 2026-09-20T02:28:23Z
+- **Recorded:** 2026-09-20T03:02:43Z
 - **PR:** #56
 - **Head:** 784ffb1f
-- **Status:** blocked; the PR remains `in-progress`
+- **Status:** superseded; PR #56 is closed as a duplicate of merged PR #58
 
 ## Validation gate
 
@@ -37,3 +37,10 @@ new base in the workspace contract, app bootstrap, preference service, and store
 autofix commit was made; resolving a duplicate implementation requires maintainer direction rather
 than an automatic merge or history rewrite. `BACKWARD_COMPATIBILITY.md` found no protected-surface
 violation in the existing implementation.
+
+## Resume disposition
+
+The current-base comparison confirmed that every implementation and test file in PR #56 is already
+included by merged PR #58; no genuinely unique work remains. The PR was closed rather than rebased or
+merged, so no new implementation validation or review pass was necessary. The earlier gate results
+above remain the authoritative record for the superseded branch.
