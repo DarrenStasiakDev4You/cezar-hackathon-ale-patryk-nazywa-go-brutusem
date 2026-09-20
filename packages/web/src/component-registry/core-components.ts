@@ -1,5 +1,12 @@
-import { TaskHeaderMain, type ComponentImplementation, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import {
+  TaskComposer,
+  TaskHeaderMain,
+  type ComponentImplementation,
+  type TaskComposerProps,
+  type TaskHeaderMainProps,
+} from '@open-mercato/cezar-extension-api'
 
+import { CoreTaskComposer } from '@/routes/task-thread/core-task-composer'
 import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'
 
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
@@ -26,9 +33,18 @@ const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.
   component: CoreTaskHeaderMain,
 })
 
+const coreTaskComposer: ComponentImplementation<TaskComposerProps> = Object.freeze({
+  id: coreDefaultComponentId(TaskComposer.id),
+  title: 'Task composer',
+  description: 'Cezar’s own task reply box',
+  capabilities: Object.freeze(['edits-draft', 'sends', 'shows-availability', 'attaches-files', 'chooses-engine']),
+  component: CoreTaskComposer,
+})
+
 /** Registers core's default of every served contract. */
 export function registerCoreComponents(registry: Pick<CockpitComponentRegistry, 'register'>): void {
   registry.register(TaskHeaderMain, coreTaskHeaderMain)
+  registry.register(TaskComposer, coreTaskComposer)
 }
 
 /**

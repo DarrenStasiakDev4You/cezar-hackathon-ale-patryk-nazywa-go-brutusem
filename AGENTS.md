@@ -193,6 +193,20 @@ network), reuses an already-healthy instance instead of double-booting, and writ
 
 `CEZ_DRY_RUN=1 npm run dev` still exercises the whole cockpit offline for manual verification.
 
+## Task Composer contract
+
+The task-thread reply box is `TaskComposer` (`cezar.task.composer@1`). `useTaskComposerModel` is
+the only reader behind its props: an implementation is controlled by core, so `onSubmit()` takes
+no text and the draft remains core-owned. Core's default is `CoreTaskComposer`, rendered only
+through `ComponentHost`; it must stay prop-only and may not import API/query, command, router,
+draft-store or task-thread state. `onAttachFiles` is the one non-JSON intent argument: it receives
+the DOM-free structural file shape (`name`, `type`, `size`, `arrayBuffer()`). Quick replies belong
+to the controller and must not clear an unsent draft. New implementations declare the contract's
+capabilities and receive JSON view data plus void intents, never React nodes or private hooks. The
+required capabilities are `edits-draft`, `sends` and `shows-availability`; `attaches-files` and
+`chooses-engine` are optional, with core fallbacks beside implementations that omit them. The
+minimal external example lives in `packages/extension-api/examples/plain-task-composer/`.
+
 ## Related documents
 
 - `AGENT_PROTOCOL.md` — the agent protocol: the runner seam, the v1 `AgentEvent` + v2 `UiEvent` streams, per-backend mapping, the golden-fixture testing contract, and the checklist for adding a new runner.

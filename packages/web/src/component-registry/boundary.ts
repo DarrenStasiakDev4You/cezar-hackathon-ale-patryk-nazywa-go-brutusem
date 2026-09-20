@@ -12,7 +12,10 @@
 import { importSites, type SourceFile } from '@/lib/import-scan'
 
 /** Core's implementations of replaceable components, without an extension. */
-export const CORE_IMPLEMENTATIONS: ReadonlySet<string> = new Set(['src/routes/task-thread/core-task-header-main'])
+export const CORE_IMPLEMENTATIONS: ReadonlySet<string> = new Set([
+  'src/routes/task-thread/core-task-header-main',
+  'src/routes/task-thread/core-task-composer',
+])
 
 /** One import of a core implementation. */
 export interface CoreImplementationImport {
