@@ -18,7 +18,7 @@
 | 2 | 2.1 | One list of core's sources, and the host's header constant | inline | done | a51d890f |
 | 2 | 2.2 | `shows-meta` leaves the header contract | inline | done | e297f917 |
 | 2 | 2.3 | The split | inline | done | 5063eda9 |
-| 3 | 3.1 | The second implementation | inline | todo | — |
+| 3 | 3.1 | The second implementation | inline | done | pending |
 | 3 | 3.2 | The proof on the task page | inline | todo | — |
 | 3 | 3.3 | The conformance test | inline | todo | — |
 | 3 | 3.4 | The README and AGENTS.md | inline | todo | — |
