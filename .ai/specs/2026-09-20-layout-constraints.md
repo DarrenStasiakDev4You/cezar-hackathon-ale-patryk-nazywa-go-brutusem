@@ -115,9 +115,26 @@ content validation and `PageRenderer` use the same zone-admission predicate, so 
 render in a zone that drag/drop would reject.
 
 Requiredness remains contextual and is not duplicated in the component contract. An item is
-required when it is the sole usable content of a `ZoneDefinition.required` zone. Removing it is
-rejected with `required-component`; removing another item from a `many` zone is allowed if the
-required zone remains populated. A future per-placement required flag is explicitly out of scope.
+required only because the current page/layout gives its zone a structural requirement: for this
+item, the last usable content of a `ZoneDefinition.required` zone cannot be removed. Removing
+another item from a `many` zone is allowed if the required zone remains populated. A future
+per-placement required flag is explicitly out of scope.
+
+The ownership boundary is deliberate:
+
+```text
+ComponentContract
+  owns: movable, removable, replaceable, allowedZones, category
+
+Page/layout
+  owns: requiredness, minimum occupancy and other structural rules
+```
+
+For example, `task.metadata` may be globally movable and removable in `task.main` and
+`task.sidebar`, while a particular page may require its sidebar to retain one
+metadata-capable item. The component is not inherently required; only its placement in that page
+and zone is. `allowedZones` remains the sole admission rule in this item. `category` is metadata
+for catalogues and diagnostics and must never silently become a second zone-matching rule.
 
 For the existing DOM edit-mode tree, descriptors for contract-backed elements carry their source
 zone and normalized policy. Legacy descriptors without a component contract keep their current
@@ -127,14 +144,17 @@ behavior until their owner supplies a definition. `LayoutRegistry.tryMoveNode` a
 operations validate every constrained descendant before changing any node, so a rejected child
 cannot leave a partially moved subtree.
 
-## Resolved assumptions (autonomous defaults)
+## Resolved decisions (confirmed in PR #69)
 
-| # | Question | Applied default | Why | Confirm? |
+The following autonomous defaults were explicitly confirmed in the PR discussion. Q4 includes the
+additional ownership clarification recorded above.
+
+| # | Question | Confirmed decision | Why | Confirm? |
 |---|---|---|---|---|
 | Q1 | Should policy be a new layout-only model or fields on the existing component definition? | Add the five fields directly to `ComponentContractOptions` and `ComponentContract`. | `defineComponentContract` is already the public source of truth for a component, and a second policy model would drift from the contract catalog. | reversible |
-| Q2 | What are the safe defaults for existing contracts? | `movable: false`, `removable: false`, `replaceable: true`; omitted `allowedZones` means no zone restriction, and omitted `category` means uncategorized. | Movement and deletion are destructive, so they opt in. Existing component-host replacement remains compatible, while the new layout replacement path can opt out explicitly. | reversible |
+| Q2 | What are the safe defaults for existing contracts? | `movable: false`, `removable: false`, `replaceable: true`; omitted `allowedZones` means no zone restriction for otherwise permitted placement, and omitted `category` means uncategorized. A newly movable contract still declares a non-empty allowlist. | Movement and deletion are destructive, so they opt in. Existing component-host replacement remains compatible, while the new layout replacement path can opt out explicitly. | reversible |
 | Q3 | Does `replaceable` control Settings implementation preferences? | No. It controls replacing a layout placement with another contract; existing implementation preferences remain governed by `ComponentRegistry` compatibility and resolver rules. | Combining two different replacement layers would make an implementation preference unexpectedly depend on page placement. | reversible |
-| Q4 | Where does “required component” come from? | Reuse the existing `ZoneDefinition.required` flag; the last usable item in a required zone cannot be removed. | Requiredness depends on the page and zone, not on a contract that may be reused in optional zones. | reversible |
+| Q4 | Where does “required component” come from? | Page/layout owns requiredness, minimum occupancy and structural rules; reuse `ZoneDefinition.required` for this item, so the last usable item in that required zone cannot be removed. | A component contract describes reusable capabilities and policy, while a page decides what its current layout requires. | reversible |
 | Q5 | Must this add persistence or a live Task Page migration? | No. Constraints are code-owned metadata and runtime validation only; the existing `LayoutSchema` remains unchanged and the live consumer migration stays separate. | Avoids copying policy into user data and preserves the zero-config rollback path. | reversible |
 | Q6 | What should the UI do when a user attempts an invalid action? | Do not show an invalid drop target; on a stale or programmatic attempt, reject atomically, keep the old snapshot and announce a concise reason through the existing live region. Required Delete remains visible but disabled with an accessible explanation. | This keeps the editor discoverable while preventing silent layout corruption. | reversible |
 | Q7 | Should `category` itself decide zone admission? | No in this item. `allowedZones` is authoritative for placement; `category` is validated metadata for catalogues, diagnostics and a future category-aware zone API. | Existing zones already have placement categories and accepted contract lists; inventing a second category-matching rule now would make the current registry ambiguous. | reversible |
@@ -152,8 +172,9 @@ flowchart LR
   menu --> domreg2["LayoutRegistry tryRemoveNode"]
 ```
 
-The contract defines what the component permits; the page defines which zones exist and which
-contracts they accept; the runtime registry performs the mutation only after the validator passes.
+The contract defines what the component permits; the page/layout defines which zones exist, which
+contracts they accept and what structural occupancy they require; the runtime registry performs the
+mutation only after the validator passes.
 No layer discovers policy by scanning DOM attributes, and no renderer or menu reimplements a
 subset of the rules.
 
@@ -421,7 +442,8 @@ each phase: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build
 9. Add explicit policy to the first core component consumer (`task.metadata` where its contract
    lands), and keep the existing Task Page catalog's zones as the source of allowed zone ids.
    *Test:* a contract fixture with `allowedZones: ['task.main', 'task.sidebar']` passes both zones
-   and fails `task.header`; required-zone removal is rejected.
+   and fails `task.header`; a page-owned required-zone rule rejects removal of its last usable
+   item without making the contract itself required.
 10. Update `AGENTS.md` and the relevant layout/component specs with the single-validator rule and
     the distinction between contract policy, page zones, implementation preferences and serialized
     layout data. Run the full gate and record browser verification limits; do not claim QA approval
@@ -438,7 +460,8 @@ each phase: `npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build
 - [ ] A non-movable component cannot be reordered or moved through pointer, keyboard or direct
       registry calls.
 - [ ] A non-removable component cannot be deleted.
-- [ ] The last usable component in a required zone cannot be removed.
+- [ ] Page/layout-owned requiredness prevents removal of the last usable component in a required
+      zone without adding requiredness to the reusable component contract.
 - [ ] A non-replaceable component cannot be replaced by another layout contract; existing
       implementation preference behavior remains unchanged.
 - [ ] Group operations validate every constrained descendant atomically.
