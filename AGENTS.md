@@ -2,6 +2,14 @@
 
 cezar is a **parallel coding-agents orchestrator**: a local cockpit (CLI + browser GUI) for running and tracking AI coding-agent tasks in a repo. You type a task, pick a workflow and a backend — Claude Code, Codex or OpenCode (experimental), or a mix per step — and watch it work live: steps, tool calls, tokens, diffs. Each task runs in its own git worktree, ends at a review gate (never auto-merges), and can be pushed as a draft PR through `gh`. Everything is local: no accounts, no database, no cloud — state is plain JSON, NDJSON and Markdown under `.ai/cezar/`. The server stack stays deliberately small: strict TypeScript (ESM, Node 20+), Hono + SSE, Zod at every boundary, and YAML workflows. The cockpit is React 19 + Vite + Tailwind v4 + shadcn/ui, compiled to static assets (the legacy vanilla UI was retired in R7). Every module is meant to be read in one sitting.
 
+### Declarative page layouts
+
+The cockpit's page-and-zone catalog lives in `packages/web/src/page-layout/`: `PageLayoutRegistry`
+stores immutable page definitions, `TaskPage` is the first core catalog entry, and `PageRenderer`
+delegates accepted content to the existing `ComponentHost`. This registry is separate from the
+DOM edit-mode `LayoutRegistry` in `packages/web/src/components/layout-registry.tsx`; the latter
+continues to own draggable layout elements and edit-mode state.
+
 ## Zero config
 
 cezar ships no config file the user must create and no setting they must set before it works. Every capability is discovered from what is already there — the repo, the environment, `gh`, the running processes — or it degrades quietly to a smaller cezar. `.ai/cezar/config.json` is optional and every key has a working default; `.env` is never auto-loaded.
