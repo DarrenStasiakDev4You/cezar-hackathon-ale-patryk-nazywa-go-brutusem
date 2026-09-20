@@ -120,7 +120,7 @@ export function ComponentsProvider(props: {
     (contractId: ContributionId) => {
       if (unresolved.has(contractId)) return
       unresolved.add(contractId)
-       console.error(`[cezar:extensions] ${contractId} has no default implementation: nothing renders in its host`)
+      console.error(`[cezar:extensions] ${contractId} has no default implementation: nothing renders in its host`)
     },
     [unresolved],
   )

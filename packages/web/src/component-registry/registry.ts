@@ -322,7 +322,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
           )
           assertFree(input.componentId)
           // Provenance comes from the scope, never from anything the implementation claims.
-            const registration = registrationOf(input, extensionId, fitOf(input), false)
+          const registration = registrationOf(input, extensionId, fitOf(input), false)
           // On an ended activation `track` disposes the registration and throws `disposed`.
           const handle = scope.track(add(registration))
           if (!registration.compatible) report(registration)
