@@ -17,6 +17,8 @@ describe('plain Task Composer example', () => {
       compatible: true,
       issues: [],
       capabilities: ['edits-draft', 'sends', 'shows-availability'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
   })
 })

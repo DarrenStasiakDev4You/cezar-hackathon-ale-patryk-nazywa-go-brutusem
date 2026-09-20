@@ -61,7 +61,7 @@ function CompactTaskHeader(props: Props) {
 
 export default defineExtension({
   // `>=0.11.2`: the first release after 0.11.1 can ship `cezar.task.header.main@1`.
-  manifest: { id: 'example.compact-header', name: 'Compact task header', version: '1.0.0', engines: { cezar: '>=0.11.2' } },
+  manifest: { id: 'example.compact-header', name: 'Compact task header', version: '1.0.0', engines: { cezar: '>=0.11.2' }, permissions: ['ui.components'] },
   activate(context) {
     context.components.provide(TaskHeaderMain, {
       id: 'example.compact-header.row',
