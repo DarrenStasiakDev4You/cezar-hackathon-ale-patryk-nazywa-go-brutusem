@@ -6,6 +6,7 @@ import {
   parseLayoutJson,
   parseLayoutSchema,
   serializeLayoutSchema,
+  type IsJson,
   type LayoutSchema,
 } from '@open-mercato/cezar-extension-api'
 
@@ -28,6 +29,10 @@ const VALID: LayoutSchema = {
 }
 
 describe('LayoutSchema', () => {
+  it('is a JSON-only public model', () => {
+    expectTypeOf<IsJson<LayoutSchema>>().toEqualTypeOf<true>()
+  })
+
   it('exports a v1 model and preserves zone and placement order through JSON', () => {
     expect(LAYOUT_SCHEMA_VERSION).toBe(1)
     const encoded = serializeLayoutSchema(VALID)
@@ -40,6 +45,7 @@ describe('LayoutSchema', () => {
   it.each([
     ['root', null, 'must be an object'],
     ['page', { ...VALID, page: '  ' }, 'page must be a non-empty string'],
+    ['missing version', { ...VALID, schemaVersion: undefined }, 'schemaVersion must be the supported layout schema version 1'],
     ['version', { ...VALID, schemaVersion: 2 }, 'schemaVersion unsupported layout schema version 2'],
     ['zones', { ...VALID, zones: [] }, 'zones must be an object of named placement arrays'],
     ['zone name', { ...VALID, zones: { '  ': [] } }, 'zones.   must be a non-empty string'],

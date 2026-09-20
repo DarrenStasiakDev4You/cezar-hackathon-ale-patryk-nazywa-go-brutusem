@@ -127,7 +127,13 @@ function parseSchema(value: unknown): LayoutSchema {
   const pageValue = value.page
   const page = nonEmptyString(pageValue, 'page', issues) ? pageValue : ''
   if (value.schemaVersion !== LAYOUT_SCHEMA_VERSION) {
-    issues.push({ path: 'schemaVersion', message: `unsupported layout schema version ${display(value.schemaVersion)}` })
+    issues.push({
+      path: 'schemaVersion',
+      message:
+        value.schemaVersion === undefined
+          ? 'must be the supported layout schema version 1'
+          : `unsupported layout schema version ${display(value.schemaVersion)}`,
+    })
   }
   if (!isRecord(value.zones)) {
     issues.push({ path: 'zones', message: 'must be an object of named placement arrays' })
@@ -162,7 +168,7 @@ function parseSchema(value: unknown): LayoutSchema {
   }
 
   if (issues.length > 0) {
-    const code: LayoutSchemaErrorCode = value.schemaVersion === LAYOUT_SCHEMA_VERSION ? 'invalid-schema' : 'unsupported-version'
+    const code: LayoutSchemaErrorCode = value.schemaVersion === undefined || value.schemaVersion === LAYOUT_SCHEMA_VERSION ? 'invalid-schema' : 'unsupported-version'
     throw new LayoutSchemaError(code, issues.map(({ path, message }) => (path ? `${path} ${message}` : message)).join('; '), issues)
   }
 
