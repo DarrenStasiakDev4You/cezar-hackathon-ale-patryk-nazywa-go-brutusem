@@ -16,10 +16,10 @@ Source doc: .ai/specs/2026-09-20-local-extension-loader.md
 
 ### Phase 1: Pure local discovery and grants
 
-- [ ] 1.1 Add extension directory and grant-file path helpers with CEZ_HOME coverage.
-- [ ] 1.2 Add the Cezar-owned grant store with atomic writes, permission coverage, salvage, and degradation tests.
-- [ ] 1.3 Add the local scanner with fail-closed manifest, compatibility, duplicate, path, and permission classification tests.
-- [ ] 1.4 Add valid and broken package fixtures proving scan-time code is never imported.
+- [x] 1.1 Add extension directory and grant-file path helpers with CEZ_HOME coverage. — 0f91d38d
+- [x] 1.2 Add the Cezar-owned grant store with atomic writes, permission coverage, salvage, and degradation tests. — 0f91d38d
+- [x] 1.3 Add the local scanner with fail-closed manifest, compatibility, duplicate, path, and permission classification tests. — 0f91d38d
+- [x] 1.4 Add valid and broken package fixtures proving scan-time code is never imported. — 0f91d38d
 
 ### Phase 2: Server inventory and asset boundary
 
