@@ -3,7 +3,7 @@
 **Run:** `2026-09-20-task-metadata-contract`
 **Branch:** `feat/task-metadata-contract`
 **PR:** #55
-**Recorded:** 2026-09-20T02:09:22Z
+**Recorded:** 2026-09-20T03:03:30Z
 **Result:** BLOCKED; PR remains `Status: in-progress` and draft.
 
 ## Configured Gate
@@ -13,10 +13,11 @@ wrapper is absent from the base revision and from this implementation worktree, 
 the exact Docker wrapper gate could not run. Native equivalents were run in the
 configured order; this limitation is not treated as a pass.
 
-The exact configured command sequence was retried on this resume at the unchanged
-PR head. All five commands exited `2` before invoking their inner command because
-the wrapper path does not exist. No implementation files changed, so the prior
-native results and integration evidence remain the applicable changed-head evidence.
+The exact configured command sequence was retried on this resume at PR head
+`be85ed1b`. All five commands exited `2` before invoking their inner command
+because the wrapper path does not exist. No implementation files changed, so the
+prior native results and integration evidence remain the applicable changed-head
+evidence.
 
 | Command | Result | Evidence |
 |---|---|---|
