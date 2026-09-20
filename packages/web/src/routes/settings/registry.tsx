@@ -13,6 +13,7 @@ import {
   NotebookPenIcon,
   PaletteIcon,
   PanelsTopLeftIcon,
+  PuzzleIcon,
 } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
@@ -31,6 +32,7 @@ import { PromptTemplatesSection } from './prompt-templates-section'
 import { ResourcesSection } from './resources-section'
 import { SkillsSection } from './skills-section'
 import { WorktreesSection } from './worktrees-section'
+import { ExtensionsSection } from './extensions-section'
 
 /**
  * The Settings section registry (R6 Step 1.3, spec §"Settings"): the ONE place a section is
@@ -62,6 +64,7 @@ export type SettingsSectionId =
   | 'keyboard'
   | 'skills'
   | 'components'
+  | 'extensions'
 
 /** Which settings area a section belongs to — and therefore which store it writes. */
 export type SettingsScope = 'project' | 'global'
@@ -191,6 +194,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Second logins, and the agent and models a project uses when it has chosen none.',
     icon: IdCardIcon,
     component: AccountsSection,
+    scope: 'global',
+  },
+  {
+    id: 'extensions',
+    title: 'Extensions',
+    description: 'Local frontend packages and their permissions.',
+    icon: PuzzleIcon,
+    component: ExtensionsSection,
     scope: 'global',
   },
   {
