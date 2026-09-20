@@ -1,8 +1,8 @@
 # Resume Handoff
 
 - Status: in-progress
-- Current phase: Phase 4, worked example and docs
-- Last commit: `06526dc6` (`chore(runs): mark component settings UI complete`), completing Phase 3 and adding the fixture
-- Next Step: `4.2` — prove the Definition of Done end to end
+- Current phase: Phase 4, final validation
+- Last commit: `1a35315c` (`fix(extensions): restore example permissions and compatibility assertions`), completing `4.4-fix2`
+- Next Step: `4.4` — rerun the full validation gate after the repository-wide test blockers are resolved
 - Worktree: `/tmp/opencode/generic-component-settings-ui`
-- Notes: the legacy flat plan is being migrated into this run folder. Existing uncommitted fixture bundle-guard test and documentation changes belong to Steps 4.2 and 4.3 respectively.
+- Notes: feature-scoped typecheck, tests, build, and package checks pass. The repository-wide Vitest suite and browser E2E suite still time out or fail in unrelated server/process-discovery scenarios; see `checkpoint-1-checks.md`.

@@ -16,3 +16,8 @@
 - The first full test pass found stale exact compatibility expectations and two example extensions missing the `ui.components` permission required by the host.
 - Updated both examples and their affected assertions; targeted extension and task-header tests now pass.
 - Full validation remains pending.
+
+## 2026-09-20T06:25:00Z — checkpoint 1
+- `4.4-fix2` is pushed as `1a35315c`; feature-scoped validation, build, package tests, and the focused component-settings suite pass.
+- The full Vitest and browser E2E gates remain blocked by unrelated server/process-discovery and broad application-flow failures; details are in `checkpoint-1-checks.md`.
+- Next Step: `4.4`, rerun the full gate after those blockers are addressed.
