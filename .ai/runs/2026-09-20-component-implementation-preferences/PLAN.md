@@ -1,5 +1,19 @@
 # Component Implementation Preferences
 
+## Tasks
+
+> Authoritative status table. `Status` is one of `todo` or `done`. On landing a Step, flip `Status` to `done` and fill the `Commit` column with the short SHA. The first row whose `Status` is not `done` is the resume point for `om-auto-continue-pr-loop`. Step ids and `Exec` cells are immutable once the plan is committed.
+>
+> Migrated on 2026-09-20 by `om-auto-continue-pr-loop` from the legacy flat plan's `## Progress` checklist. The legacy checklist disagreed with the implementation-plan checkbox for 2.4; the Progress entry and commit history were treated as authoritative, and 2.4 is recorded as done at `dbb5d2dd`.
+
+| Phase | Step | Title | Exec | Status | Commit |
+|-------|------|-------|------|--------|--------|
+| 1 | 1.1 | Add the bounded `components.implementations` workspace contract and server round-trip, merge-preservation, unknown-sibling, and rejection tests. | inline | done | 82d84a03 |
+| 2 | 2.1 | Implement the pure `componentPreferences` service and its hydration, validation, persistence, rollback, serialization, and subscription tests. | inline | done | 5700731f |
+| 2 | 2.2 | Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving refresh persistence, fallback, reset, cache sharing, and failed-write behavior. | inline | done | 9a666928 |
+| 2 | 2.3 | Create the service in `main.tsx`, mount it through `App`, and add the production boundary regression test for the provider wiring. | inline | done | f095251f |
+| 2 | 2.4 | Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract. | inline | done | dbb5d2dd
+
 Source doc: `.ai/specs/2026-09-19-component-implementation-preferences.md`
 
 ## Goal
@@ -37,30 +51,15 @@ a settings screen or changing the zero-config default.
 
 ### Phase 1: The Stored Key
 
-- [ ] 1.1 Add the bounded `components.implementations` workspace contract and server round-trip,
+- [x] 1.1 Add the bounded `components.implementations` workspace contract and server round-trip,
   merge-preservation, unknown-sibling, and rejection tests.
 
 ### Phase 2: Service And Cockpit Wiring
 
-- [ ] 2.1 Implement the pure `componentPreferences` service and its hydration, validation,
+- [x] 2.1 Implement the pure `componentPreferences` service and its hydration, validation,
   persistence, rollback, serialization, and subscription tests.
-- [ ] 2.2 Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving
+- [x] 2.2 Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving
   refresh persistence, fallback, reset, cache sharing, and failed-write behavior.
-- [ ] 2.3 Create the service in `main.tsx`, mount it through `App`, and add the production boundary
+- [x] 2.3 Create the service in `main.tsx`, mount it through `App`, and add the production boundary
   regression test for the provider wiring.
-- [x] 2.4 Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract. — dbb5d2dd
-
-## Progress
-
-> Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
-
-### Phase 1: The Stored Key
-
-- [x] 1.1 Add the bounded `components.implementations` workspace contract and server round-trip, merge-preservation, unknown-sibling, and rejection tests. — 82d84a03
-
-### Phase 2: Service And Cockpit Wiring
-
-- [x] 2.1 Implement the pure `componentPreferences` service and its hydration, validation, persistence, rollback, serialization, and subscription tests. — 5700731f
-- [x] 2.2 Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving refresh persistence, fallback, reset, cache sharing, and failed-write behavior. — 9a666928
-- [x] 2.3 Create the service in `main.tsx`, mount it through `App`, and add the production boundary regression test for the provider wiring. — f095251f
 - [x] 2.4 Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract. — dbb5d2dd
