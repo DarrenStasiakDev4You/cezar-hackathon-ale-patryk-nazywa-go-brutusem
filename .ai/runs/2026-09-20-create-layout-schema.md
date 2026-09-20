@@ -31,17 +31,17 @@ Source doc: `.ai/specs/2026-09-19-create-layout-schema.md`
 
 ### Phase 1: Pure schema
 
-- [ ] 1.1 Add the node-free layout types, v1 constant, typed parser errors, and public re-exports.
-- [ ] 1.2 Implement strict v1 validation for required fields, typed layout hints, duplicate ids,
+- [x] 1.1 Add the node-free layout types, v1 constant, typed parser errors, and public re-exports. — 1af9c144
+- [x] 1.2 Implement strict v1 validation for required fields, typed layout hints, duplicate ids,
   unsupported fields, unsupported versions, and error paths.
-- [ ] 1.3 Implement deterministic JSON serialization and valid-model round trips.
+- [x] 1.3 Implement deterministic JSON serialization and valid-model round trips. — 1af9c144
 
 ### Phase 2: Default Task Page data
 
-- [ ] 2.1 Add the immutable default Task Page layout for header, composer, and empty sidebar.
-- [ ] 2.2 Add boundary tests proving the default is JSON-safe, contract-backed, and free of runtime
-  implementation/settings data.
-- [ ] 2.3 Document the intent/runtime-registry boundary and verify the full repository gate.
+- [x] 2.1 Add the immutable default Task Page layout for header, composer, and empty sidebar. — 1af9c144
+- [x] 2.2 Add boundary tests proving the default is JSON-safe, contract-backed, and free of runtime
+  implementation/settings data. — 1af9c144
+- [x] 2.3 Document the intent/runtime-registry boundary and verify the full repository gate. — 1af9c144
 
 ## Progress
 
@@ -49,12 +49,12 @@ Source doc: `.ai/specs/2026-09-19-create-layout-schema.md`
 
 ### Phase 1: Pure schema
 
-- [ ] 1.1 Add the node-free layout types, v1 constant, typed parser errors, and public re-exports.
-- [ ] 1.2 Implement strict v1 validation for required fields, typed layout hints, duplicate ids, unsupported fields, unsupported versions, and error paths.
-- [ ] 1.3 Implement deterministic JSON serialization and valid-model round trips.
+- [x] 1.1 Add the node-free layout types, v1 constant, typed parser errors, and public re-exports. — 1af9c144
+- [x] 1.2 Implement strict v1 validation for required fields, typed layout hints, duplicate ids, unsupported fields, unsupported versions, and error paths. — 1af9c144
+- [x] 1.3 Implement deterministic JSON serialization and valid-model round trips. — 1af9c144
 
 ### Phase 2: Default Task Page data
 
-- [ ] 2.1 Add the immutable default Task Page layout for header, composer, and empty sidebar.
-- [ ] 2.2 Add boundary tests proving the default is JSON-safe, contract-backed, and free of runtime implementation/settings data.
-- [ ] 2.3 Document the intent/runtime-registry boundary and verify the full repository gate.
+- [x] 2.1 Add the immutable default Task Page layout for header, composer, and empty sidebar. — 1af9c144
+- [x] 2.2 Add boundary tests proving the default is JSON-safe, contract-backed, and free of runtime implementation/settings data. — 1af9c144
+- [x] 2.3 Document the intent/runtime-registry boundary and verify the full repository gate. — 1af9c144
