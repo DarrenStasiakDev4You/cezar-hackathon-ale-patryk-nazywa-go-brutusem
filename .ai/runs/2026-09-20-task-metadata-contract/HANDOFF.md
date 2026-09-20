@@ -1,14 +1,14 @@
 # Handoff — 2026-09-20-task-metadata-contract
 
-**Last updated:** 2026-09-20T03:03:30Z
+**Last updated:** 2026-09-20T03:57:08Z
 **Branch:** `feat/task-metadata-contract`
 **PR:** draft #55 — https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/55
-**Current phase/step:** Complete; final gate blocked by the missing configured Docker wrapper
-**Last commit:** final-gate retry and handoff documentation are pending this resume commit
+**Current phase/step:** Final gate; blocked by the missing configured Docker wrapper
+**Last commit:** `1ef676b4` — previous blocked handoff; this resume's final-gate record is pending
 
 ## Resume outcome
 - All nine implementation Tasks remain `done`; no implementation or review-fix Step is pending.
-- The exact five configured commands were retried at PR head `be85ed1b`; each exited `2` because `.ai/scripts/in-docker.sh` is absent from this worktree.
+- The exact five configured commands were retried at PR head `1ef676b4`; each exited `2` because `.ai/scripts/in-docker.sh` is absent from this worktree.
 - Prior native evidence remains: typecheck, unit tests, build/check:pack, and package tests passed; native `npm test` had unrelated/environment-sensitive failures.
 - The authoritative re-review found no new code changes since the prior review. Its blocker remains the unavailable/red validation gate; no change-specific correctness, security, compatibility, or coverage finding was added.
 
@@ -28,4 +28,4 @@
 ## Final Gate Record
 - Artifact: `.ai/runs/2026-09-20-task-metadata-contract/final-gate-checks.md`
 - First remaining work item: none; all implementation Tasks are `done`.
-- Resume blocker: keep `Status: in-progress`, keep the PR draft, preserve `needs-qa`, and resume after the configured gate is restored or a new reviewable commit lands.
+- Resume blocker: keep `Status: in-progress`, keep the PR draft, preserve `needs-qa`, and resume after the configured gate is restored or a new reviewable commit lands. No implementation Task remains todo; the final gate is the remaining work item.

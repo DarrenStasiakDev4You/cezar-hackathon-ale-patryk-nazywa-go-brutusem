@@ -35,6 +35,14 @@ automation suites. The earlier recorded baseline identified seven server timeout
 failures; these fresh reruns were noisier under concurrent worktree load (8 and 12
 failures respectively). The gate remains red and no unrelated tests were changed.
 
+## Current Resume Attempt
+
+At `2026-09-20T03:57:08Z`, the exact configured command sequence was retried at
+PR head `1ef676b4`. Each command exited `2` before its inner command because
+`.ai/scripts/in-docker.sh` is still absent. This resume added no implementation
+changes, so the previously recorded native and integration evidence remains valid;
+the configured gate is still blocked.
+
 ## Integration And UI
 
 `npm run test:e2e` was run through the repository's `om-integration-tests` path with
