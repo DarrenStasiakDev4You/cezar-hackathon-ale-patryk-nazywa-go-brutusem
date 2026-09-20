@@ -56,7 +56,7 @@ a settings screen or changing the zero-config default.
 
 ### Phase 1: The Stored Key
 
-- [ ] 1.1 Add the bounded `components.implementations` workspace contract and server round-trip, merge-preservation, unknown-sibling, and rejection tests.
+- [x] 1.1 Add the bounded `components.implementations` workspace contract and server round-trip, merge-preservation, unknown-sibling, and rejection tests. — 82d84a03
 
 ### Phase 2: Service And Cockpit Wiring
 
