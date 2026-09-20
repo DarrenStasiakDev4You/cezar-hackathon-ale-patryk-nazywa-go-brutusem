@@ -41,11 +41,11 @@ Source doc: .ai/specs/2026-09-20-layout-constraints.md
 
 ### Phase 3: Edit-mode mutation guard
 
-- [ ] 3.1 Preserve normalized contract policy and zone identity on contract-backed layout descriptors while keeping legacy descriptors compatible.
-- [ ] 3.2 Implement atomic `tryMoveNode` and `tryRemoveNode` operations with compatibility wrappers and subtree validation.
-- [ ] 3.3 Route sortable surfaces and context-menu deletion through the result seam, including accessible rejection states and interaction tests.
+- [x] 3.1 Preserve normalized contract policy and zone identity on contract-backed layout descriptors while keeping legacy descriptors compatible. — 8f1b33c5
+- [x] 3.2 Implement atomic `tryMoveNode` and `tryRemoveNode` operations with compatibility wrappers and subtree validation. — 8f1b33c5
+- [x] 3.3 Route sortable surfaces and context-menu deletion through the result seam, including accessible rejection states and interaction tests. — 8f1b33c5
 
 ### Phase 4: Core declarations and handoff
 
-- [ ] 4.1 Add explicit policy to the first core component consumer and test allowed zones, replacement, and required-zone deletion.
+- [x] 4.1 Add explicit policy to the first core component consumer and test allowed zones, replacement, and required-zone deletion. — 148aac7b
 - [ ] 4.2 Update project guidance/spec references, run the full validation gate, and document browser verification limits.
