@@ -304,10 +304,14 @@ implementation of a core contract. Providing never selects: the user picks an im
 contract, core's default always stays available, and a replacement that throws while rendering
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
 goes through the same check. A settings definition is declared with `defineSettings({ scope, schema })`
-and the first supported field is `booleanSetting({ default })`. The host stores sparse overrides under
-the exact implementation id in global or active-project UI state, fills defaults before rendering,
-and exposes them only through the implementation-only `useComponentSettings()` reader. The returned
-registration handle can read or observe its own settings, but has no setter or cross-implementation access.
+and supports generated `booleanSetting`, `stringSetting`, `numberSetting` and `selectSetting` fields.
+Each field may provide a `label` and `description`; string and number fields carry their own bounds,
+and select fields declare their allowed options. The host stores sparse scalar overrides under the
+exact implementation id in global or active-project UI state, fills defaults before rendering, and
+exposes them only through the implementation-only `useComponentSettings()` reader. The Settings →
+Components page generates these controls for configurable implementations, autosaving booleans and
+selects immediately and text/numbers on blur or after 400 ms of inactivity. The returned registration
+handle can read or observe its own settings, but has no setter or cross-implementation access.
 
 **Status.** The cockpit serves one core contract, the task header's main part (below). It keeps
 every implementation per contract with the id of the extension that provided it, and renders a

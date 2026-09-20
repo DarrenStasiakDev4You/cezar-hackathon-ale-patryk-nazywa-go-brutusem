@@ -47,5 +47,5 @@ Source doc: `.ai/specs/2026-09-20-generic-component-settings-ui.md`
 | 3 | 3.4 | Wire writes, resets, and failures | inline | done | c1b68fd1 |
 | 4 | 4.1 | Add the test-fixture extension | inline | done | c1b68fd1 |
 | 4 | 4.2 | Prove the Definition of Done end to end | inline | done | e8a58908 |
-| 4 | 4.3 | Document the durable contract | inline | todo | - |
+| 4 | 4.3 | Document the durable contract | inline | done | 2d087919 |
 | 4 | 4.4 | Run the full validation gate | inline | todo | - |
