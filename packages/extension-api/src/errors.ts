@@ -27,6 +27,8 @@ import type { ManifestIssue } from './manifest.ts'
  *   `cause`. A handler's own coded error is wrapped too, so the code always describes the call
  *   the caller made.
  * - `command-timeout` — an extension-provided handler exceeded the host's time limit.
+ * - `permission-denied` — a protected context method was called without its permission. The
+ *   error carries `permission` and `api` fields naming the missing permission and method.
  *
  * The union grows additively.
  */
@@ -42,6 +44,7 @@ export type ExtensionErrorCode =
   | 'invalid-input'
   | 'command-failed'
   | 'command-timeout'
+  | 'permission-denied'
 
 const ERROR_CODES: ReadonlySet<string> = new Set<ExtensionErrorCode>([
   'invalid-manifest',
@@ -55,6 +58,7 @@ const ERROR_CODES: ReadonlySet<string> = new Set<ExtensionErrorCode>([
   'invalid-input',
   'command-failed',
   'command-timeout',
+  'permission-denied',
 ])
 
 /**

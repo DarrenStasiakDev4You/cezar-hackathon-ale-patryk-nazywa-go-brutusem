@@ -6,6 +6,7 @@ import type {
   ExtensionContext,
   ExtensionManifest,
   JsonValue,
+  Notifications,
 } from '@open-mercato/cezar-extension-api'
 
 // A RECORDING ExtensionContext for tests — test-only, never exported by the package.
@@ -58,6 +59,7 @@ export function createFakeContext(manifest: ExtensionManifest): FakeContext {
 
   const context: ExtensionContext = {
     extension: manifest,
+    permissions: Object.freeze([...(manifest.permissions ?? [])]),
     subscriptions: [],
     commands: {
       register(command, handler, options) {
@@ -112,6 +114,11 @@ export function createFakeContext(manifest: ExtensionManifest): FakeContext {
         return noop
       },
     },
+    notifications: {
+      info(_message: string) {},
+      warning(_message: string) {},
+      error(_message: string) {},
+    } satisfies Notifications,
   }
 
   return { context, commands, emitted, listeners, storage, components }

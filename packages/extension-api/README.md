@@ -3,8 +3,9 @@
 > **Experimental and private.** The cockpit's extension registry
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
 > extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands`
-> (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`) and
-> `components` (spec `2026-09-19-component-registry`) are honoured; storage arrives in a later
+> (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`),
+> `components` (spec `2026-09-19-component-registry`) and notifications are honoured; storage
+> remains a placeholder behind its permission until its host item lands;
 > item, and every host item may still revise these types in the PR that implements them.
 > `context.components` records implementations, while rendering and selection arrive with the slot
 > and picker items. Component contracts are checkable anywhere — `checkComponentCompatibility`
@@ -52,6 +53,22 @@ The worked example is `examples/hello-extension/index.ts` — it imports only th
   compile-time checking; the host matches tokens **by `id` (and `version`)**, never by object
   identity, because every bundle carries its own copy of the package.
 
+```ts
+const extension = defineExtension({
+  manifest: {
+    id: 'acme.hello',
+    name: 'Hello',
+    version: '1.0.0',
+    engines: { cezar: '^0.11.0' },
+    permissions: ['storage', 'events'],
+  },
+  activate(context) {
+    // The host supplies the matching grant before this runs.
+    context.events.emit(defineEvent('acme.hello.started'))
+  },
+})
+```
+
 ### Ids
 
 | Kind | Grammar | Example |
@@ -91,6 +108,47 @@ How the host runs it:
   reference to an old context.
 - **Page unload does not call `deactivate`.** Closing or reloading the page discards everything
   without deactivating it, so never rely on `deactivate` to save data: write it as you go.
+
+### Permissions
+
+The manifest's `permissions` list is a **request**, not an approval. The installer will pass the
+approved list to `register(extension, { grantedPermissions })`; compiled-in extensions receive a
+host-policy grant. An omitted list or grant is empty. `context.permissions` is the frozen effective
+set for this activation, and there are no run-time permission prompts.
+
+The host checks compatibility before calling `activate`. Every requested name must be supported by
+this Cezar and present in the grant. An unknown or planned name fails closed with
+`unsupported-permission`; a missing approval fails with `permission-not-granted`. No extension
+code runs in either case. A grant that contains names the manifest did not request is ignored.
+
+| Permission | Allows | Status |
+| --- | --- | --- |
+| `ui.components` | Providing component implementations and UI contributions | supported |
+| `commands.execute` | Public Cezar commands and other extensions' commands | supported |
+| `storage` | This extension's namespaced storage (and future secrets) | supported |
+| `events` | Listening to public events and emitting this extension's events | supported |
+| `notifications` | Transient plain-text messages in Cezar's notification UI | supported |
+| `network` | Declares intent only; it currently protects nothing | reserved / not enforceable |
+| `filesystem`, `shell`, `backend.routes`, `commands.intercept` | Future privileged APIs | planned |
+
+`context.extension`, `context.subscriptions`, `context.permissions`, `commands.register` and an
+extension's own `${extension.id}.` commands are always available. A different command requires
+`commands.execute`; without it, `commands.has` is `false` and `execute` rejects. All other denied
+services remain present and fail with `permission-denied`. The error has `permission` and `api`
+fields and is checked portably with `isExtensionError(error, 'permission-denied')`. Liveness wins:
+after deactivation a call reports `disposed` instead.
+
+This is an API guarantee, not a sandbox. Extension code still runs in the cockpit's origin and can
+use capabilities outside this context, including direct browser APIs. `network` is deliberately
+reserved and must never be presented as a security boundary.
+
+### Notifications
+
+`context.notifications.info`, `.warning` and `.error` show a transient plain-text message prefixed
+with the extension's display name. Messages must be non-empty strings of at most 500 characters.
+The cockpit allows five messages per extension in a sliding ten-second window; additional messages
+are dropped and reported by the host without throwing. Notifications are page-local, not stored,
+and have no markup or actions.
 
 ### Commands
 
@@ -400,6 +458,6 @@ notice; at publication each core contract is listed with its major in `BACKWARD_
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
 and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
 malformed command, event or component contract token, or a malformed component implementation id); `namespace-violation`, `duplicate-registration`, `command-not-found`,
-`contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
-`command-timeout` come from the host. The union grows additively: a copy of this package older than
+`contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed`,
+`command-timeout` and `permission-denied` come from the host. The union grows additively: a copy of this package older than
 the host does not recognise the newer codes.

@@ -106,4 +106,14 @@ describe('Toaster', () => {
     act(() => vi.advanceTimersByTime(200))
     expect(document.querySelector('[data-slot="toast"]')).toBeNull()
   })
+
+  it('renders warning with the warning tone without changing existing tones', () => {
+    render(<Toaster />)
+    act(() => toast('Heads up', { tone: 'warning' }))
+
+    const item = screen.getByRole('status')
+    expect(item.getAttribute('data-tone')).toBe('warning')
+    expect(item.className).toContain('bg-warning')
+    expect(item.className).toContain('text-warning-foreground')
+  })
 })
