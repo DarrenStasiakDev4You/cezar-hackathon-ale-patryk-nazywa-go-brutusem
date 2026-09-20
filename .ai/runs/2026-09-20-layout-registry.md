@@ -52,6 +52,7 @@ Source doc: `.ai/specs/2026-09-20-layout-registry.md`
 
 - [x] 2.1 Add `PageRenderer` and `ZoneRenderer` backed by `ComponentHost`, with required-zone error and optional-zone empty states. — d14af301
 - [x] 2.2 Add the declarative `TaskPage` catalog definition and public page-layout exports. — d14af301
+- [x] Post-review fix: enforce `single` cardinality and unique content keys in the renderer. — 208944cd
 
 ### Phase 3: Verification
 
