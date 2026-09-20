@@ -8,8 +8,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node ../../scripts/test-in-docker.mjs web",
+    "test:watch": "node ../../scripts/test-in-docker.mjs web-watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

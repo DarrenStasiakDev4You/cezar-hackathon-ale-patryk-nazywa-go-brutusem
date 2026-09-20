@@ -34,12 +34,12 @@
     "server-install": "tsx src/index.ts server-install",
     "server-deploy": "tsx src/index.ts server-deploy",
     "server-uninstall": "tsx src/index.ts server-uninstall",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:unit": "node --import tsx --test test/unit/*.test.ts",
-    "test:package": "node --import tsx --test test/e2e/*.test.ts",
+    "test": "node ../../scripts/test-in-docker.mjs cezar",
+    "test:watch": "node ../../scripts/test-in-docker.mjs cezar-watch",
+    "test:unit": "node ../../scripts/test-in-docker.mjs cezar-unit",
+    "test:package": "node ../../scripts/test-in-docker.mjs cezar-package",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
-    "postbuild": "node scripts/inline-contract.mjs"
+    "postbuild": "node scripts/inline-contract.mjs && node scripts/inline-extension-loader.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",
@@ -53,6 +53,7 @@
   "devDependencies": {
     "@open-mercato/cezar-api-client": "^0.11.1",
     "@open-mercato/cezar-contract": "^0.11.1",
+    "@open-mercato/cezar-extension-api": "^0.11.1",
     "@types/node": "^20.14.0",
     "@types/ws": "^8.18.1",
     "esbuild": "^0.28.1",

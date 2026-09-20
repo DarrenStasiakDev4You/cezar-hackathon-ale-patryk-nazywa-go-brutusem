@@ -111,6 +111,7 @@ import type {
   WorkspaceConfigResponse,
   WorkspaceUiState,
   SkillsUpdateState,
+  ExtensionInventoryResponse,
 } from '@open-mercato/cezar-api-client'
 import { parseProviderStatusResponse } from '@/lib/provider-status'
 import {
@@ -451,6 +452,22 @@ export async function getLaunchKey(opts?: ReadOptions): Promise<LaunchKeyRespons
  *  matches the DTO rather than the source of it. */
 export async function getProjects(opts?: ReadOptions): Promise<ProjectsResponse> {
   return unwrap(await cez.api.v1.projects.$get({}, init(opts)), '/projects')
+}
+
+/** Local extension inventory. Workspace-level and deliberately unavailable, not erroring, in hosted mode. */
+export async function getExtensions(opts?: ReadOptions): Promise<ExtensionInventoryResponse> {
+  return unwrap(await cez.api.v1.extensions.$get({}, init(opts)), '/extensions')
+}
+
+/** Approve or revoke the current permission request for one local extension. */
+export async function setExtensionApproval(id: string, approved: boolean): Promise<ExtensionInventoryResponse> {
+  return unwrap(
+    await cez.api.v1.extensions[':id'].approval.$put({
+      param: { id: encodeURIComponent(id) },
+      json: { approved },
+    }),
+    `/extensions/${encodeURIComponent(id)}/approval`,
+  )
 }
 
 /** One directory listing for the folder picker (`GET /api/fs/browse`, step 4.1). `path`
