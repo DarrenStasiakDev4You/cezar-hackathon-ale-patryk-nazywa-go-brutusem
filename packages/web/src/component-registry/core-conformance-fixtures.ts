@@ -1,6 +1,8 @@
 import {
+  TaskComposer,
   TaskHeaderMain,
   TaskMetadata,
+  type TaskComposerProps,
   type TaskHeaderMainProps,
   type TaskMetadataProps,
 } from '@open-mercato/cezar-extension-api'
@@ -57,7 +59,39 @@ const metadataProps: TaskMetadataProps = {
   intents: {},
 }
 
+const composerProps: TaskComposerProps = {
+  task: { taskId: 'r1', projectId: 'p1' },
+  draft: { text: 'Summarize the project.', attachments: [] },
+  status: { mode: 'reply', placeholder: 'Reply', submitLabel: 'Send' },
+  availability: { enabled: true },
+  actions: {
+    submit: { available: true, enabled: true, pending: false },
+    attach: { available: true, enabled: true, pending: false },
+    chooseRunner: { available: true, enabled: true, pending: false },
+    chooseModel: { available: true, enabled: true, pending: false },
+  },
+  engine: {
+    runner: 'claude',
+    model: 'auto',
+    modelLabel: 'Auto',
+    runnerChoices: [{ runner: 'claude', label: 'Claude' }],
+    modelChoices: [{ id: 'auto', label: 'Auto' }],
+  },
+  completions: { skills: { status: 'idle', items: [] }, files: { status: 'idle', items: [] } },
+  limits: { maxAttachments: 4, maxAttachmentBytes: 5 * 1024 * 1024, accept: 'image/*' },
+  onTextChange: noop,
+  onSubmit: noop,
+  onAttachFiles: noop,
+  onRemoveAttachment: noop,
+  onSelectRunner: noop,
+  onSelectModel: noop,
+  onRequestCompletions: noop,
+  onUseSkill: noop,
+  onNavigate: noop,
+}
+
 export const CORE_CONFORMANCE_FIXTURES: readonly CoreConformanceFixture[] = [
   { contract: TaskHeaderMain, props: headerProps },
   { contract: TaskMetadata, props: metadataProps },
+  { contract: TaskComposer, props: composerProps },
 ]

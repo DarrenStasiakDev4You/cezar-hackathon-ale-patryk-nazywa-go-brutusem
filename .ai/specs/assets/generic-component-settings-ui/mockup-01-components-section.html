@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Mockup — Settings → Components</title>
+<style>
+  :root{--bg:#0b0b0c;--panel:#131315;--panel2:#171719;--border:#26262a;--fg:#e9e9ec;--muted:#8d8d96;--soft:#a5a5ae;--accent:#3ddc97;--accentdim:#1f3d33;--danger:#f2777a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif}
+  .app{display:flex;min-height:640px}
+  .side{width:264px;border-right:1px solid var(--border);padding:16px 12px;flex:none}
+  .brand{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:18px}
+  .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#3ddc97,#2b8f6a)}
+  .navitem{padding:7px 10px;border-radius:8px;color:var(--soft);font-size:13.5px}
+  .navitem.active{background:#1d1d20;color:var(--fg)}
+  .main{flex:1;padding:18px 24px 28px}
+  .head{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--border);padding-bottom:14px}
+  .head h1{font-size:19px;margin:0}
+  .head p{margin:0;color:var(--muted);font-size:13px}
+  .cols{display:flex;gap:26px;margin-top:16px}
+  .secnav{width:190px;flex:none;display:flex;flex-direction:column;gap:2px}
+  .secnav div{padding:7px 10px;border-radius:8px;color:var(--soft);font-size:13.5px}
+  .secnav div.active{background:#1d1d20;color:var(--fg);box-shadow:inset 0 0 0 1px var(--border)}
+  .secnav div.new{color:var(--accent)}
+  .body{flex:1;max-width:660px}
+  .grouphead{font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:2px 0 10px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .cardhead{display:flex;align-items:flex-start;gap:10px;justify-content:space-between}
+  .title{font-weight:600;font-size:14.5px}
+  .by{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;color:var(--muted)}
+  .badge{font-size:11px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--soft);white-space:nowrap}
+  .badge.project{border-color:#2f4a63;color:#9dc4e8}
+  .badge.global{border-color:#3b4a2f;color:#b6d79b}
+  .rows{margin-top:12px;border-top:1px solid var(--border)}
+  .row{display:flex;gap:16px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #1e1e21}
+  .row:last-child{border-bottom:0}
+  .rowtext{flex:1;min-width:0}
+  .rowtext .lab{font-size:13.5px;font-weight:500}
+  .rowtext .hint{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .ctl{flex:none;display:flex;align-items:center;gap:10px}
+  .sw{width:38px;height:21px;border-radius:999px;background:#2b2b30;position:relative}
+  .sw.on{background:var(--accent)}
+  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#0b0b0c}
+  .sw.on i{left:19px;background:#08120e}
+  .input{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 9px;font-size:13px;color:var(--fg);min-width:150px}
+  .input.num{min-width:92px;text-align:right}
+  .select{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 26px 6px 9px;font-size:13px;position:relative;min-width:132px}
+  .select::after{content:"▾";position:absolute;right:9px;color:var(--muted)}
+  .reset{font-size:12px;color:var(--soft);text-decoration:underline;text-underline-offset:2px}
+  .cardfoot{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding-top:12px}
+  .saved{font-size:12px;color:var(--accent)}
+  .btn{font-size:12.5px;border:1px solid var(--border);border-radius:8px;padding:6px 11px;color:var(--soft);background:var(--panel2)}
+  .btn.primary{color:#08120e;background:var(--accent);border-color:var(--accent);font-weight:600}
+  .dirty{border-color:#3f6b57}
+  .note{margin-top:10px;color:var(--muted);font-size:12px}
+  .stamp{position:static;display:block;margin:16px 24px 0;text-align:right;font-size:11px;color:#55555e}
+</style></head>
+<body><div class="app">
+  <aside class="side">
+    <div class="brand"><span class="logo"></span> cezar</div>
+    <div class="navitem">Tasks</div><div class="navitem">Git</div><div class="navitem">GitHub</div>
+    <div class="navitem">Automations</div><div class="navitem">Skills</div><div class="navitem">Workflows</div>
+    <div class="navitem active">Settings</div>
+  </aside>
+  <main class="main">
+    <div class="head"><h1>Components</h1><p>Settings the installed component implementations declare.</p></div>
+    <div class="cols">
+      <nav class="secnav">
+        <div>General</div><div>Agents</div><div>Agent config</div>
+        <div class="active new">Components</div>
+        <div>Worktrees</div><div>Bookmarklets</div><div>Prompt templates</div>
+      </nav>
+      <div class="body">
+        <div class="grouphead">Task header · cezar.task.header.main@1</div>
+        <div class="card">
+          <div class="cardhead">
+            <div><div class="title">Configurable header</div>
+              <div class="by">test.configurable-header · <span class="mono">test.configurable-header.row</span></div></div>
+            <span class="badge global">All projects</span>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="rowtext"><div class="lab">Compact</div>
+              <div class="hint">One dense row instead of title and meta rows.</div></div>
+              <div class="ctl"><span class="sw on"><i></i></span></div></div>
+            <div class="row"><div class="rowtext"><div class="lab">Density</div>
+              <div class="hint">How much padding the row uses.</div></div>
+              <div class="ctl"><span class="reset">Reset</span><span class="select">Cozy</span></div></div>
+            <div class="row"><div class="rowtext"><div class="lab">Title max length</div>
+              <div class="hint">Characters before the title is ellipsized (16–120). Saves 400 ms after you stop typing.</div></div>
+              <div class="ctl"><span class="reset">Reset</span><span class="input num dirty">48</span></div></div>
+            <div class="row"><div class="rowtext"><div class="lab">Status prefix</div>
+              <div class="hint">Printed before the status label.</div></div>
+              <div class="ctl"><span class="input">•</span></div></div>
+          </div>
+          <div class="cardfoot"><span class="saved">Saved</span><span class="btn">Restore defaults</span></div>
+        </div>
+        <div class="grouphead">Task composer · cezar.task.composer@1</div>
+        <div class="card">
+          <div class="cardhead">
+            <div><div class="title">Plain composer</div>
+              <div class="by">example.plain-composer · <span class="mono">example.plain-composer.box</span></div></div>
+            <span class="badge project">This project</span>
+          </div>
+          <div class="rows">
+            <div class="row"><div class="rowtext"><div class="lab">Send on Enter</div>
+              <div class="hint">Enter sends; Shift+Enter adds a line.</div></div>
+              <div class="ctl"><span class="sw"><i></i></span></div></div>
+            <div class="row"><div class="rowtext"><div class="lab">Placeholder</div>
+              <div class="hint">Shown while the box is empty.</div></div>
+              <div class="ctl"><span class="input">Describe the next step…</span></div></div>
+          </div>
+
+        </div>
+        <p class="note">Controls are generated from each implementation's declared settings schema. Switches and dropdowns
+          write at once; typed fields save on blur or 400 ms after the last keystroke — no Save button.
+          A value is stored only when it differs from its default.</p>
+      </div>
+    </div>
+  </main>
+</div><div class="stamp">Illustrative mockup — spec 2026-09-20-generic-component-settings-ui</div></body></html>

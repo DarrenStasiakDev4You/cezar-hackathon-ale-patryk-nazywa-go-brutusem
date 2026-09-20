@@ -9,12 +9,14 @@ import {
   type ManifestIssue,
 } from '@open-mercato/cezar-extension-api'
 
+import { checkPermissions, guardServices } from './permissions'
+
 /**
  * The cockpit's extension registry (spec `.ai/specs/2026-09-18-extension-registry.md`): one entry
  * per extension id, in registration order, and the lifecycle that runs `activate()` and
  * `deactivate()` so that one extension's failure never blocks another.
  *
- * PURE on purpose. The extension API is its only import — no React, no DOM, no `window`, no
+ * PURE on purpose. The extension API and the pure local permissions guard are its only imports — no React, no DOM, no `window`, no
  * module-level state — so it runs unchanged under vitest and can move into a package or a worker
  * when a second consumer appears. The services behind `ExtensionContext` are not implemented
  * here: they come from the injected `services(scope)` factory and join the lifecycle through
@@ -34,6 +36,10 @@ export interface ExtensionRecord {
   readonly id: ExtensionId
   readonly manifest: Readonly<ExtensionManifest>
   readonly status: ExtensionStatus
+  readonly permissions: {
+    readonly requested: readonly string[]
+    readonly granted: readonly string[]
+  }
   /** Present only when `status` is `failed`. */
   readonly error?: ExtensionFailure
 }
@@ -51,7 +57,7 @@ export interface ExtensionScope {
   assertLive(): void
 }
 
-export type ExtensionServices = Pick<ExtensionContext, 'commands' | 'events' | 'storage' | 'components'>
+export type ExtensionServices = Pick<ExtensionContext, 'commands' | 'events' | 'storage' | 'components' | 'notifications'>
 
 export interface ExtensionErrorReport {
   readonly id: ExtensionId
@@ -86,7 +92,10 @@ export interface ExtensionRegistryOptions {
 
 export interface ExtensionRegistry {
   /** Synchronous; runs no extension code. `{ enabled: false }` registers it `disabled`. Throws `invalid-extension` or `duplicate-extension`. */
-  register(extension: Extension, options?: { readonly enabled?: boolean }): ExtensionRecord
+  register(
+    extension: Extension,
+    options?: { readonly enabled?: boolean; readonly grantedPermissions?: readonly string[] },
+  ): ExtensionRecord
   get(id: ExtensionId): ExtensionRecord | undefined
   /** Every extension, in registration order. */
   list(): readonly ExtensionRecord[]
@@ -141,6 +150,7 @@ interface Entry {
   readonly extension: Extension
   /** Captured at `register` (and frozen by `defineExtension`); reassigning `extension.manifest` changes nothing. */
   readonly manifest: Readonly<ExtensionManifest>
+  readonly permissions: ExtensionRecord['permissions']
   record: ExtensionRecord
   /** Tail of this extension's lifecycle chain. Every public call enqueues one step on it. */
   tail: Promise<unknown>
@@ -171,7 +181,7 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
 
   const setRecord = (entry: Entry, status: ExtensionStatus, error?: ExtensionFailure): ExtensionRecord => {
     const previous = entry.record
-    const record = createRecord(entry.manifest, status, error)
+    const record = createRecord(entry.manifest, entry.permissions, status, error)
     entry.record = record
     if (options.onStatusChange !== undefined && previous.status !== status) {
       try {
@@ -211,6 +221,12 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
     if (!from.includes(entry.record.status) || entry.abandoned !== undefined) return entry.record
 
     const { id } = entry.manifest
+    const permissionFailure = checkPermissions(entry.manifest, entry.permissions.granted)
+    if (permissionFailure !== null) {
+      const failure = Object.freeze(permissionFailure)
+      report(id, 'activate', failure)
+      return setRecord(entry, 'failed', failure)
+    }
     const activation = createActivation(entry.manifest, (error) => report(id, 'dispose', error))
     // A throw from `services` counts as an activation failure, like a throw from `activate`.
     const call = invoke(() => entry.extension.activate(createContext(activation, options.services)))
@@ -262,10 +278,19 @@ export function createExtensionRegistry(options: ExtensionRegistryOptions): Exte
           `Extension "${manifest.id}" is already registered`,
         )
       }
+      const permissions = Object.freeze({
+        requested: Object.freeze([...(manifest.permissions ?? [])]),
+        granted: Object.freeze([...(registerOptions?.grantedPermissions ?? [])]),
+      })
       const entry: Entry = {
         extension,
         manifest,
-        record: createRecord(manifest, registerOptions?.enabled === false ? 'disabled' : 'registered'),
+        permissions,
+        record: createRecord(
+          manifest,
+          permissions,
+          registerOptions?.enabled === false ? 'disabled' : 'registered',
+        ),
         tail: Promise.resolve(),
         activation: undefined,
         abandoned: undefined,
@@ -380,14 +405,13 @@ function createActivation(manifest: Readonly<ExtensionManifest>, reportDispose: 
 
 /** A fresh context per activation; frozen, so an extension cannot swap `subscriptions` for an unguarded array. */
 function createContext(activation: Activation, services: ExtensionRegistryOptions['services']): ExtensionContext {
-  const { commands, events, storage, components } = services(activation.scope)
+  const effective = new Set(activation.scope.extension.permissions ?? [])
+  const guarded = guardServices(activation.scope, services(activation.scope), effective)
   return Object.freeze({
     extension: activation.scope.extension,
+    permissions: Object.freeze([...effective]),
     subscriptions: activation.subscriptions,
-    commands,
-    events,
-    storage,
-    components,
+    ...guarded,
   })
 }
 
@@ -458,11 +482,12 @@ function isArrayIndex(key: string | symbol): boolean {
 
 function createRecord(
   manifest: Readonly<ExtensionManifest>,
+  permissions: ExtensionRecord['permissions'],
   status: ExtensionStatus,
   error?: ExtensionFailure,
 ): ExtensionRecord {
   const { id } = manifest
-  return Object.freeze(error === undefined ? { id, manifest, status } : { id, manifest, status, error })
+  return Object.freeze(error === undefined ? { id, manifest, status, permissions } : { id, manifest, status, permissions, error })
 }
 
 /** `defineExtension` threw: keep its message and every issue (read by `code`, never `instanceof`). */

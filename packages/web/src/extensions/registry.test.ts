@@ -23,6 +23,7 @@ import {
   type ExtensionErrorReport,
   type ExtensionRegistryOptions,
 } from './registry'
+import { STANDARD_PERMISSIONS } from './permissions'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -30,6 +31,15 @@ afterEach(() => {
 
 const noServices: ExtensionRegistryOptions['services'] = () => {
   throw new Error('no services in this test')
+}
+
+const allPermissions = Object.keys(STANDARD_PERMISSIONS)
+function registerGranted(
+  registry: ReturnType<typeof createExtensionRegistry>,
+  extension: Extension,
+  options: { readonly enabled?: boolean } = {},
+) {
+  return registry.register(extension, { ...options, grantedPermissions: allPermissions })
 }
 
 function registryError(run: () => unknown): ExtensionRegistryError {
@@ -46,10 +56,11 @@ describe('register', () => {
   it('records a valid extension as registered, and `{ enabled: false }` as disabled', () => {
     const registry = createExtensionRegistry({ services: noServices })
 
-    const enabled = registry.register(fixture('acme.alpha'))
-    const disabled = registry.register(fixture('acme.beta'), { enabled: false })
+    const enabled = registerGranted(registry, fixture('acme.alpha'))
+    const disabled = registerGranted(registry, fixture('acme.beta'), { enabled: false })
 
-    expect(enabled).toEqual({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
+    expect(enabled).toMatchObject({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
+    expect(enabled.permissions).toEqual({ requested: allPermissions, granted: allPermissions })
     expect(disabled.status).toBe('disabled')
     expect(enabled).not.toHaveProperty('error')
     expect(registry.get('acme.alpha')).toBe(enabled)
@@ -59,9 +70,9 @@ describe('register', () => {
 
   it('refuses a duplicate id and leaves the first record untouched', () => {
     const registry = createExtensionRegistry({ services: noServices })
-    const first = registry.register(fixture('acme.alpha'))
+    const first = registerGranted(registry, fixture('acme.alpha'))
 
-    const error = registryError(() => registry.register(fixture('acme.alpha')))
+    const error = registryError(() => registerGranted(registry, fixture('acme.alpha')))
 
     expect(error.code).toBe('duplicate-extension')
     expect(error.name).toBe('ExtensionRegistryError')
@@ -105,7 +116,7 @@ describe('register', () => {
 
   it('keeps registration order and returns frozen records', () => {
     const registry = createExtensionRegistry({ services: noServices })
-    for (const id of ['acme.charlie', 'acme.alpha', 'acme.bravo']) registry.register(fixture(id))
+    for (const id of ['acme.charlie', 'acme.alpha', 'acme.bravo']) registerGranted(registry, fixture(id))
 
     const records = registry.list()
 
@@ -121,7 +132,7 @@ describe('register', () => {
   it('keeps the manifest captured at registration when the extension reassigns it', () => {
     const registry = createExtensionRegistry({ services: noServices })
     const extension = fixture('acme.alpha')
-    registry.register(extension)
+    registerGranted(registry, extension)
 
     ;(extension as { manifest: ExtensionManifest }).manifest = fixtureManifest('acme.impostor')
 
@@ -135,7 +146,7 @@ describe('register', () => {
     const services = vi.fn(noServices)
     const registry = createExtensionRegistry({ services })
 
-    registry.register(fixture('acme.alpha', { activate, deactivate }))
+    registerGranted(registry, fixture('acme.alpha', { activate, deactivate }))
 
     expect(activate).not.toHaveBeenCalled()
     expect(deactivate).not.toHaveBeenCalled()
@@ -160,8 +171,8 @@ const statuses = (records: readonly { id: string; status: string }[]) =>
 describe('activate', () => {
   it('activates two extensions and lists both as active', async () => {
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(fixture('acme.alpha'))
-    registry.register(fixture('acme.beta'))
+    registerGranted(registry, fixture('acme.alpha'))
+    registerGranted(registry, fixture('acme.beta'))
 
     const records = await registry.activateAll()
 
@@ -176,17 +187,17 @@ describe('activate', () => {
     vi.useFakeTimers()
     const reports: ExtensionErrorReport[] = []
     const registry = createExtensionRegistry({ ...recordingServices(), onError: (report) => reports.push(report) })
-    registry.register(fixture('acme.first'))
-    registry.register(
+    registerGranted(registry, fixture('acme.first'))
+    registerGranted(registry,
       fixture('acme.throws', {
         activate() {
           throw Object.assign(new Error('sync boom'), { code: 'boom' })
         },
       }),
     )
-    registry.register(fixture('acme.rejects', { activate: () => Promise.reject('not an Error') }))
-    registry.register(fixture('acme.hangs', { activate: () => new Promise<void>(() => {}) }))
-    registry.register(fixture('acme.last'))
+    registerGranted(registry, fixture('acme.rejects', { activate: () => Promise.reject('not an Error') }))
+    registerGranted(registry, fixture('acme.hangs', { activate: () => new Promise<void>(() => {}) }))
+    registerGranted(registry, fixture('acme.last'))
 
     const done = registry.activateAll()
     await vi.advanceTimersByTimeAsync(10_000)
@@ -217,7 +228,7 @@ describe('activate', () => {
     const log: string[] = []
     const deactivate = vi.fn()
     const registry = createExtensionRegistry(recordingServices(log))
-    registry.register(
+    registerGranted(registry,
       fixture('acme.partial', {
         activate(context) {
           context.commands.register(pingCommand('acme.partial'), () => {})
@@ -240,7 +251,7 @@ describe('activate', () => {
     const hang = deferred()
     let context: ExtensionContext | undefined
     const registry = createExtensionRegistry({ ...recordingServices(), timeoutMs: 50 })
-    registry.register(
+    registerGranted(registry,
       fixture('acme.slow', {
         activate(ctx) {
           context = ctx
@@ -262,7 +273,7 @@ describe('activate', () => {
     const hang = deferred()
     const activate = vi.fn<Extension['activate']>().mockReturnValueOnce(hang.promise)
     const registry = createExtensionRegistry({ ...recordingServices(), timeoutMs: 50 })
-    registry.register(fixture('acme.slow', { activate }))
+    registerGranted(registry, fixture('acme.slow', { activate }))
 
     const first = registry.activate('acme.slow')
     await vi.advanceTimersByTimeAsync(50)
@@ -284,7 +295,7 @@ describe('activate', () => {
   it('treats an unbounded `timeoutMs` as no practical limit rather than an instant timeout', async () => {
     // Real timers on purpose: an unclamped `setTimeout(…, Infinity)` fires at once.
     const registry = createExtensionRegistry({ ...recordingServices(), timeoutMs: Infinity })
-    registry.register(fixture('acme.patient', { activate: () => new Promise<void>((done) => setTimeout(done, 20)) }))
+    registerGranted(registry, fixture('acme.patient', { activate: () => new Promise<void>((done) => setTimeout(done, 20)) }))
 
     const record = await registry.activate('acme.patient')
 
@@ -295,7 +306,7 @@ describe('activate', () => {
     const gate = deferred()
     const activate = vi.fn(() => gate.promise)
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(fixture('acme.alpha', { activate }))
+    registerGranted(registry, fixture('acme.alpha', { activate }))
 
     const both = Promise.all([registry.activate('acme.alpha'), registry.activate('acme.alpha')])
     gate.resolve()
@@ -313,13 +324,13 @@ describe('activate', () => {
     })
     const late = vi.fn()
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(fixture('acme.off', { activate: disabled }), { enabled: false })
-    registry.register(fixture('acme.crash', { activate: crash }))
+    registerGranted(registry, fixture('acme.off', { activate: disabled }), { enabled: false })
+    registerGranted(registry, fixture('acme.crash', { activate: crash }))
     await registry.activate('acme.crash')
-    registry.register(
+    registerGranted(registry,
       fixture('acme.first', {
         activate() {
-          registry.register(fixture('acme.late', { activate: late }))
+          registerGranted(registry, fixture('acme.late', { activate: late }))
         },
       }),
     )
@@ -341,7 +352,7 @@ describe('activate', () => {
     const order: string[] = []
     const gate = deferred()
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(
+    registerGranted(registry,
       fixture('acme.alpha', {
         async activate() {
           order.push('alpha start')
@@ -350,7 +361,7 @@ describe('activate', () => {
         },
       }),
     )
-    registry.register(fixture('acme.beta', { activate: () => void order.push('beta') }))
+    registerGranted(registry, fixture('acme.beta', { activate: () => void order.push('beta') }))
 
     const done = registry.activateAll()
     await Promise.resolve()
@@ -366,12 +377,12 @@ describe('activate', () => {
       .mockRejectedValueOnce(new Error('flaky'))
       .mockResolvedValue(undefined)
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(fixture('acme.flaky', { activate }))
+    registerGranted(registry, fixture('acme.flaky', { activate }))
 
     expect((await registry.activate('acme.flaky')).status).toBe('failed')
     const retry = await registry.activate('acme.flaky')
 
-    expect(retry).toEqual({ id: 'acme.flaky', manifest: fixtureManifest('acme.flaky'), status: 'active' })
+    expect(retry).toMatchObject({ id: 'acme.flaky', manifest: fixtureManifest('acme.flaky'), status: 'active' })
     expect(activate).toHaveBeenCalledTimes(2)
   })
 
@@ -393,7 +404,7 @@ describe('activate', () => {
       },
     })
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(extension)
+    registerGranted(registry, extension)
 
     await registry.activate('acme.self')
 
@@ -407,8 +418,8 @@ describe('activate', () => {
         throw new Error('reporter is down')
       },
     })
-    registry.register(fixture('acme.broken', { activate: () => Promise.reject(new Error('broken')) }))
-    registry.register(fixture('acme.fine'))
+    registerGranted(registry, fixture('acme.broken', { activate: () => Promise.reject(new Error('broken')) }))
+    registerGranted(registry, fixture('acme.fine'))
 
     const records = await registry.activateAll()
 
@@ -426,7 +437,7 @@ describe('activate', () => {
       },
       onError: () => {},
     })
-    registry.register(fixture('acme.alpha', { activate }))
+    registerGranted(registry, fixture('acme.alpha', { activate }))
 
     const record = await registry.activate('acme.alpha')
 
@@ -438,7 +449,7 @@ describe('activate', () => {
     let seen: ExtensionContext | undefined
     const recording = recordingServices()
     const registry = createExtensionRegistry(recording)
-    const record = registry.register(
+    const record = registerGranted(registry,
       fixture('acme.alpha', {
         activate(context) {
           seen = context
@@ -457,6 +468,85 @@ describe('activate', () => {
   })
 })
 
+describe('permission activation checks', () => {
+  it('fails unsupported requests before activate, reports them, and leaves the next extension runnable', async () => {
+    const activate = vi.fn()
+    const reports: ExtensionErrorReport[] = []
+    const registry = createExtensionRegistry({
+      ...recordingServices(),
+      onError: (report) => reports.push(report),
+    })
+    const unsupported = defineExtension({
+      manifest: { ...fixtureManifest('acme.unsupported'), permissions: ['teleport.machine'] as never },
+      activate,
+    })
+    registerGranted(registry, unsupported)
+    registerGranted(registry, fixture('acme.next'))
+
+    expect((await registry.activate('acme.unsupported')).error).toMatchObject({ code: 'unsupported-permission' })
+    expect(activate).not.toHaveBeenCalled()
+    expect(reports).toHaveLength(1)
+    expect((await registry.activate('acme.next')).status).toBe('active')
+  })
+
+  it('fails a request that was not approved, including on retry', async () => {
+    const activate = vi.fn()
+    const registry = createExtensionRegistry({ ...recordingServices(), onError: () => {} })
+    registry.register(fixture('acme.unapproved', { permissions: ['storage'], activate }))
+
+    const first = await registry.activate('acme.unapproved')
+    const retry = await registry.activate('acme.unapproved')
+
+    expect(first).toMatchObject({ status: 'failed', error: { code: 'permission-not-granted' } })
+    expect(retry.error).toEqual(first.error)
+    expect(activate).not.toHaveBeenCalled()
+  })
+
+  it('guards a no-permission context, disposes partial activation, and exposes only the effective request', async () => {
+    const log: string[] = []
+    let context: ExtensionContext | undefined
+    const registry = createExtensionRegistry({ ...recordingServices(log), onError: () => {} })
+    registry.register(
+      fixture('acme.denied', {
+        permissions: [],
+        activate: async (seen) => {
+          context = seen
+          seen.commands.register(pingCommand('acme.denied'), () => {})
+          await seen.storage.get('key')
+        },
+      }),
+      { grantedPermissions: allPermissions },
+    )
+
+    const record = await registry.activate('acme.denied')
+
+    expect(record).toMatchObject({ status: 'failed', error: { code: 'permission-denied' } })
+    expect(log).toEqual(['dispose command acme.denied.ping'])
+    expect(context?.permissions).toEqual([])
+    expect(Object.isFrozen(context?.permissions)).toBe(true)
+  })
+
+  it('lets an extension catch a denial and ignores extra grants', async () => {
+    let permissions: readonly string[] | undefined
+    let caught: unknown
+    const registry = createExtensionRegistry({ ...recordingServices(), onError: () => {} })
+    registry.register(
+      fixture('acme.catches', {
+        permissions: [],
+        async activate(context) {
+          permissions = context.permissions
+          caught = await context.storage.get('key').catch((error: unknown) => error)
+        },
+      }),
+      { grantedPermissions: ['storage'] },
+    )
+
+    expect((await registry.activate('acme.catches')).status).toBe('active')
+    expect(permissions).toEqual([])
+    expect(isExtensionError(caught, 'permission-denied')).toBe(true)
+  })
+})
+
 describe('deactivate', () => {
   it('awaits `deactivate` once, then disposes subscriptions and tracked registrations, each newest first', async () => {
     const log: string[] = []
@@ -466,7 +556,7 @@ describe('deactivate', () => {
       log.push('deactivate end')
     })
     const registry = createExtensionRegistry(recordingServices(log))
-    registry.register(
+    registerGranted(registry,
       fixture('acme.alpha', {
         activate(context) {
           context.commands.register(pingCommand('acme.alpha'), () => {})
@@ -480,7 +570,7 @@ describe('deactivate', () => {
 
     const record = await registry.deactivate('acme.alpha')
 
-    expect(record).toEqual({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
+    expect(record).toMatchObject({ id: 'acme.alpha', manifest: fixtureManifest('acme.alpha'), status: 'registered' })
     expect(deactivate).toHaveBeenCalledTimes(1)
     expect(log).toEqual([
       'deactivate start',
@@ -507,13 +597,13 @@ describe('deactivate', () => {
         activate: (context) => void context.subscriptions.push(disposable(log, `dispose ${id}`)),
         deactivate,
       })
-    registry.register(
+    registerGranted(registry,
       withSubscription('acme.throws', () => {
         throw new Error('goodbye failed')
       }),
     )
-    registry.register(withSubscription('acme.hangs', () => new Promise<void>(() => {})))
-    registry.register(
+    registerGranted(registry, withSubscription('acme.hangs', () => new Promise<void>(() => {})))
+    registerGranted(registry,
       fixture('acme.leaky', {
         activate(context) {
           context.subscriptions.push(disposable(log, 'dispose acme.leaky older'), {
@@ -550,7 +640,7 @@ describe('deactivate', () => {
     const recording = recordingServices(log)
     let context: ExtensionContext | undefined
     const registry = createExtensionRegistry(recording)
-    registry.register(
+    registerGranted(registry,
       fixture('acme.alpha', {
         activate(ctx) {
           context = ctx
@@ -575,7 +665,7 @@ describe('deactivate', () => {
     const log: string[] = []
     let registration: Disposable | undefined
     const registry = createExtensionRegistry(recordingServices(log))
-    registry.register(
+    registerGranted(registry,
       fixture('acme.alpha', {
         activate(context) {
           registration = context.commands.register(pingCommand('acme.alpha'), () => {})
@@ -595,7 +685,7 @@ describe('deactivate', () => {
     const contexts: ExtensionContext[] = []
     const recording = recordingServices()
     const registry = createExtensionRegistry(recording)
-    registry.register(
+    registerGranted(registry,
       fixture('acme.alpha', {
         activate(context) {
           contexts.push(context)
@@ -619,7 +709,7 @@ describe('deactivate', () => {
   it('runs `deactivate` once for two overlapping calls', async () => {
     const deactivate = vi.fn()
     const registry = createExtensionRegistry(recordingServices())
-    registry.register(fixture('acme.alpha', { deactivate }))
+    registerGranted(registry, fixture('acme.alpha', { deactivate }))
     await registry.activate('acme.alpha')
 
     const [first, second] = await Promise.all([registry.deactivate('acme.alpha'), registry.deactivate('acme.alpha')])
@@ -648,10 +738,10 @@ describe('state machine', () => {
     const spy = (id: string, activate: Extension['activate'] = () => void calls.push(`activate ${id}`)) =>
       fixture(id, { activate, deactivate: () => void calls.push(`deactivate ${id}`) })
     const registry = createExtensionRegistry({ ...recordingServices(), onError: () => {} })
-    registry.register(spy('acme.active'))
-    registry.register(spy('acme.registered'))
-    registry.register(spy('acme.off'), { enabled: false })
-    registry.register(
+    registerGranted(registry, spy('acme.active'))
+    registerGranted(registry, spy('acme.registered'))
+    registerGranted(registry, spy('acme.off'), { enabled: false })
+    registerGranted(registry,
       spy('acme.failed', () => {
         throw new Error('crash')
       }),
@@ -681,7 +771,7 @@ describe('state machine', () => {
     const hang = deferred()
     const activate = vi.fn()
     const registry = createExtensionRegistry({ ...recordingServices(), timeoutMs: 50, onError: () => {} })
-    registry.register(fixture('acme.slow', { activate, deactivate: () => hang.promise }))
+    registerGranted(registry, fixture('acme.slow', { activate, deactivate: () => hang.promise }))
     await registry.activate('acme.slow')
 
     const pending = registry.deactivate('acme.slow')
@@ -710,15 +800,15 @@ describe('onStatusChange', () => {
       onError: () => {},
       onStatusChange: (record, previous) => seen.push([record, previous]),
     })
-    registry.register(fixture('acme.alpha'))
-    registry.register(
+    registerGranted(registry, fixture('acme.alpha'))
+    registerGranted(registry,
       fixture('acme.crash', {
         activate() {
           throw new Error('crash')
         },
       }),
     )
-    registry.register(fixture('acme.off'), { enabled: false })
+    registerGranted(registry, fixture('acme.off'), { enabled: false })
     expect(seen).toEqual([])
 
     await registry.activateAll()
@@ -751,7 +841,7 @@ describe('onStatusChange', () => {
         }
       },
     })
-    registry.register(
+    registerGranted(registry,
       fixture('acme.alpha', {
         async activate(context) {
           // Registered only after an await: the callback must still come after it.
@@ -774,8 +864,8 @@ describe('onStatusChange', () => {
         throw new Error('callback is down')
       },
     })
-    registry.register(fixture('acme.alpha'))
-    registry.register(fixture('acme.beta'))
+    registerGranted(registry, fixture('acme.alpha'))
+    registerGranted(registry, fixture('acme.beta'))
 
     const records = await registry.activateAll()
 

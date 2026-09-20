@@ -16,6 +16,7 @@ import {
 } from '@open-mercato/cezar-extension-api'
 import { registerCoreCommands } from '../commands/core-commands'
 import { createCommandRegistry } from '../commands/registry'
+import { listComponentChoices } from '../component-registry/choices'
 import { createCoreComponentRegistry } from '../component-registry/core-components'
 import { createComponentRegistry, type CockpitComponentRegistry } from '../component-registry/registry'
 import { resolveComponent, type ComponentResolution } from '../component-registry/resolve'
@@ -50,13 +51,14 @@ function bootCockpit(
   extensions: readonly Extension[],
   busOptions: Parameters<typeof createEventBus>[0] = {},
   components: CockpitComponentRegistry = createCoreComponentRegistry(),
+  notify: (message: string, options: { readonly tone: 'default' | 'warning' | 'danger' }) => void = () => {},
 ) {
   const commands = createCommandRegistry()
   registerCoreCommands(commands, { queryClient: new QueryClient() })
   const events = createEventBus(busOptions)
   const host = startExtensionHost({
     extensions,
-    services: cockpitServices({ commands, events, components }),
+    services: cockpitServices({ commands, events, components, notify }),
     onStatusChange: extensionLifecycleEvents(events),
     onError: () => {},
   })
@@ -133,6 +135,33 @@ describe('startExtensionHost', () => {
 
     expect(log).toHaveBeenCalledTimes(1)
     expect(log.mock.calls[0]?.[0]).toBe('[cezar:extensions] (no id): register failed')
+  })
+
+  it('grants built-ins their supported requests and fails closed on an unknown request', async () => {
+    const activated: string[] = []
+    const unknown = {
+      manifest: { ...fixture('acme.unknown').manifest, permissions: ['teleport.machine'] },
+      activate() {
+        activated.push('unknown')
+      },
+    } as unknown as Extension
+    const supported = fixture('acme.supported', {
+      permissions: ['events'],
+      activate(context) {
+        activated.push(context.permissions.join(','))
+      },
+    })
+
+    const { registry, ready } = startExtensionHost({
+      extensions: [unknown, supported],
+      ...recordingServices(),
+      onError: () => {},
+    })
+    await ready
+
+    expect(registry.get('acme.unknown')).toMatchObject({ status: 'failed', error: { code: 'unsupported-permission' } })
+    expect(registry.get('acme.supported')?.status).toBe('active')
+    expect(activated).toEqual(['events'])
   })
 })
 
@@ -372,6 +401,57 @@ describe('cockpitServices', () => {
 
     await expect(live.storage.get('key')).rejects.toThrow('context.storage is not available in this Cezar version yet')
   })
+
+  it('exposes notifications only with its permission and maps the host toast contract', async () => {
+    const shown: Array<{ message: string; tone: string }> = []
+    let activeContext: ExtensionContext | undefined
+    const { registry, ready } = bootCockpit(
+      [
+        fixture('acme.notify', {
+          permissions: ['notifications'],
+          activate(context) {
+            activeContext = context
+            context.notifications.info('hello')
+            context.notifications.warning('heads up')
+            context.notifications.error('broken')
+          },
+        }),
+      ],
+      {},
+      undefined,
+      (message, options) => shown.push({ message, tone: options.tone }),
+    )
+    await ready
+
+    expect(registry.get('acme.notify')?.status).toBe('active')
+    expect(activeContext?.permissions).toEqual(['notifications'])
+    expect(shown).toEqual([
+      { message: 'Fixture acme.notify: hello', tone: 'default' },
+      { message: 'Fixture acme.notify: heads up', tone: 'warning' },
+      { message: 'Fixture acme.notify: broken', tone: 'danger' },
+    ])
+  })
+
+  it('denies notifications without running the injected toast function', async () => {
+    const notify = vi.fn()
+    const { registry, ready } = bootCockpit(
+      [
+        fixture('acme.denied', {
+          permissions: [],
+          activate(context) {
+            context.notifications.info('not shown')
+          },
+        }),
+      ],
+      {},
+      undefined,
+      notify,
+    )
+    await ready
+
+    expect(registry.get('acme.denied')).toMatchObject({ status: 'failed', error: { code: 'permission-denied' } })
+    expect(notify).not.toHaveBeenCalled()
+  })
 })
 
 describe('the components service', () => {
@@ -429,6 +509,69 @@ describe('the components service', () => {
       'Compact header',
     ])
     expect(components.listUsable(TaskHeader)).toEqual(components.list('cezar.fixture.task-header'))
+  })
+
+  it('DoD, capability choices expose complete implementations and explain incomplete ones', async () => {
+    interface CapabilityHeaderProps {
+      readonly title: string
+    }
+    const CapabilityHeader = defineComponentContract<CapabilityHeaderProps>('cezar.fixture.capability-header', {
+      version: 1,
+      requiredCapabilities: ['task.status', 'task.continue'],
+    })
+    const implementation = (id: string, capabilities: readonly string[]): ComponentImplementation<CapabilityHeaderProps> => ({
+      id,
+      title: id,
+      capabilities,
+      component: () => null,
+    })
+    const components = createComponentRegistry({ contracts: [CapabilityHeader], onDiagnostic: () => {} })
+    components.register(
+      CapabilityHeader,
+      implementation('cezar.fixture.capability-header.default', ['task.status', 'task.continue']),
+    )
+    const { registry, ready } = bootCockpit(
+      [
+        fixture('acme.jira', {
+          activate(context) {
+            context.components.provide(
+              CapabilityHeader,
+              implementation('acme.jira.capability-header', ['task.status', 'task.continue', 'jira.issue.create']),
+            )
+          },
+        }),
+        fixture('acme.partial', {
+          activate(context) {
+            context.components.provide(
+              CapabilityHeader,
+              implementation('acme.partial.capability-header', ['task.status']),
+            )
+          },
+        }),
+      ],
+      {},
+      components,
+    )
+
+    await ready
+
+    const choices = listComponentChoices(components, CapabilityHeader)
+    expect(choices.status).toBe('resolved')
+    if (choices.status !== 'resolved') throw new Error('expected resolved choices')
+    expect(choices.overrides.map((entry) => entry.componentId)).toEqual(['acme.jira.capability-header'])
+    expect(choices.overrides[0]?.customCapabilities).toEqual(['jira.issue.create'])
+    expect(choices.unavailable.map((entry) => entry.componentId)).toEqual(['acme.partial.capability-header'])
+    expect(choices.unavailable[0]?.missingCapabilities).toEqual(['task.continue'])
+
+    const fallback = resolveComponent(components, CapabilityHeader, 'acme.partial.capability-header')
+    expect(fallback).toMatchObject({
+      status: 'resolved',
+      source: 'default',
+      component: components.get('cezar.fixture.capability-header.default'),
+      rejected: { reason: 'incompatible', componentId: 'acme.partial.capability-header' },
+    })
+    expect(registry.get('acme.jira')?.status).toBe('active')
+    expect(registry.get('acme.partial')?.status).toBe('active')
   })
 
   it('removes an extension’s implementation when that extension deactivates', async () => {
@@ -763,13 +906,14 @@ describe('extensionLifecycleEvents', () => {
     events.on(ExtensionActivated, (activation) => heard.push(activation))
     const onStatusChange = extensionLifecycleEvents(events)
     const registry = createExtensionRegistry({ ...recordingServices(), onStatusChange, onError: () => {} })
-    registry.register(fixture('acme.alpha'))
+    registry.register(fixture('acme.alpha'), { grantedPermissions: ['ui.components', 'commands.execute', 'storage', 'events', 'network', 'notifications'] })
     registry.register(
       fixture('acme.crash', {
         activate() {
           throw new Error('crash')
         },
       }),
+      { grantedPermissions: ['ui.components', 'commands.execute', 'storage', 'events', 'network', 'notifications'] },
     )
 
     await registry.activateAll()

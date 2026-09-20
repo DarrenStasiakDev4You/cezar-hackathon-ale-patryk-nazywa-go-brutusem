@@ -5,4 +5,5 @@
 export const CORE_IMPLEMENTATION_SOURCES: readonly { readonly contractId: string; readonly source: string }[] = [
   { contractId: 'cezar.task.header.main', source: 'src/routes/task-thread/core-task-header-main' },
   { contractId: 'cezar.task.metadata', source: 'src/routes/task-thread/core-task-metadata' },
+  { contractId: 'cezar.task.composer', source: 'src/routes/task-thread/core-task-composer' },
 ]

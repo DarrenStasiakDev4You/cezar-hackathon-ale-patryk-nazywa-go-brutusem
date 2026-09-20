@@ -11,6 +11,8 @@ const valid: ExtensionManifest = {
   engines: { cezar: '^0.12.0' },
 }
 
+const permissions = ['ui.components', 'commands.execute', 'storage', 'events', 'network', 'notifications'] as const
+
 function without(key: keyof ExtensionManifest): Record<string, unknown> {
   const { [key]: _removed, ...rest } = valid
   return rest
@@ -23,6 +25,39 @@ function pathsOf(value: unknown): string[] {
 describe('validateManifest', () => {
   it('returns [] for a valid manifest', () => {
     expect(validateManifest(valid)).toEqual([])
+  })
+
+  it('accepts omitted, empty, supported and well-formed unknown permissions', () => {
+    expect(validateManifest({ ...valid, permissions: [] })).toEqual([])
+    expect(validateManifest({ ...valid, permissions })).toEqual([])
+    expect(validateManifest({ ...valid, permissions: ['teleport.machine'] })).toEqual([])
+  })
+
+  describe('permissions', () => {
+    it('validates the shape, grammar, length and duplicates', () => {
+      expect(pathsOf({ ...valid, permissions: 'storage' })).toEqual(['permissions'])
+      expect(pathsOf({ ...valid, permissions: [7, '', 'Bad.name', 'a.'.repeat(33)] })).toEqual([
+        'permissions[0]',
+        'permissions[1]',
+        'permissions[2]',
+        'permissions[3]',
+      ])
+      expect(validateManifest({ ...valid, permissions: ['storage', 'events', 'storage'] })).toEqual([
+        { path: 'permissions[2]', message: 'must be unique — it repeats permissions[0]' },
+      ])
+    })
+
+    it('reports the entry limit together with entry issues', () => {
+      const entries = Array.from({ length: 33 }, (_, index) => (index === 32 ? '' : `permission-${index}`))
+      expect(validateManifest({ ...valid, permissions: entries }).map((issue) => issue.path)).toEqual([
+        'permissions',
+        'permissions[32]',
+      ])
+    })
+
+    it('never throws for exotic permission values', () => {
+      expect(() => validateManifest({ ...valid, permissions: [Symbol('permission')] })).not.toThrow()
+    })
   })
 
   it('treats description and author as optional', () => {

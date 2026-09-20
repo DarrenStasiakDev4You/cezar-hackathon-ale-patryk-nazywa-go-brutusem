@@ -32,6 +32,7 @@ import { jsonZodValidator, paramZodValidator, queryZodValidator } from './valida
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
 import {
+  componentSettingsSchema,
   setWorkspaceUiStateInputSchema,
   type GroupResponse,
   type GroupVariant,
@@ -807,6 +808,7 @@ const uiStateSchema = z
     // `importedSkills` curation (see `workspaceUiStateSchema`); `.passthrough()` would preserve
     // the key regardless, but keep it typed.
     dismissedSkillsBanner: z.boolean().optional(),
+    componentSettings: componentSettingsSchema.optional(),
   })
   .passthrough();
 
