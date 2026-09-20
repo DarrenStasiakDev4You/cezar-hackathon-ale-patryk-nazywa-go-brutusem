@@ -1455,6 +1455,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     expect(document.querySelector('[data-slot="run-tabs"]')?.textContent).toContain('Changes')
     expect(consoleError.mock.calls.filter(([first]) => typeof first === 'string' && first.startsWith('[cezar:extensions]'))).toEqual([
       ['[cezar:extensions] task.header has no default implementation: nothing renders in its host'],
+      ['[cezar:extensions] cezar.task.composer has no default implementation: nothing renders in its host'],
     ])
   })
 

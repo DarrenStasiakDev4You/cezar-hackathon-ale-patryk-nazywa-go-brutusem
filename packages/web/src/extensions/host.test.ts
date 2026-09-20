@@ -528,7 +528,8 @@ describe('the components service', () => {
     const components = createComponentRegistry({ contracts: [CapabilityHeader], onDiagnostic: () => {} })
     components.register(
       CapabilityHeader,
-      implementation('cezar.fixture.capability-header.default', ['task.status', 'task.continue']),
+      implementation('core.fixture.capability-header.default', ['task.status', 'task.continue']),
+      { default: true },
     )
     const { registry, ready } = bootCockpit(
       [
@@ -567,7 +568,7 @@ describe('the components service', () => {
     expect(fallback).toMatchObject({
       status: 'resolved',
       source: 'default',
-      component: components.get('cezar.fixture.capability-header.default'),
+      component: components.get('core.fixture.capability-header.default'),
       rejected: { reason: 'incompatible', componentId: 'acme.partial.capability-header' },
     })
     expect(registry.get('acme.jira')?.status).toBe('active')

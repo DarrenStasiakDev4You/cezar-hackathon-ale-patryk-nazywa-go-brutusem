@@ -266,7 +266,7 @@ describe('the Jira task header extension on the task page', () => {
     })
     await renderTaskPage(run('done'))
     fireEvent.click(row().getByRole('button', { name: 'Draft Jira issue' }))
-    await waitFor(() => expect(part()?.dataset.component).toBe('cezar.task.header.main.default'))
+    await waitFor(() => expect(part()?.dataset.component).toBe('core.task-header'))
     expect(actionBar().getByRole('button', { name: 'Continue' })).not.toBeNull()
     expect(actionBar().getByRole('button', { name: 'Archive' })).not.toBeNull()
     thrower.mockRestore()

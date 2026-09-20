@@ -110,9 +110,7 @@ describe('core’s task header main part', () => {
     const components = registry.forExtension(fakeScope('cezar.task').scope)
     const implementation = registered()[0]!.implementation
 
-    expect(() => components.provide(TaskHeader, { ...implementation, title: 'Impostor header' })).toThrow(
-      /already provided by core/,
-    )
+    expect(() => components.provide(TaskHeader, { ...implementation, title: 'Impostor header' })).toThrow(/may only provide components under/)
     expect(registry.get('core.task-header')?.extensionId).toBeNull()
   })
 })

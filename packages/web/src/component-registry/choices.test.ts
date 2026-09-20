@@ -23,8 +23,8 @@ const Header = defineComponentContract<HeaderProps>('cezar.fixture.choices', {
 const HeaderV2 = defineComponentContract<HeaderProps>('cezar.fixture.choices', { version: 2 })
 const Render: ComponentType<HeaderProps> = () => null
 
-const DEFAULT = 'cezar.fixture.choices.default'
-const COMPACT = 'cezar.fixture.choices.compact'
+const DEFAULT = 'core.fixture.choices.default'
+const COMPACT = 'core.fixture.choices.compact'
 const JIRA = 'acme.jira.choices'
 const PARTIAL = 'acme.partial.choices'
 const V2 = 'acme.version.choices'
@@ -38,7 +38,7 @@ const implementation = (id: string, capabilities: readonly string[] = ['shows-ti
 
 function registryWithAllImplementations(): CockpitComponentRegistry {
   const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
-  registry.register(Header, implementation(DEFAULT))
+  registry.register(Header, implementation(DEFAULT), { default: true })
   registry.register(Header, implementation(COMPACT))
   registry.forExtension(fakeScope('acme.jira').scope).provide(Header, implementation(JIRA, ['shows-title', 'jira.issue.create']))
   registry.forExtension(fakeScope('acme.partial').scope).provide(Header, implementation(PARTIAL, []))
@@ -94,7 +94,7 @@ describe('listComponentChoices', () => {
       [PARTIAL, Header, []],
       [JIRA, Header, ['shows-title', 'jira.issue.create']],
     ] as const
-    second.register(Header, implementation(DEFAULT))
+    second.register(Header, implementation(DEFAULT), { default: true })
     second.register(Header, implementation(COMPACT))
     for (const [id, contract, capabilities] of [...registrations].reverse()) {
       second.forExtension(fakeScope(id.replace(/\.choices$/, '')).scope).provide(contract, implementation(id, capabilities))
@@ -106,7 +106,7 @@ describe('listComponentChoices', () => {
 
   it('reflects a disposed registration on the next call', () => {
     const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
-    registry.register(Header, implementation(DEFAULT))
+    registry.register(Header, implementation(DEFAULT), { default: true })
     const scope = fakeScope('acme.partial')
     const handle = registry.forExtension(scope.scope).provide(Header, implementation(PARTIAL, []))
 

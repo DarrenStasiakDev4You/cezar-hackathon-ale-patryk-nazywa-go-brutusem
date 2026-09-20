@@ -162,6 +162,8 @@ describe('the Jira task header example', () => {
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status', 'offers-continue', 'offers-stop', 'offers-archive'],
+      customCapabilities: [],
+      missingCapabilities: [],
     })
   })
 

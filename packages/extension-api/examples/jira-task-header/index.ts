@@ -247,6 +247,7 @@ export default defineExtension({
     name: 'Jira task header (example)',
     version: '1.0.0',
     engines: { cezar: '>=0.11.2' },
+    permissions: ['ui.components'],
   },
   activate(context) {
     context.components.provide(TaskHeader, {
