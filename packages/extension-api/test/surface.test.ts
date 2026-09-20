@@ -38,6 +38,9 @@ describe('@open-mercato/cezar-extension-api surface', () => {
       'isExtensionError',
       'isValidContributionId',
       'isValidExtensionId',
+      'numberSetting',
+      'selectSetting',
+      'stringSetting',
       'validateManifest',
     ])
   })
