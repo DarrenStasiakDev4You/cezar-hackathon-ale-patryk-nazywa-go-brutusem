@@ -6,7 +6,8 @@ import { GlobalEventsProvider } from './api/global-events'
 import { createQueryClient } from './api/query-client'
 import { CommandsProvider } from './commands/provider'
 import type { CommandRegistry } from './commands/registry'
-import { ComponentsProvider } from './component-registry/provider'
+import { StoredComponentsProvider } from './component-registry/stored-components-provider'
+import type { ComponentPreferences } from './component-registry/preferences'
 import type { CockpitComponentRegistry } from './component-registry/registry'
 import type { EventBus } from './events/bus'
 import { EventBusProvider } from './events/provider'
@@ -51,6 +52,8 @@ export function App(props: {
    * registered (spec `2026-09-19-component-host`). Omitted (tests) → ComponentsProvider's own.
    */
   readonly components?: CockpitComponentRegistry
+  /** The workspace-backed implementation choices. Omitted in tests → an in-memory empty store. */
+  readonly componentPreferences?: ComponentPreferences
 }) {
   // Lazy initial state rather than a module-level constant: one client per App instance, so a
   // test (or a remount) never inherits another's cache, and StrictMode's double-invoke of the
@@ -67,7 +70,7 @@ export function App(props: {
           {/* Above every route: the task header renders its replaceable part through a
               ComponentHost, which reads the registry, the user's choice and the failure record
               from here. */}
-          <ComponentsProvider registry={props.components}>
+          <StoredComponentsProvider registry={props.components} preferences={props.componentPreferences}>
             <GlobalEventsProvider>
               {/* Beside the stream on purpose: it watches the run-list cache the stream patches
                   (and reconciliation refetches), turning attention transitions into browser
@@ -99,7 +102,7 @@ export function App(props: {
                 </AppearanceProvider>
               </ThemeProvider>
             </GlobalEventsProvider>
-          </ComponentsProvider>
+          </StoredComponentsProvider>
         </EventBusProvider>
       </CommandsProvider>
     </QueryClientProvider>

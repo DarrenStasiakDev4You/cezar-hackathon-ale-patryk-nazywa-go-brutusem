@@ -48,9 +48,9 @@ The preference service must not overwrite unrelated workspace UI state, and a mi
 
 ### Phase 1: Preference storage and live host wiring
 
-- [ ] 1.1 Add the bounded `components.implementations` workspace UI-state contract and tests.
-- [ ] 1.2 Add the validated component preference service with hydration, set/reset, rollback, and tests.
-- [ ] 1.3 Wire the service through the app and component provider, with live host updates and tests.
+- [x] 1.1 Add the bounded `components.implementations` workspace UI-state contract and tests. — pending commit
+- [x] 1.2 Add the validated component preference service with hydration, set/reset, rollback, and tests. — pending commit
+- [x] 1.3 Wire the service through the app and component provider, with live host updates and tests. — pending commit
 
 ### Phase 2: Settings UI
 
