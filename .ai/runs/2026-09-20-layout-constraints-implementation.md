@@ -30,8 +30,8 @@ Source doc: .ai/specs/2026-09-20-layout-constraints.md
 
 ### Phase 1: Public component policy
 
-- [ ] 1.1 Extend the extension API component contract with validated, frozen policy metadata and regression tests.
-- [ ] 1.2 Update the extension API surface, README, and contract tests for layout policy versus implementation preferences.
+- [x] 1.1 Extend the extension API component contract with validated, frozen policy metadata and regression tests. — 5cf3982f
+- [x] 1.2 Update the extension API surface, README, and contract tests for layout policy versus implementation preferences. — ccdbb49d
 
 ### Phase 2: Shared validator and page admission
 
