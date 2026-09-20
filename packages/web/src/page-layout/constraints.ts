@@ -20,8 +20,8 @@ export type LayoutConstraintIssue =
   | { readonly code: 'not-replaceable'; readonly key: string; readonly zone: ZoneId }
   | { readonly code: 'contract-not-accepted'; readonly key: string; readonly zone: ZoneId }
 
-export type LayoutOperationResult =
-  | { readonly applied: true; readonly snapshot: readonly unknown[] }
+export type LayoutOperationResult<Snapshot = readonly unknown[]> =
+  | { readonly applied: true; readonly snapshot: Snapshot }
   | { readonly applied: false; readonly issues: readonly LayoutConstraintIssue[] }
 
 export interface LayoutConstraintPolicy {

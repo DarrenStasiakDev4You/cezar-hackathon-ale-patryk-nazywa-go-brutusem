@@ -14,6 +14,14 @@ registry is separate from the DOM edit-mode `LayoutRegistry` in
 elements and edit-mode state. The live task route is not mounted through the page registry until
 the follow-up consumer migration is specified and verified.
 
+Layout policy is immutable metadata on the component contract (`movable`, `removable`,
+`replaceable`, `allowedZones` and `category`). `packages/web/src/page-layout/constraints.ts` is the
+single pure admission seam: page-content validation, rendering and edit-mode mutation callers must
+use it rather than reimplementing zone checks. `allowedZones` controls placement, `category` is
+diagnostic metadata only, and requiredness belongs to the page zone. Legacy DOM descriptors without
+contract metadata retain their existing behavior; serialized `LayoutSchema` data does not copy the
+policy.
+
 ## Zero config
 
 cezar ships no config file the user must create and no setting they must set before it works. Every capability is discovered from what is already there — the repo, the environment, `gh`, the running processes — or it degrades quietly to a smaller cezar. `.ai/cezar/config.json` is optional and every key has a working default; `.env` is never auto-loaded.
