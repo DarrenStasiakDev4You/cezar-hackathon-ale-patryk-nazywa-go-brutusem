@@ -9,3 +9,14 @@
 - `.ai/runs/2026-09-20-component-implementation-preferences.md` → `.ai/runs/2026-09-20-component-implementation-preferences/PLAN.md`.
 - Initialized `HANDOFF.md` and `NOTIFY.md`; all five Tasks rows are recorded as done from the legacy checklist and reachable commits.
 - The legacy implementation-plan checkbox for 2.4 was stale; the Progress entry and commit `dbb5d2dd` were authoritative.
+
+## 2026-09-20T02:06:33Z — om-auto-continue-pr-loop resume
+- Resumed by: @DarrenStasiakDev4You
+- Resume point: final gate (source: HANDOFF.md and Tasks table)
+- PR head SHA: 784ffb1f
+
+## 2026-09-20T02:28:23Z — final gate blocker
+- Typecheck, unit tests, build, package tests, and 97 focused changed-area tests passed.
+- The full Vitest gate reported 8 failures and 3 unhandled teardown errors in unrelated or environment-sensitive suites.
+- The mandatory browser integration suite started successfully but exceeded its 600-second budget with broad fixture/navigation failures; no preference-specific browser path exists because this PR adds no picker.
+- PR remains `in-progress`; maintainer waiver or upstream/environment fixes are required before completion.
