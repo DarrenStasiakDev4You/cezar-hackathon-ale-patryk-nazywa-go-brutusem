@@ -33,9 +33,9 @@ The preference service must not overwrite unrelated workspace UI state, and a mi
 
 ### Phase 2: Settings UI
 
-- [ ] 2.1 Add the global Interface → Components settings section and route.
-- [ ] 2.2 Render compatible implementation choices with provider metadata and reset-to-core behavior.
-- [ ] 2.3 Add UI tests for selection, persistence, incompatible filtering, core availability, and reset.
+- [x] 2.1 Add the global Interface → Components settings section and route. — pending commit
+- [x] 2.2 Render compatible implementation choices with provider metadata and reset-to-core behavior. — pending commit
+- [x] 2.3 Add UI tests for selection, persistence, incompatible filtering, core availability, and reset. — pending commit
 
 ### Phase 3: Verification and handoff
 
