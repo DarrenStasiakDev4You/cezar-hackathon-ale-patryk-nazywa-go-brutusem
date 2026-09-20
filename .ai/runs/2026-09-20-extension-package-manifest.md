@@ -47,7 +47,7 @@ Implement the pure, dependency-free `cezar.extension.json` package-manifest vali
 
 ### Phase 1: Package format and decision
 
-- [ ] 1.1 Add `src/ranges.ts` parsing for the specified comparator grammar, partials, placeholders, OR sets, bounds, and unsupported-range rejection; add parser tests.
+- [x] 1.1 Add `src/ranges.ts` parsing for the specified comparator grammar, partials, placeholders, OR sets, bounds, and unsupported-range rejection; add parser tests. — 810fe91a
 - [ ] 1.2 Add semver satisfaction with 0.x caret behavior, tilde/comparator semantics, ignored build metadata, and npm pre-release admission rules; add table-driven satisfaction tests.
 - [ ] 1.3 Add `ExtensionPackageManifest`, `EntrypointKind`, `EXTENSION_API_VERSION`, and generation-aware `validatePackageManifest`; add manifest-format tests including strict sections, path grammar, permissions, metadata, and prototype edge cases.
 - [ ] 1.4 Add `PackageCompatibility`, `PackageCompatibilityIssue`, `HostIdentity`, and ordered `checkPackageCompatibility`; add frozen-result, gating, entrypoint, throwing-getter, and revoked-proxy tests.
