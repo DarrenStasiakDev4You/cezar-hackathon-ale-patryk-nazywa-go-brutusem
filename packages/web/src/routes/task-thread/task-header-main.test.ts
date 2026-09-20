@@ -15,6 +15,7 @@ import { deriveAttention } from '@/lib/attention'
 import { workflowLabel } from '@/lib/tasks-table'
 
 import { resolveConflictsPrompt, runActionFlags } from './run-actions'
+import { useTaskMetadataController } from './task-metadata'
 import { useTaskHeaderModel, type TaskHeaderModel, type TaskHeaderModelOptions } from './task-header-main'
 
 afterEach(() => {
@@ -104,9 +105,10 @@ function LocationProbe() {
   return null
 }
 
-type HookProps = { record: ApiRun; options?: Partial<TaskHeaderModelOptions> }
+type HookOptions = Omit<Partial<TaskHeaderModelOptions>, 'metadata'> & { chooseEngine?: () => void }
+type HookProps = { record: ApiRun; options?: HookOptions }
 
-function renderModel(record: ApiRun, { path = '/tasks/r1', options = {} }: { path?: string; options?: Partial<TaskHeaderModelOptions> } = {}) {
+function renderModel(record: ApiRun, { path = '/tasks/r1', options = {} }: { path?: string; options?: HookOptions } = {}) {
   const client = createQueryClient()
   const requestStopConfirmation = vi.fn()
   const wrapper = ({ children }: { children: ReactNode }) =>
@@ -120,7 +122,10 @@ function renderModel(record: ApiRun, { path = '/tasks/r1', options = {} }: { pat
       ),
     )
   const hook = renderHook<TaskHeaderModel, HookProps>(
-    ({ record: current, options: extra }) => useTaskHeaderModel(current, { requestStopConfirmation, ...extra }),
+    ({ record: current, options: extra }) => {
+      const metadata = useTaskMetadataController(current, { chooseEngine: extra?.chooseEngine })
+      return useTaskHeaderModel(current, { requestStopConfirmation, planTally: extra?.planTally, metadata })
+    },
     { wrapper, initialProps: { record, options } },
   )
   return { ...hook, requestStopConfirmation }
@@ -272,9 +277,9 @@ describe('useTaskHeaderModel: the data', () => {
     const firstRender: unknown[] = []
     renderHook(
       () => {
-        const model = useTaskHeaderModel(run('done', { referencedPullRequestUrl: 'https://github.com/o/r/pull/7105' }), {
-          requestStopConfirmation: () => {},
-        })
+        const record = run('done', { referencedPullRequestUrl: 'https://github.com/o/r/pull/7105' })
+        const metadata = useTaskMetadataController(record)
+        const model = useTaskHeaderModel(record, { requestStopConfirmation: () => {}, metadata })
         if (firstRender.length === 0) firstRender.push(model.props.meta.references?.[0])
         return model
       },
@@ -715,7 +720,10 @@ describe('useTaskHeaderModel: identity', () => {
         createElement(CommandsProvider, null, createElement(MemoryRouter, { initialEntries: ['/tasks/r1'] }, children)),
       )
     const record = run('queued', { referencedPullRequestUrl: 'https://github.com/o/r/pull/7301' })
-    const { result } = renderHook(() => useTaskHeaderModel(record, { requestStopConfirmation: () => {} }), { wrapper })
+    const { result } = renderHook(() => {
+      const metadata = useTaskMetadataController(record)
+      return useTaskHeaderModel(record, { requestStopConfirmation: () => {}, metadata })
+    }, { wrapper })
     await waitFor(() => expect(result.current.props.attention.queuePosition).toBe(2))
     await waitFor(() => expect(result.current.props.meta.references?.[0]?.lookup).toBe('ready'))
     const queued = result.current.props

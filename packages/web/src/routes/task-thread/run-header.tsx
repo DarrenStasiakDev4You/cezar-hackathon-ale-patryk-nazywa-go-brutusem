@@ -61,6 +61,7 @@ import { Markdown } from './markdown'
 import { cliTargetResumes, cliTargetRunner, finishTitle, resumeHint, runActionFlags } from './run-actions'
 import { WorkflowSteps } from './step-rail'
 import { useTaskHeaderModel } from './task-header-main'
+import { useTaskMetadataController } from './task-metadata'
 import { useFinishRun } from './use-finish-run'
 
 /**
@@ -132,11 +133,12 @@ function RunHeaderView({
   const hint = resumeHint(run)
   const [notesOpen, setNotesOpen] = useState(false)
   const actions = useRunActions(run, onMarkedUnread)
+  const metadata = useTaskMetadataController(run, { chooseEngine: onChooseEngine })
   // The one reader of the run behind the replaceable part and the three task actions it models.
   const model = useTaskHeaderModel(run, {
     planTally,
     requestStopConfirmation: () => actions.setConfirming('cancel'),
-    chooseEngine: onChooseEngine,
+    metadata,
   })
   const { props } = model
   const editor = model.titleEditor
