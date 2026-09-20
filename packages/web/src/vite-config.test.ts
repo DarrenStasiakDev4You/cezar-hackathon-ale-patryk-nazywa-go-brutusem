@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import config, { entryChunkGuard, entryChunkProblems, fixtureBundleGuard, reactRuntimeChunk, type BundledFile } from '../vite.config'
 
@@ -140,5 +140,14 @@ describe('the entry chunk check', () => {
         ?.flat()
         .some((plugin) => plugin !== null && typeof plugin === 'object' && 'name' in plugin && plugin.name === guard.name),
     ).toBe(true)
+  })
+
+  it('fails when a release asset contains the fixture id', () => {
+    const guard = fixtureBundleGuard()
+    const error = vi.fn()
+    guard.generateBundle?.call({ error } as never, {}, {
+      'assets/leaked.js': { type: 'asset', source: 'fixture.configurable-header' },
+    } as never)
+    expect(error).toHaveBeenCalledWith('test fixture leaked into release assets: assets/leaked.js')
   })
 })
