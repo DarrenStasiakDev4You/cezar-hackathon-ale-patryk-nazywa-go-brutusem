@@ -50,12 +50,12 @@ function settingsIndexPath(scope: SettingsScope): string {
   return scope === 'global' ? '/settings/global' : '/settings'
 }
 
-function useOmittedSections(): readonly SettingsSectionId[] {
+function useOmittedSections(scope: SettingsScope): readonly SettingsSectionId[] {
   const registry = useOptionalComponentRegistry()
   const subscribe = registry?.subscribe ?? NOOP_SUBSCRIBE
   const snapshot = registry?.revision ?? ZERO_REVISION
   useSyncExternalStore(subscribe, snapshot)
-  return registry !== null && hasConfigurableComponent(registry) ? [] : ['components']
+  return scope === 'project' && (registry === null || !hasConfigurableComponent(registry)) ? ['components'] : []
 }
 
 /** Global links bypass the project prefix; project links get it. See the header comment. */
@@ -188,7 +188,7 @@ export function SettingsSectionRoute({
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>
 }) {
   const Body = section.component
-  const omit = useOmittedSections()
+  const omit = useOmittedSections(scope)
   return (
     <div
       data-route={scope === 'global' ? `settings-global-${section.id}` : `settings-${section.id}`}
@@ -222,7 +222,7 @@ export function SettingsIndexRoute({ scope, capabilities }: {
   scope: SettingsScope
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>
 }) {
-  const omit = useOmittedSections()
+  const omit = useOmittedSections(scope)
   const { Link } = navComponents(scope)
   const global = scope === 'global'
   return (
