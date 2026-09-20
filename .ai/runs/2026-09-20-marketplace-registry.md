@@ -34,15 +34,15 @@ Spec PR: #73 (merged)
 
 ### Phase 1: Contract And Pure Catalog Logic
 
-- [ ] 1.1 Define the bounded external catalog and HTTP response schemas, export inferred types, and add contract-focused fixtures/tests.
-- [ ] 1.2 Implement pure catalog normalization with envelope validation, per-entry salvage, duplicate rejection, deterministic semver ordering, and bounded input handling.
-- [ ] 1.3 Validate compatibility metadata with the existing extension API range grammar while preserving declarations without making host compatibility decisions.
+- [x] 1.1 Define the bounded external catalog and HTTP response schemas, export inferred types, and add contract-focused fixtures/tests. — 681cd7ed
+- [x] 1.2 Implement pure catalog normalization with envelope validation, per-entry salvage, duplicate rejection, deterministic semver ordering, and bounded input handling. — 681cd7ed
+- [x] 1.3 Validate compatibility metadata with the existing extension API range grammar while preserving declarations without making host compatibility decisions. — 681cd7ed
 
 ### Phase 2: On-Demand Service Endpoint
 
-- [ ] 2.1 Implement the fixed-source, dependency-injected fetcher with timeout, byte cap, redirect policy, in-flight coalescing, and short-lived in-memory success cache.
-- [ ] 2.2 Add and chain the workspace marketplace route, expose the inferred typed-client method, and test success, partial, unavailable, cache, and non-project-scoped behavior.
+- [x] 2.1 Implement the fixed-source, dependency-injected fetcher with timeout, byte cap, redirect policy, in-flight coalescing, and short-lived in-memory success cache. — 5dc2b6b5
+- [x] 2.2 Add and chain the workspace marketplace route, expose the inferred typed-client method, and test success, partial, unavailable, cache, and non-project-scoped behavior. — 5dc2b6b5
 
 ### Phase 3: Operational Handoff
 
-- [ ] 3.1 Add the checked-in sample catalog fixture and update `BACKWARD_COMPATIBILITY.md` with exact route, response, cache, and additive evolution semantics.
+- [x] 3.1 Add the checked-in sample catalog fixture and update `BACKWARD_COMPATIBILITY.md` with exact route, response, cache, and additive evolution semantics. — d22c80df

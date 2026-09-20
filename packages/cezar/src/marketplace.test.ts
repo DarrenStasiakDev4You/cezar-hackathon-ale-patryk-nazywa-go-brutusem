@@ -139,6 +139,19 @@ describe('marketplace contract and parser', () => {
     }
   });
 
+  it('rejects invalid UTF-8 before replacement characters can enter the catalog', async () => {
+    const bytes = new TextEncoder().encode(JSON.stringify(catalog()));
+    const description = new TextEncoder().encode('Issues and transitions on the task header.');
+    const offset = bytes.findIndex((value, index) => value === description[0] && bytes[index + 1] === description[1]);
+    expect(offset).toBeGreaterThanOrEqual(0);
+    bytes[offset] = 0xc3;
+    bytes[offset + 1] = 0x28;
+    const response = await createMarketplaceRegistry({
+      fetch: async () => new Response(bytes, { status: 200 }),
+    }).read();
+    expect(response).toEqual({ available: false, reason: 'marketplace registry is unavailable' });
+  });
+
   it('aborts a fetch that exceeds the explicit timeout', async () => {
     const response = await createMarketplaceRegistry({
       timeoutMs: 1,

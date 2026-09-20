@@ -197,7 +197,10 @@ async function readResponseBody(response: Response): Promise<string | null> {
       const next = await reader.read();
       if (next.done) break;
       size += next.value.byteLength;
-      if (size > MARKETPLACE_MAX_DOCUMENT_BYTES) return null;
+      if (size > MARKETPLACE_MAX_DOCUMENT_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
       chunks.push(next.value);
     }
   } finally {
@@ -209,7 +212,11 @@ async function readResponseBody(response: Response): Promise<string | null> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  return new TextDecoder().decode(bytes);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
 }
 
 /**
