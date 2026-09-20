@@ -23,7 +23,7 @@ export function uiStateComponentStorage(queryClient: QueryClient): ComponentPref
         queryKey: workspaceQueryKeys.uiState,
         queryFn: ({ signal }) => getWorkspaceUiState({ signal }),
       }))
-      return state.components ?? {}
+      return state?.components ?? {}
     },
     async save(components) {
       const merged = await putWorkspaceUiState({ components })
