@@ -16,3 +16,11 @@
 - `npm test` completed with 8145/8158 tests passing; the failures are outside the changed metadata tests plus the expected source-list tests fixed in `aa106438`.
 - Browser screenshot artifacts were not produced by the failed isolated scenario; final QA must capture them after the remaining implementation is complete.
 - Next step: implement Step 3.1.
+
+## 2026-09-20T01:08:00Z — checkpoint after Step 3.3
+- Completed Steps 3.1, 3.2 and 3.3. The independent compact implementation, task-route proof, conformance fixtures and generic host gates are pushed.
+- `npm run typecheck` passed.
+- Compact implementation, route proof, conformance, source-list and core-registration tests passed: 31 tests in the latest focused group.
+- Live browser verification used the shared `agent-browser` environment successfully. Screenshot: `.ai/qa/artifacts_e2e/task-metadata-checkpoint/task-thread-metadata.png`.
+- The previously recorded full-suite and isolated E2E failures remain documented in `HANDOFF.md`; they are not from the conformance changes.
+- Next step: update README and AGENTS.md, then run final validation in configured order.
