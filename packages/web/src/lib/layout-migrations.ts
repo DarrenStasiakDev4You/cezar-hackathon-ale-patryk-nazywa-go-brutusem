@@ -1,5 +1,6 @@
 import {
   cloneLayoutSchema,
+  parseLayoutJson,
   parseLayoutSchema,
   type LayoutContractRef,
   type LayoutPlacementV1,
@@ -25,6 +26,7 @@ export type LayoutChange = {
 }
 
 export type LayoutMigrationErrorCode =
+  | 'invalid-json'
   | 'invalid-schema'
   | 'unsupported-version'
   | 'zone-collision'
@@ -221,10 +223,10 @@ export function migrateLayoutSchema(
   const changes: LayoutChange[] = []
   let parsed: LayoutSchema
   try {
-    parsed = parseLayoutSchema(input)
+    parsed = typeof input === 'string' ? parseLayoutJson(input) : parseLayoutSchema(input)
   } catch (error) {
-    const code = error instanceof Error && 'code' in error && error.code === 'unsupported-version'
-      ? 'unsupported-version'
+    const code = error instanceof Error && 'code' in error && (error.code === 'invalid-json' || error.code === 'unsupported-version')
+      ? error.code
       : 'invalid-schema'
     const path = error instanceof Error && 'path' in error && typeof error.path === 'string' ? error.path : '$'
     return { status: 'fallback', fallback, original: input, error: migrationError(code, path, error instanceof Error ? error.message : 'layout schema is invalid') }

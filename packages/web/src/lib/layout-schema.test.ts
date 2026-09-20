@@ -71,6 +71,9 @@ describe('LayoutSchema', () => {
     const result = tryParseLayoutSchema({ ...v1, schemaVersion: 4 })
     expect(result.success).toBe(false)
     if (!result.success) expect(result.error.code).toBe('unsupported-version')
+    const oldResult = tryParseLayoutSchema({ ...v1, schemaVersion: 0 })
+    expect(oldResult.success).toBe(false)
+    if (!oldResult.success) expect(oldResult.error.code).toBe('invalid-schema')
     expect(() => parseLayoutJson('{')).toThrow('not valid JSON')
   })
 

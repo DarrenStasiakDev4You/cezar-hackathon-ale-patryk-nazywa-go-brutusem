@@ -128,4 +128,9 @@ describe('migrateLayoutSchema', () => {
     const result = migrateLayoutSchema({ page: 'task', schemaVersion: 9, zones: {} }, fallback)
     expect(result).toMatchObject({ status: 'fallback', fallback, error: { code: 'unsupported-version' } })
   })
+
+  it('keeps invalid JSON distinct from a valid document with an invalid shape', () => {
+    const result = migrateLayoutSchema('{', fallback)
+    expect(result).toMatchObject({ status: 'fallback', fallback, error: { code: 'invalid-json', path: '$' }, original: '{' })
+  })
 })

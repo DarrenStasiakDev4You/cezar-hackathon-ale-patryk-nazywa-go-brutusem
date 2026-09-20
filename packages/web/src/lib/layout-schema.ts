@@ -100,7 +100,7 @@ const readPositiveInteger = (value: unknown, path: string): number => {
 
 const readSchemaVersion = (value: unknown): LayoutSchemaVersion => {
   if (!isPositiveInteger(value) || !LAYOUT_SCHEMA_VERSIONS.includes(value as LayoutSchemaVersion)) {
-    if (typeof value === 'number' && Number.isInteger(value)) {
+    if (typeof value === 'number' && Number.isInteger(value) && value > Math.max(...LAYOUT_SCHEMA_VERSIONS)) {
       throw new LayoutSchemaValidationError('unsupported-version', '$.schemaVersion', `schema version ${value} is not supported`)
     }
     fail('$.schemaVersion', 'must be one of the supported schema versions')
