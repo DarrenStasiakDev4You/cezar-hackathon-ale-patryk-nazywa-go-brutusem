@@ -20,7 +20,7 @@ Source doc: `.ai/specs/2026-09-20-layout-registry.md`
 
 - The page-layout registry is a new shared web abstraction; malformed definitions must be rejected atomically and snapshots must not be mutable.
 - The generic renderer must preserve the existing component registry's compatibility and fallback behavior.
-- The final gate remains blocked by six unrelated failures in `npm test` (extension-api compatibility expectation, four external task-header tests and one system-prompt timeout); the implementation tests and all other configured commands pass.
+- The final gate remains blocked by five unrelated failures in `npm test` (one extension-api compatibility expectation and four external task-header tests); the implementation tests and all other configured commands pass.
 
 ## Implementation Plan
 
@@ -60,3 +60,5 @@ Source doc: `.ai/specs/2026-09-20-layout-registry.md`
 
 - [x] 3.1 Add unit tests covering registry invariants, validation and renderer behavior. — 624d2de8
 - [ ] 3.2 Run the repository validation gate and prepare the implementation PR.
+
+Gate evidence: `npm run typecheck`, `npm run test:unit` (36/36), `npm run build`, and `npm run test:package` (16/16) pass. `npm test` reports 8,222/8,227 passing with five failures confined to the pre-existing extension-api/plain-task-composer expectation and external-task-header suite; no layout-registry test fails.
