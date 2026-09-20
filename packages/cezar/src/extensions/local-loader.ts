@@ -129,7 +129,7 @@ export async function scanLocalExtensions(options: LocalExtensionScanOptions): P
     }
 
     const manifestPath = join(packageRoot, 'cezar.extension.json');
-    let text: string;
+    let bytes: Uint8Array;
     try {
       const info = await stat(manifestPath);
       if (info.size > MAX_EXTENSION_MANIFEST_BYTES) {
@@ -138,9 +138,18 @@ export async function scanLocalExtensions(options: LocalExtensionScanOptions): P
         candidates.push(emptyEntry(candidate, issue));
         continue;
       }
-      text = await readFile(manifestPath, 'utf8');
+      bytes = await readFile(manifestPath);
     } catch {
       issue = diagnostic(candidate, null, 'manifest-missing', 'cezar.extension.json is missing', 'cezar.extension.json');
+      diagnostics.push(issue);
+      candidates.push(emptyEntry(candidate, issue));
+      continue;
+    }
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      issue = diagnostic(candidate, null, 'manifest-invalid-json', 'cezar.extension.json is not valid UTF-8', 'cezar.extension.json');
       diagnostics.push(issue);
       candidates.push(emptyEntry(candidate, issue));
       continue;

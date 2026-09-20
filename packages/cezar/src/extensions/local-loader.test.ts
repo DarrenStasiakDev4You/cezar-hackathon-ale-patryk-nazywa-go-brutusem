@@ -52,6 +52,18 @@ describe('scanLocalExtensions', () => {
     expect(result.extensions.find((entry) => entry.candidate === 'broken')).toMatchObject({ status: 'rejected' });
   });
 
+  it('rejects manifests containing invalid UTF-8 before JSON parsing', async () => {
+    const root = await fixture();
+    const packageRoot = join(root, 'invalid-utf8');
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(join(packageRoot, 'cezar.extension.json'), Uint8Array.from([0x7b, 0xff, 0x7d]));
+    const result = await scanLocalExtensions({ root, version: '0.11.1' });
+    expect(result.extensions.find((entry) => entry.candidate === 'invalid-utf8')).toMatchObject({
+      status: 'rejected',
+      diagnostic: { code: 'manifest-invalid-json' },
+    });
+  });
+
   it('requires approval for requested permissions and allows zero-permission packages', async () => {
     const root = await fixture();
     await packageAt(root, 'plain', manifest({ id: 'acme.plain' }));
