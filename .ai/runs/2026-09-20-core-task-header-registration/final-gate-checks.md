@@ -8,7 +8,7 @@ PR: #54
 | Command | Result | Notes |
 | --- | --- | --- |
 | `npm run typecheck` | pass | All contract, client, server, web, and extension-api typechecks passed. |
-| `npm test` | blocked | 8,146 passed / 12 failed across 8 files, with 2 teardown errors. Failures were in automation route loading, agent profiles, open-in-app, route parity, system prompt, settings, and task-files suites; the changed focused suites passed. |
+| `npm test` | pass | CI-equivalent Node 24 run: 433 files and 8,158 tests passed. |
 | `npm run test:unit` | pass | 36 passed. |
 | `npm run build` | pass | Production server/web build and package check passed. |
 | `npm run test:package` | pass | 16 passed. |
@@ -17,14 +17,14 @@ PR: #54
 ## Focused Validation
 
 - Changed component/extension/task-header suites: 38 files, 1,067 passed.
-- The full Vitest run reached 425 passed files and 8 failed files; 12 tests failed and 2 teardown errors were reported.
+- The native-host run was also attempted and reproduced the prior WSL2 timeout failures; it is not the authoritative result because the repository requires the Linux container gate.
 
 ## Integration
 
-- Environment: `.ai/qa/test-env.json`, `http://127.0.0.1:56851`, `agent-browser` installed.
-- `npm run test:e2e`: failed before completion; the existing quick-list, project-groups, and task-thread suites reported fixture/UI timing and baseline assertion failures. A focused task-thread rerun passed 13/20 tests; failures included stale fixture expectations, missing step-progress DOM during evaluation, server socket closure, and browser navigation timeouts. No source change was made for these unrelated failures.
-- Browser screenshots: not recorded because the existing integration suite did not reach a stable pass and the changed contract has no new user-visible flow.
+- Environment: `.ai/qa/test-env.json`, `http://127.0.0.1:4321`, `agent-browser 0.38.1` installed.
+- `npm run test:e2e`: failed broadly and exceeded the 10-minute run budget. A focused `task-thread.e2e.ts` rerun passed 15/20 tests; failures were stale fixture expectations (timestamp and action-menu contents), a missing step-progress DOM node, and a server socket closure during rename. These failures are outside the task-header contract change and no source change was made for them.
+- Browser screenshots: not recorded because the integration suite did not reach a stable pass; the changed contract is covered by focused component tests and has no new user-visible flow.
 
 ## Gate Status
 
-Not complete. The implementation-specific checks pass, but the repository's full test gate remains blocked by the failures documented above.
+Not complete. The full validation gate passes in the CI-equivalent container, but the mandatory real-browser integration suite remains blocked by the failures documented above.
