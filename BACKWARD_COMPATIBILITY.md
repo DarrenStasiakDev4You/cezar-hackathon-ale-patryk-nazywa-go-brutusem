@@ -18,6 +18,12 @@ Breaking: renaming/removing a command, flag, alias or env var; changing a defaul
 
 ## 2. HTTP API of the cockpit server (`packages/cezar/src/server/server.ts`)
 
+Component implementation preferences are additive workspace UI state: `components.implementations`
+maps a served contract id without its major to a component id. The optional map is bounded to 200
+entries with 128-character ids; absent means core's registered default. Unknown component siblings
+and entries survive round-trips, and a missing or incompatible implementation falls back to core
+without clearing the stored choice.
+
 **Every route lives under `/api/v1`.** The unversioned `/api/*` surface was REMOVED (see the breaking entry in CHANGELOG.md): the paths below are the real URLs; the project-scoped ones also answer at `/api/v1/p/<projectId>/<path>`. A future `v2` mounts beside `v1` rather than editing these paths.
 
 Consumed by the bundled React cockpit (`packages/cezar/web/dist`, shipped in lockstep — low risk) and by anyone scripting `localhost:4321`. Saved bookmarklets do NOT call the API — since GitHub's CSP blocked cross-origin probes they only open a page URL (`packages/web/src/lib/bookmarklet.ts`), which is why removing the unversioned surface did not break them.
@@ -167,6 +173,11 @@ Required path for a change: keep parsing the old spelling for at least one minor
 the instructions emit the new one.
 
 ## 9. `~/.cezar/` per-user workspace files (`packages/cezar/src/workspace/`, `packages/cezar/src/paths.ts`)
+
+The `ui-state.json` `components.implementations` map is written only by the cockpit's
+`componentPreferences` service. It validates choices through `resolveComponent`, never stores core's
+default, uses `reset` to remove an override, and retains stale choices until the implementation is
+available again. The key is optional and needs no migration.
 
 The multi-project workspace (spec `.ai/specs/2026-07-20-multi-project-workspace.md`) adds per-user state next to the per-repo files in section 3. Same contract, one extra twist: these files are shared by **every** cezar the user runs across all their repos, so an old CLI and a new one routinely read and write the *same file* — the `.passthrough()` rule cuts both ways (an **older writer must not lose keys a newer version wrote**, not just vice versa). All paths hang off `cezarHomeDir()`, so the `CEZ_HOME` override applies (tests and containers must pin it and never touch a real home).
 
