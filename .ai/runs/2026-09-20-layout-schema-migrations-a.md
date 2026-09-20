@@ -36,7 +36,7 @@ Risks:
 
 ### Phase 2: Load boundary and safe fallback
 
-- [ ] 2.1 Add a pure load result that distinguishes current, migrated and fallback layouts while retaining raw input.
-- [ ] 2.2 Connect the loader to the default core layout without throwing into the root React tree.
-- [ ] 2.3 Add regression coverage for optional resolver fallback and required-component failure to the full default.
+- [x] 2.1 Add a pure load result that distinguishes current, migrated and fallback layouts while retaining raw input. — 3026a749
+- [x] 2.2 Connect the loader to the default core layout without throwing into the root React tree. — 3026a749
+- [x] 2.3 Add regression coverage for optional resolver fallback and required-component failure to the full default. — 67b3bdcf
 - [ ] 2.4 Run the repository validation gate, review the diff, update this plan and publish the implementation PR.
