@@ -40,4 +40,4 @@ Source doc: .ai/specs/2026-09-20-local-extension-loader.md
 - [x] 4.2 Document local package authoring, permissions, reload behavior, and the unsandboxed trust boundary. — deecd90f
 - [ ] 4.3 Update AGENTS/reference and BACKWARD_COMPATIBILITY.md as required, then run the full validation and browser smoke gates.
 
-Validation note: typecheck, build, unit tests, feature-focused Vitest tests, and package installation pass. The aggregate `npm test` run remains red on unrelated automation, system-prompt, agent-profile, open-in-app, and automation-route tests; browser smoke has not been run.
+Validation note: typecheck, build, unit tests, feature-focused Vitest tests, and package installation pass. Manual review found and fixed malformed UTF-8 manifest acceptance in `77892385`. The aggregate `npm test` run remains red on unrelated automation, system-prompt, agent-profile, open-in-app, and automation-route tests; browser smoke has not been run.
