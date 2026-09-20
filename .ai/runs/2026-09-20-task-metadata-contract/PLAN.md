@@ -13,11 +13,11 @@
 
 | Phase | Step | Title | Exec | Status | Commit |
 |-------|------|-------|------|--------|--------|
-| 1 | 1.1 | The shared model and the contract | inline | done | 3c67690c |
-| 1 | 1.2 | The controller, and the header's adapter on top of it | inline | done | fb98a9ca |
-| 2 | 2.1 | One list of core's sources, and the host's header constant | inline | done | d3762a65 |
-| 2 | 2.2 | `shows-meta` leaves the header contract | inline | done | 790839ca |
-| 2 | 2.3 | The split | inline | done | c2e4a9f8 |
+| 1 | 1.1 | The shared model and the contract | inline | done | 0a06733e |
+| 1 | 1.2 | The controller, and the header's adapter on top of it | inline | done | 22d259a9 |
+| 2 | 2.1 | One list of core's sources, and the host's header constant | inline | done | a51d890f |
+| 2 | 2.2 | `shows-meta` leaves the header contract | inline | done | e297f917 |
+| 2 | 2.3 | The split | inline | done | 5063eda9 |
 | 3 | 3.1 | The second implementation | inline | todo | — |
 | 3 | 3.2 | The proof on the task page | inline | todo | — |
 | 3 | 3.3 | The conformance test | inline | todo | — |
