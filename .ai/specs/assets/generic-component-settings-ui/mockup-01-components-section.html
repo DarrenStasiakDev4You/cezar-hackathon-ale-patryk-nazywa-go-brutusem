@@ -45,7 +45,8 @@
   .select{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px 26px 6px 9px;font-size:13px;position:relative;min-width:132px}
   .select::after{content:"▾";position:absolute;right:9px;color:var(--muted)}
   .reset{font-size:12px;color:var(--soft);text-decoration:underline;text-underline-offset:2px}
-  .cardfoot{display:flex;justify-content:flex-end;gap:8px;padding-top:12px}
+  .cardfoot{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding-top:12px}
+  .saved{font-size:12px;color:var(--accent)}
   .btn{font-size:12.5px;border:1px solid var(--border);border-radius:8px;padding:6px 11px;color:var(--soft);background:var(--panel2)}
   .btn.primary{color:#08120e;background:var(--accent);border-color:var(--accent);font-weight:600}
   .dirty{border-color:#3f6b57}
@@ -71,25 +72,25 @@
         <div class="grouphead">Task header · cezar.task.header.main@1</div>
         <div class="card">
           <div class="cardhead">
-            <div><div class="title">Compact row</div>
-              <div class="by">example.compact-header · <span class="mono">example.compact-header.row</span></div></div>
+            <div><div class="title">Configurable header</div>
+              <div class="by">test.configurable-header · <span class="mono">test.configurable-header.row</span></div></div>
             <span class="badge global">All projects</span>
           </div>
           <div class="rows">
-            <div class="row"><div class="rowtext"><div class="lab">Show engine</div>
-              <div class="hint">Show the runner and model beside the status.</div></div>
+            <div class="row"><div class="rowtext"><div class="lab">Compact</div>
+              <div class="hint">One dense row instead of title and meta rows.</div></div>
               <div class="ctl"><span class="sw on"><i></i></span></div></div>
             <div class="row"><div class="rowtext"><div class="lab">Density</div>
               <div class="hint">How much padding the row uses.</div></div>
               <div class="ctl"><span class="reset">Reset</span><span class="select">Cozy</span></div></div>
             <div class="row"><div class="rowtext"><div class="lab">Title max length</div>
-              <div class="hint">Characters before the title is ellipsized (16–120). Edited — press Save.</div></div>
+              <div class="hint">Characters before the title is ellipsized (16–120). Saves 400 ms after you stop typing.</div></div>
               <div class="ctl"><span class="reset">Reset</span><span class="input num dirty">48</span></div></div>
             <div class="row"><div class="rowtext"><div class="lab">Status prefix</div>
               <div class="hint">Printed before the status label.</div></div>
               <div class="ctl"><span class="input">•</span></div></div>
           </div>
-          <div class="cardfoot"><span class="btn">Restore defaults</span><span class="btn primary">Save</span></div>
+          <div class="cardfoot"><span class="saved">Saved</span><span class="btn">Restore defaults</span></div>
         </div>
         <div class="grouphead">Task composer · cezar.task.composer@1</div>
         <div class="card">
@@ -106,10 +107,10 @@
               <div class="hint">Shown while the box is empty.</div></div>
               <div class="ctl"><span class="input">Describe the next step…</span></div></div>
           </div>
-          <div class="cardfoot"><span class="btn" style="opacity:.45">Save</span></div>
+          
         </div>
         <p class="note">Controls are generated from each implementation's declared settings schema. Switches and dropdowns
-          write on change; typed fields save with the card's Save button, as Resources and Worktrees do.
+          write at once; typed fields save on blur or 400 ms after the last keystroke — no Save button.
           A value is stored only when it differs from its default.</p>
       </div>
     </div>

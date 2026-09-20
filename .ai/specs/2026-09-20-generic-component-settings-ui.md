@@ -43,27 +43,28 @@ The Definition of Done is one capability with three coupled guarantees:
 
 | Requirement | Required behavior | Proof |
 |---|---|---|
-| An example implementation declares settings | The `compact-task-header` example declares one field of each supported type, with no Cezar-side code that knows about it. | `packages/extension-api/test/compact-task-header.test.ts` asserts the declared schema; the cockpit test activates the example through the real extension host. |
-| The user changes a value in Settings | Settings → Components lists every configurable implementation and renders its controls from the schema alone; changing one persists through `registry.setSettings()` to the declared scope's UI-state file. | Section test flips a switch, edits a text and a number field and picks a select option, and asserts the store received the canonical sparse override. |
-| The component reacts | The rendered implementation shows the new value without a reload. | A cockpit test renders the section and the task header together, changes a setting and asserts the header's output changes. |
+| An example implementation declares settings | The `configurable-header` test fixture declares one field of each supported type, with no Cezar-side code that knows about it, and renders from `useComponentSettings()`. | The fixture activates through the real extension host; a bundle test asserts its id appears in no release build. |
+| The user changes a value in Settings | Settings → Components lists every configurable implementation and renders its controls from the schema alone; a switch or dropdown persists at once and a typed field persists on blur or 400 ms after the last keystroke, through `registry.setSettings()` to the declared scope's UI-state file. | Section test flips a switch, edits a text and a number field and picks a select option, and asserts the store received the canonical sparse override — once per field, not once per keystroke. |
+| The component reacts, and the value survives a reload | The rendered implementation shows the new value with no reload, and the same value still applies after one. | The owner's seven-step flow as one cockpit integration test: the fixture is registered and selected, the section changes a setting, the header's output changes, and a fresh registry/host/store over the same persisted state still renders it. |
 
 The third guarantee needs no new mechanism: a store write already calls `changed()` in the registry,
 which bumps `revision()`, and `SettingsImplementation` in `component-host.tsx` re-reads on every
 revision. This item must not break that chain — it is the DoD.
 
-## Resolved assumptions (autonomous defaults)
+## Resolved assumptions (autonomous defaults, Q4 and Q5 answered by the owner)
 
 This spec was written unattended by `om-auto-write-spec`; the questions that would have gated an
-interactive run are answered below. Each is reversible before merge — correct any row and the
-design follows.
+interactive run are answered below. **Q4 and Q5 carry the owner's own answers**
+([PR #59](https://github.com/DarrenStasiakDev4You/cezar-hackathon-ale-patryk-nazywa-go-brutusem/pull/59#issuecomment-5746736077)),
+and the design follows them; the rest are autonomous defaults, reversible before merge.
 
 | # | Question | Applied default | Why | Confirm? |
 |---|---|---|---|---|
 | Q1 | Where does the form live — a new Settings section, or inside the component-overrides UI (PR #58)? | **One new section, `components`, at project scope** (`/p/:projectId/settings/components`), declared once in `SETTINGS_SECTIONS`. If #58's override picker lands under the same id, the generated form mounts inside its per-implementation card rather than becoming a second section. | `resolveComponentProjectId()` reads the project from a `/p/<id>/` URL, so a **project**-scoped definition can only be written from a project URL; a global-scope section could never edit half the settings it lists. One id keeps "components" a single destination. | reversible |
 | Q2 | Which field types ship, and as what public API? | **`boolean` (exists) plus `stringSetting`, `numberSetting`, `selectSetting`**, each an additive descriptor with optional `label`/`description` and its own bounds. No other type, no free-form JSON field. | Exactly the brief's four. Additive to `defineSettings`, so every implementation written against the boolean-only API keeps compiling. | reversible |
 | Q3 | Does the persisted value type widen beyond boolean? | **Yes** — `componentSettingsSchema` values become `boolean \| string \| number`, with a 256-character string cap and a 32 KiB cap on the whole map. Existing boolean files parse unchanged. | Storing a string as a boolean is not possible; the schema is an additive widening of an optional UI-state key, and BACKWARD_COMPATIBILITY.md §2 records the new shape in the same PR. | reversible |
-| Q4 | Save on change, or an explicit Save button? | **Both, split the way this repo already splits them**: a switch or a dropdown writes on change; a text or number field is edited locally and saved with the card's **Save** button, disabled until the card is dirty and valid, with the invalid rule shown inline. | That is the house rhythm, not a compromise: Appearance's segmented controls write on change, while Resources' memory limit and monitoring interval (`resources-section.tsx:220,273`) and Worktrees' retention (`worktrees-section.tsx:116`) all use a dirty-and-valid-gated Save. A debounced write for typed fields would be a new mechanism with no precedent in Settings. | reversible |
-| Q5 | How is "the user changes it and the component reacts" proven, given no extension ships in the cockpit today? | **Through the cockpit's own test of the real extension host** — the `compact-task-header` example is activated, the section is rendered, a control is changed and the header's output is asserted. `BUILTIN_EXTENSIONS` stays empty, so the released cockpit gains no example extension. | Shipping an example extension to every user is a product decision beyond this brief, and the platform's other items (task header, composer, capability validation) all proved themselves this way. Manual verification is documented: add the example to `BUILTIN_EXTENSIONS` locally and run `CEZ_DRY_RUN=1 npm run dev`. | reversible — **override this row if the DoD means clicking it in the shipped cockpit**; the change is then one line in `builtin-extensions.ts` plus a QA pass |
+| Q4 | Save on change, or an explicit Save button? | **Autosave, with the debounce the owner specified** — `boolean` and `select` persist immediately; `string` and `number` keep a local draft and persist on blur, or 400 ms after the last keystroke. **No Save button anywhere in the section.** | The owner's call: "customizacja UI zaczyna przypominać formularz administracyjny" — and the whole point of this section is the loop *change a setting → see the component react*, which a Save button interrupts. It deliberately departs from the one existing precedent for typed fields (Resources' memory limit `resources-section.tsx:273`, Worktrees' retention `worktrees-section.tsx:116`, both dirty-and-valid-gated Save buttons), so the debounced writer is a new mechanism in Settings and carries the obligations below: pending writes flush on blur and on unmount, and per-implementation writes must be atomic. | ✅ answered by the owner |
+| Q5 | How is "the user changes it and the component reacts" proven, given no extension ships in the cockpit today? | **A test-fixture extension, never a demo extension in the shipped cockpit.** `packages/web/test-fixtures/extensions/configurable-header/` provides a `cezar.task.header.main@1` implementation that declares one field of each type and renders from `useComponentSettings()`. The proof is the owner's seven-step flow: register the fixture → select it → open Settings → change a setting → assert the component changed → reload → assert the value still applies. A release build must contain no fixture code, and that is asserted against the built bundle. | The owner's call, and it is the stronger proof: a demo extension shipped to every user would be product surface added to demonstrate a test. Two consequences are called out in § Phasing rather than hidden: the seven steps run as a cockpit integration test against the **real** extension host (where "reload" is a fresh registry, host and store over the same persisted state), and the same fixture in a **real browser** additionally needs a build-time opt-in plus the persisted implementation preference from #56 to perform step 2 without a picker. | ✅ answered by the owner |
 | Q6 | Does this item add the "custom settings renderer" the brief anticipates? | **No.** The renderer is an internal table keyed by descriptor `type`, private to the cockpit. An unknown type renders as a disabled, read-only row naming the type. | Smallest surface that ships something working; a public renderer API would be a second extension contract (component-contract shaped) and deserves its own item. The internal table is where it would attach. | reversible |
 | Q7 | Does the section also list implementations with no settings, or offer the override picker? | **No** — only implementations that declare a settings definition, grouped by contract. | Scope cohesion: choosing which implementation renders is `2026-09-19-component-implementation-preferences` / PR #58. Listing unconfigurable rows would make the section's empty state meaningless. | reversible |
 | Q8 | The item changes the public extension API, a protected UI-state shape **and** adds a Settings surface. Split it? | **No, ship it as one item** — but in the phase order below, where phase 3 alone is deployable against today's boolean-only API. | The brief names the four control types as the deliverable, and a boolean-only picker would be shipped and immediately rewritten. The split line, if the owner wants one, is exactly phase 3 (the section, booleans) versus phases 1–2 (the vocabulary and its persistence) — the phases are written so either order works. | reversible — this is a product call about the brief's scope, not a design constraint |
@@ -100,9 +101,11 @@ design follows.
    every reset through `registry.resetSettings(componentId, key?)`, and a successful write invalidates
    both UI-state query keys so the rest of the cockpit does not keep a stale snapshot. The section
    knows nothing about any extension.
-5. **Prove it on a real extension.** The `compact-task-header` example declares four settings (one
-   per type) and renders from them, so the DoD's three guarantees are asserted against extension
-   code that Cezar has never special-cased.
+5. **Prove it on a real extension, without shipping one.** A test-fixture extension
+   (`packages/web/test-fixtures/extensions/configurable-header/`) declares four settings — one per
+   type — and renders from `useComponentSettings()`, so the DoD is asserted against extension code
+   Cezar has never special-cased. `BUILTIN_EXTENSIONS` keeps shipping empty, and a bundle test
+   proves the fixture's id is in no release build.
 
 ### Prior art
 
@@ -133,9 +136,11 @@ design follows.
   need the four generated types cover. The renderer table is the seam it would attach to.
 - **A JSON textarea per implementation.** Rejected: it is `ui-state.json` with extra steps — no
   labels, no validation before the write, no reset, no discoverability.
-- **Explicit Save per card.** Rejected (Q4): every other Settings section saves on change, and a
-  draft buffer would have to reconcile with the revision-driven re-read that makes the component
-  react in the first place.
+- **Explicit Save per card.** Rejected by the owner (Q4), although it is what Resources and
+  Worktrees do for their typed fields: a Save button turns component customization into an
+  administrative form and breaks the loop this section exists for — change a setting, watch the
+  component react. It stays the honest fallback if the debounced writer's obligations (flush on
+  blur and unmount, atomic per-implementation writes) cannot be met.
 - **Add `label`/`description` as a separate metadata map.** Rejected: a field's label belongs on the
   field. Optional properties on the descriptor keep one object to validate and one to render.
 
@@ -187,8 +192,11 @@ the revision chain would be the one silent way to fail this item.
   project scope), one `SettingsSectionId` member, and the `omit` argument on
   `visibleSettingsSections`; `settings-shell.tsx` computes `omit` from the live registry so the entry
   appears only when something is configurable.
-- `packages/extension-api/examples/compact-task-header/index.ts` — the worked example gains four
-  settings and reads them through `useComponentSettings()`.
+- `packages/web/test-fixtures/extensions/configurable-header/` (new, test-only) — the fixture
+  extension behind the Definition of Done: four declared settings, one per type, rendered from
+  `useComponentSettings()`. It is never in `BUILTIN_EXTENSIONS` for a release build, and a bundle
+  test enforces that. `packages/extension-api/examples/compact-task-header/` is deliberately left
+  as it is: its settings-free authoring path is the guard that the new descriptors stay additive.
 - Docs: `packages/extension-api/README.md` (the settings paragraph), the component-settings row in
   `AGENTS.md`, and `BACKWARD_COMPATIBILITY.md` §2's `componentSettings` paragraph.
 
@@ -294,8 +302,8 @@ type widens:
 ```json
 {
   "componentSettings": {
-    "example.compact-header.row": {
-      "showEngine": false,
+    "test.configurable-header.row": {
+      "compact": true,
       "density": "cozy",
       "titleMaxLength": 48,
       "statusPrefix": "•"
@@ -460,18 +468,28 @@ copy for a field that declares no `description`. It shares the same tokens and a
 
 | Descriptor | Control | Write |
 |---|---|---|
-| `boolean` | `Switch` | on change |
-| `select` | `Select` with one item per option | on change |
-| `string` | single-line `Input` (`placeholder` honored) | local, saved with the card's **Save** |
-| `number` | `Input type="number"` (`min`/`max`/`step` honored) | local, saved with the card's **Save** |
+| `boolean` | `Switch` | immediately on change |
+| `select` | `Select` with one item per option | immediately on change |
+| `string` | single-line `Input` (`placeholder` honored) | local draft → 400 ms after the last keystroke, or on blur |
+| `number` | `Input type="number"` (`min`/`max`/`step` honored) | local draft → 400 ms after the last keystroke, or on blur |
 | unknown `type` | disabled read-only row: "This setting needs a newer Cezar (`type`)" | never |
 
-**Save** sits in the card footer beside **Restore defaults**, disabled until that card has an edited
-and valid typed field — the shape Resources and Worktrees already use — and a row whose stored value
-differs from its default shows a **Reset** action. Reset and Restore defaults write through
-`registry.resetSettings(componentId, key?)`. The unknown-type row is reachable only once the host
-snapshots a descriptor it cannot render (a later renderer item, or a field type added after this
-one); until then an unrecognizable definition registers the implementation without settings.
+**Autosave, no Save button** (Q4). A toggle or a dropdown is a decision, so it persists at once; a
+typed field is a sentence in progress, so it keeps a local draft and persists once the typing stops.
+Three obligations come with that and are part of this item, not of a later one:
+
+- a pending debounced write **flushes on blur and on unmount**, so leaving the section — or the page —
+  never loses the value the user just typed;
+- the debounce is per field, but two fields of one implementation can be in flight together, which is
+  why the per-implementation read-modify-write becomes atomic (§ API Contracts);
+- the row reports its own state: a brief "Saved" on success, and an inline error that names the field
+  and the rule on rejection. The card never shows a spinner for a one-field write.
+
+A row whose stored value differs from its default shows a **Reset** action; the card footer keeps
+**Restore defaults** alone. Both write through `registry.resetSettings(componentId, key?)`. The
+unknown-type row is reachable only once the host snapshots a descriptor it cannot render (a later
+renderer item, or a field type added after this one); until then an unrecognizable definition
+registers the implementation without settings.
 
 **States.**
 
@@ -481,10 +499,10 @@ one); until then an unrecognizable definition registers the implementation witho
 - *Unavailable* — a read or write fails with `settings-unavailable` (UI state offline or read-only):
   the card's controls are disabled with the reason underneath, and the values shown are the declared
   defaults. Nothing else on the page is affected.
-- *Rejected* — a typed value outside its declared bounds keeps **Save** disabled and shows the rule
-  inline ("Must be 16–120"); no write is attempted. A write that the host still rejects
-  (`invalid-settings`) leaves the stored value unchanged, keeps the edited value on screen and raises
-  one `toast(..., { tone: 'danger' })`, as the other sections do.
+- *Rejected* — a typed value outside its declared bounds is never written: the debounce resolves to
+  an inline rule instead ("Must be 16–120"), the draft stays on screen and the stored value is
+  untouched. A write the host still rejects (`invalid-settings`) behaves the same way and adds one
+  `toast(..., { tone: 'danger' })`, as the other sections do.
 
 **Accessibility.** Every control has a `<Label htmlFor>`; the hint and any error are wired through
 `aria-describedby`, and the error row is a live region. The switch is the cockpit's own primitive, so
@@ -508,6 +526,8 @@ revision and the host re-reads.
 | Stored value out of the declared range after the author tightened `max` | Same path: the value is ignored for rendering, the field shows the default, and the next write canonicalizes the entry. |
 | The user types a number outside `min`/`max` | The write is not attempted; the inline error names the rule. The previous persisted value is untouched. |
 | The user clears a `string` field | An empty string is a legal value when `maxLength ≥ 0`; if it differs from the default it is stored, otherwise the key is dropped. |
+| The user types and immediately navigates away | The pending debounced write flushes on blur and on unmount, so the value persists; a flush that fails surfaces as the same toast, because the section is still mounted when the blur fires. |
+| The user types an invalid value and leaves it | Nothing is written at any point; the field keeps the draft and the inline rule until it becomes valid or the section is left. The stored value never changes. |
 | Two fields of one card are edited quickly | Each write is a sparse patch merged **inside the store's write queue** through `update()`, so the second sees the first. Without that change the merge happens on a snapshot read outside the queue and the second write erases the first field — the reason `update()` is in scope. |
 | Two cockpit tabs edit different implementations | Unchanged from PR #50: read-modify-write plus the server's merge-write preserves both entries. |
 | The same implementation is edited in two tabs | Last writer wins, as documented for UI state; the other tab reconciles on its next revision-driven read. |
@@ -540,6 +560,15 @@ revision and the host re-reads.
   settings. It makes a newer extension forward-compatible with an older cockpit, and it means a
   typo in a schema now shows up as a missing card plus one diagnostic line rather than a missing
   component. Core keeps the strict path, so a core mistake still fails the gate.
+- **Autosave is a new mechanism in Settings (owner-decided).** Every other typed field in Settings
+  is behind a dirty-and-valid Save button; this section persists on a 400 ms debounce instead,
+  because the feedback loop here is the component itself. The debt that buys is concrete and
+  testable: flush-on-blur, flush-on-unmount, atomic per-implementation writes, and one write per
+  field rather than one per keystroke. If any of those is dropped, the honest fallback is the Save
+  button, not a partial autosave.
+- **The fixture must not reach a release.** The Definition of Done runs on extension code that ships
+  with the tests, so the one way this leaks is a build that bundles it. The guard is a bundle
+  assertion on the fixture's extension id, and it belongs in the same PR as the fixture.
 - **A dead nav entry avoided, a new visibility rule accepted.** The section's entry is computed from
   the registry rather than declared statically, which is one more thing the shell re-reads on a
   registry revision. The alternative — an always-visible section that is empty for every user who
@@ -577,8 +606,18 @@ revision and the host re-reads.
    phase a widened value survives a reload and two quick edits of one card cannot drop each other.
 3. **Phase 3 — The section.** The renderer table, the Components section, the registry entry and
    every state (loading, empty, unavailable, rejected). After this phase a user can change a value.
-4. **Phase 4 — The worked example and the docs.** The example's settings, the end-to-end cockpit
-   proof, and the README/AGENTS/BACKWARD_COMPATIBILITY updates.
+4. **Phase 4 — The fixture, the proof and the docs.** The `configurable-header` test fixture, the
+   owner's seven-step flow as one cockpit integration test, the bundle guard, and the
+   README/AGENTS/BACKWARD_COMPATIBILITY updates.
+
+   The same seven steps in a **real browser** (`packages/web/e2e/`) are deliberately **not** in this
+   phase, and the reason is worth stating plainly: `npm run test:e2e` builds and boots the production
+   bundle (`test-env-up.sh`, `BUILD_COMMAND="npm ci && npm run build"`), so a browser-level run needs
+   (a) a build-time opt-in that puts the fixture in that one build and keeps it out of releases, and
+   (b) step 2 — *select Test Header* — which on `main` nothing can do yet: `preferenceOf` is not
+   wired in `main.tsx` and no preference is persisted until #56 lands. The integration test proves
+   the same seven steps today; the browser variant is a one-step follow-on once #56 is in, and it is
+   spelled out in the plan so it is not forgotten.
 
 Each phase leaves the application working and shippable on its own. Phase 3 is the one that is
 independently *useful* — it renders today's boolean settings without phases 1–2 — which is why it is
@@ -662,27 +701,36 @@ only way to know a new test is not green either way.
      route still renders; registering one reveals the entry without a remount; the filter stays pure
      (a unit test calls it with an explicit `omit`).
 11. **Wire writes, resets and failures.**
-   - Test: a switch and a select write `{ key: value }` through `setSettings` on change; a text or
-     number field writes only when Save is pressed, and Save is disabled until the card is dirty and
-     valid; an out-of-range number shows the inline rule and issues no write; a successful write
+   - Test: a switch and a select write `{ key: value }` through `setSettings` on change; typing five
+     characters into a string field produces **one** write, 400 ms after the last one; blurring
+     flushes a pending write immediately and unmounting flushes it too (prove both fail without the
+     flush); an out-of-range number issues no write and shows the inline rule; a successful write
      invalidates both UI-state query keys; `settings-unavailable` disables the card with its reason;
      Reset and Restore defaults call `resetSettings` with and without a key; a failed write leaves
-     the previous value visible.
+     the previous value visible and toasts once.
 
 ### Phase 4 — The worked example and the docs
 
-12. **Give the example settings.**
-    - Code: `packages/extension-api/examples/compact-task-header/index.ts` declares `showEngine`
-      (boolean), `density` (select: compact/cozy), `titleMaxLength` (number, 16–120, integer) and
-      `statusPrefix` (string, ≤ 8) and renders from them.
-    - Test: `packages/extension-api/test/compact-task-header.test.ts` asserts the declared schema and
-      that the component reads it; the example still imports only itself, the package and `react`
-      (`test/boundary.test.ts`).
-13. **Prove the Definition of Done end to end.**
-    - Test: a cockpit test activates the example through the real extension host, renders the
-      Components section and the task header together, changes `showEngine` and `density`, and
-      asserts the store received the canonical override **and** the header re-rendered with the new
-      value; a second case asserts core's default is unaffected.
+12. **Add the test-fixture extension.**
+    - Code: `packages/web/test-fixtures/extensions/configurable-header/` — an extension providing
+      `cezar.task.header.main@1` that declares `compact` (boolean), `density` (select:
+      compact/cozy), `titleMaxLength` (number, 16–120, integer) and `statusPrefix` (string, ≤ 8)
+      through the shipped `defineSettings({ scope, schema })` form, and renders from
+      `useComponentSettings()` with the values visible in its output (`data-density`, the title it
+      prints).
+    - Test: the fixture activates through the real extension host and its declared schema reaches
+      `registration.settings`; **a bundle test asserts the fixture's extension id appears in no file
+      under `packages/cezar/web/dist/`** after a release build, and fails if it is ever added to the
+      shipped `BUILTIN_EXTENSIONS`.
+13. **Prove the Definition of Done end to end — the owner's seven steps.**
+    - Test: one cockpit integration test walks (1) register the fixture through the real extension
+      host, (2) select it for the contract, (3) render Settings → Components, (4) turn `compact` on
+      and edit `titleMaxLength`, (5) assert the rendered header changed, (6) rebuild registry, host
+      and store over the same persisted state — the reload — and (7) assert both values still apply.
+      A second case asserts core's default renders unaffected when the fixture is not selected.
+    - Follow-on, not this phase: the same seven steps in a real browser (`packages/web/e2e/`), which
+      needs the build-time fixture opt-in and #56's persisted preference for step 2. Open it as a
+      follow-up issue when this lands.
 14. **Document the durable contract.**
     - Docs: the settings paragraph in `packages/extension-api/README.md` (the four field types, the
       generated form, the non-secret rule), the component-settings row in `AGENTS.md` (the section,
@@ -691,5 +739,6 @@ only way to know a new test is not green either way.
       its caps), and the release notes.
 15. **Run the full gate.** The five configured commands, plus the focused extension-api,
     component-registry, component-host, settings-section and UI-state suites. Manual verification
-    (optional, documented in the PR): add the example to `BUILTIN_EXTENSIONS` locally and run
-    `CEZ_DRY_RUN=1 npm run dev` to click the flow end to end.
+    (optional, documented in the PR): register the fixture in a local `BUILTIN_EXTENSIONS` and run
+    `CEZ_DRY_RUN=1 npm run dev` to click the flow end to end — a local edit that must never be
+    committed, which is what the bundle guard in step 12 is there to catch.
