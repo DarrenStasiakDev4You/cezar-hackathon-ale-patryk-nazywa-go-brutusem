@@ -48,24 +48,29 @@ function registryWithFixtures(): CockpitComponentRegistry {
   const registry = createComponentRegistry({ contracts: [Header, TaskList], onDiagnostic: () => {} })
   registry.register(Header, header(DEFAULT_ID, 'Task header'))
   registry.register(Header, header(COMPACT_ID, 'Compact header'))
-  registry.register(TaskList, { id: 'cezar.fixture.task-list.default', title: 'Task list', component: RenderList })
+  registry.register(
+    TaskList,
+    { id: 'cezar.fixture.task-list.default', title: 'Task list', component: RenderList } as ComponentImplementation<
+      { readonly runIds: readonly string[] }
+    >,
+  )
   registry.forExtension(fakeScope('acme.jira').scope).provide(Header, header(JIRA_ID, 'Jira header'))
   registry.forExtension(fakeScope('acme.jira').scope).provide(TaskList, {
     id: JIRA_LIST_ID,
     title: 'Jira list',
     component: RenderList,
-  })
+  } as ComponentImplementation<{ readonly runIds: readonly string[] }>)
   registry.forExtension(fakeScope('acme.versioned').scope).provide(HeaderV2, {
     id: VERSIONED_ID,
     title: 'Versioned header',
     component: Render,
-  })
+  } as ComponentImplementation<HeaderProps>)
   registry.forExtension(fakeScope('acme.misfit').scope).provide(Header, {
     id: MISFIT_ID,
     title: 'Misfit header',
     component: Render,
     capabilities: [],
-  })
+  } as ComponentImplementation<HeaderProps>)
   return registry
 }
 
