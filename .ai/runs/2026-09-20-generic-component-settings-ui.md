@@ -41,9 +41,9 @@ Source doc: `.ai/specs/2026-09-20-generic-component-settings-ui.md`
 
 ### Phase 2: Persistence
 
-- [ ] 2.1 Widen the contract schema
-- [ ] 2.2 Widen the store, add atomic updates, and deduplicate reads
-- [ ] 2.3 Prove reload persistence for the new types
+- [x] 2.1 Widen the contract schema — 2cb07a0f
+- [x] 2.2 Widen the store, add atomic updates, and deduplicate reads — 2cb07a0f
+- [x] 2.3 Prove reload persistence for the new types — 2cb07a0f
 
 ### Phase 3: The section
 
