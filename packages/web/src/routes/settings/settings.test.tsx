@@ -143,7 +143,7 @@ describe('the section registry', () => {
   })
 
   it('splits the sections by scope (step 3.5) — each id belongs to exactly one area', () => {
-    expect(visibleSettingsSections('project').map((s) => s.id)).toEqual(PROJECT_SECTIONS)
+    expect(visibleSettingsSections('project', undefined, { omit: ['components'] }).map((s) => s.id)).toEqual(PROJECT_SECTIONS)
     expect(visibleSettingsSections('global').map((s) => s.id)).toEqual(GLOBAL_SECTIONS)
     // No id may appear in both areas — the two navs would then link to two different pages
     // under the same name, and the `settings/<id>` legacy redirect would be ambiguous.

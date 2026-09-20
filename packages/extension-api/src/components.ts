@@ -220,11 +220,52 @@ function layoutOf(value: unknown, issue: (path: string, message: string) => void
 export type ComponentProps<C> = C extends ComponentContract<infer P> ? P : never
 
 export type ComponentSettingsScope = 'global' | 'project'
-export interface BooleanSettingDefinition { readonly type: 'boolean'; readonly default: boolean }
-export type ComponentSettingDefinition = BooleanSettingDefinition
+export interface SettingFieldMeta {
+  readonly label?: string
+  readonly description?: string
+}
+export interface BooleanSettingDefinition extends SettingFieldMeta {
+  readonly type: 'boolean'
+  readonly default: boolean
+}
+export interface StringSettingDefinition extends SettingFieldMeta {
+  readonly type: 'string'
+  readonly default: string
+  readonly maxLength?: number
+  readonly placeholder?: string
+}
+export interface NumberSettingDefinition extends SettingFieldMeta {
+  readonly type: 'number'
+  readonly default: number
+  readonly min?: number
+  readonly max?: number
+  readonly step?: number
+  readonly integer?: boolean
+}
+export interface SettingOption {
+  readonly value: string
+  readonly label?: string
+}
+export interface SelectSettingDefinition extends SettingFieldMeta {
+  readonly type: 'select'
+  readonly default: string
+  readonly options: readonly SettingOption[]
+}
+export type ComponentSettingDefinition =
+  | BooleanSettingDefinition
+  | StringSettingDefinition
+  | NumberSettingDefinition
+  | SelectSettingDefinition
+export type ComponentSettingValue = boolean | string | number
 export type ComponentSettingsSchema = Readonly<Record<string, ComponentSettingDefinition>>
 export type InferSettings<Schema extends ComponentSettingsSchema> = {
-  -readonly [Key in keyof Schema]: Schema[Key] extends BooleanSettingDefinition ? boolean : never
+  -readonly [Key in keyof Schema]: Schema[Key] extends BooleanSettingDefinition
+    ? boolean
+    : Schema[Key] extends NumberSettingDefinition
+      ? number
+      : Schema[Key] extends StringSettingDefinition | SelectSettingDefinition
+        ? string
+        : never
 }
 export interface ComponentSettingsDefinition<Settings> {
   readonly scope: ComponentSettingsScope
@@ -237,9 +278,110 @@ export type ComponentRenderProps<Props, Settings = never> = [Settings] extends [
   ? Props
   : Props & { readonly useComponentSettings: () => Settings }
 
-export function booleanSetting(options: { readonly default: boolean }): BooleanSettingDefinition {
+export function booleanSetting(options: {
+  readonly default: boolean
+  readonly label?: string
+  readonly description?: string
+}): BooleanSettingDefinition {
   if (typeof options?.default !== 'boolean') throw settingsError('Invalid component settings default')
-  return Object.freeze({ type: 'boolean' as const, default: options.default })
+  validateMeta(options)
+  return Object.freeze({
+    type: 'boolean' as const,
+    default: options.default,
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.description === undefined ? {} : { description: options.description }),
+  })
+}
+
+export function stringSetting(options: {
+  readonly default: string
+  readonly maxLength?: number
+  readonly placeholder?: string
+  readonly label?: string
+  readonly description?: string
+}): StringSettingDefinition {
+  const maxLength = settingMaxLength(options?.maxLength)
+  validateMeta(options)
+  if (typeof options?.default !== 'string' || options.default.length > maxLength) {
+    throw settingsError(`String setting default must be at most ${maxLength} characters`)
+  }
+  if (options.placeholder !== undefined && typeof options.placeholder !== 'string') {
+    throw settingsError('String setting placeholder must be a string')
+  }
+  return Object.freeze({
+    type: 'string' as const,
+    default: options.default,
+    maxLength,
+    ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.description === undefined ? {} : { description: options.description }),
+  })
+}
+
+export function numberSetting(options: {
+  readonly default: number
+  readonly min?: number
+  readonly max?: number
+  readonly step?: number
+  readonly integer?: boolean
+  readonly label?: string
+  readonly description?: string
+}): NumberSettingDefinition {
+  validateMeta(options)
+  const { min, max, step, integer } = options ?? {}
+  if (min !== undefined && !finiteNumber(min)) throw settingsError('Number setting min must be finite')
+  if (max !== undefined && !finiteNumber(max)) throw settingsError('Number setting max must be finite')
+  if (min !== undefined && max !== undefined && min > max) throw settingsError('Number setting min must not exceed max')
+  if (step !== undefined && !(finiteNumber(step) && step > 0)) throw settingsError('Number setting step must be positive and finite')
+  if (integer !== undefined && typeof integer !== 'boolean') throw settingsError('Number setting integer must be a boolean')
+  if (!validNumberValue(options?.default, min, max, integer)) throw settingsError('Invalid component settings number default')
+  return Object.freeze({
+    type: 'number' as const,
+    default: options.default,
+    ...(min === undefined ? {} : { min }),
+    ...(max === undefined ? {} : { max }),
+    ...(step === undefined ? {} : { step }),
+    ...(integer === undefined ? {} : { integer }),
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.description === undefined ? {} : { description: options.description }),
+  })
+}
+
+export function selectSetting(options: {
+  readonly default: string
+  readonly options: readonly SettingOption[]
+  readonly label?: string
+  readonly description?: string
+}): SelectSettingDefinition {
+  validateMeta(options)
+  if (!Array.isArray(options?.options) || options.options.length < 1 || options.options.length > 64) {
+    throw settingsError('Select setting options must contain 1 to 64 items')
+  }
+  const values = new Set<string>()
+  const copied = options.options.map((option, index) => {
+    if (!isRecord(option) || typeof option.value !== 'string' || option.value.length < 1 || option.value.length > 64) {
+      throw settingsError(`Select setting option ${index} has an invalid value`)
+    }
+    if (values.has(option.value)) throw settingsError(`Select setting option ${index} is not unique`)
+    values.add(option.value)
+    if (option.label !== undefined && (typeof option.label !== 'string' || option.label.length > 128)) {
+      throw settingsError(`Select setting option ${index} has an invalid label`)
+    }
+    return Object.freeze({
+      value: option.value,
+      ...(option.label === undefined ? {} : { label: option.label }),
+    })
+  })
+  if (typeof options?.default !== 'string' || !values.has(options.default)) {
+    throw settingsError('Select setting default must be one of its options')
+  }
+  return Object.freeze({
+    type: 'select' as const,
+    default: options.default,
+    options: Object.freeze(copied),
+    ...(options.label === undefined ? {} : { label: options.label }),
+    ...(options.description === undefined ? {} : { description: options.description }),
+  })
 }
 
 export function defineSettings<const Schema extends ComponentSettingsSchema>(options: {
@@ -250,14 +392,14 @@ export function defineSettings<const Schema extends ComponentSettingsSchema>(opt
   if (typeof options?.schema !== 'object' || options.schema === null || Array.isArray(options.schema)) {
     throw settingsError('Invalid component settings schema')
   }
-  const fields: Record<string, BooleanSettingDefinition> = {}
+  const fields: Record<string, ComponentSettingDefinition> = {}
   for (const key of Object.keys(options.schema)) {
     const descriptor = (options.schema as Record<string, unknown>)[key]
-    if (key.length === 0 || key.length > 64 || typeof descriptor !== 'object' || descriptor === null ||
-      (descriptor as { type?: unknown }).type !== 'boolean' || typeof (descriptor as { default?: unknown }).default !== 'boolean') {
+    const normalized = key.length === 0 || key.length > 64 ? undefined : normalizeSettingDefinition(descriptor)
+    if (normalized === undefined) {
       throw settingsError(`Invalid component setting "${key}"`)
     }
-    fields[key] = Object.freeze({ type: 'boolean', default: (descriptor as BooleanSettingDefinition).default })
+    fields[key] = normalized
   }
   if (Object.keys(fields).length > 64) throw settingsError('Component settings have too many fields')
   const schema = Object.freeze({ ...fields }) as Schema
@@ -266,11 +408,11 @@ export function defineSettings<const Schema extends ComponentSettingsSchema>(opt
     if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new TypeError('component settings must be an object')
     const source = input as Record<string, unknown>
     for (const key of Object.keys(source)) if (!Object.prototype.hasOwnProperty.call(fields, key)) throw new TypeError(`unknown component setting "${key}"`)
-    const result: Record<string, boolean> = {}
+    const result: Record<string, ComponentSettingValue> = {}
     for (const [key, descriptor] of Object.entries(fields)) {
       const value = source[key]
       if (value === undefined) result[key] = descriptor.default
-      else if (typeof value !== 'boolean') throw new TypeError(`component setting "${key}" must be a boolean`)
+      else if (!settingValueIsValid(descriptor, value)) throw new TypeError(`component setting "${key}" ${settingValueError(descriptor, value)}`)
       else result[key] = value
     }
     return Object.freeze(result) as InferSettings<Schema>
@@ -280,6 +422,64 @@ export function defineSettings<const Schema extends ComponentSettingsSchema>(opt
 
 function settingsError(message: string): ExtensionDefinitionError {
   return new ExtensionDefinitionError('invalid-id', message, [{ path: 'settings', message }])
+}
+
+function finiteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function validNumberValue(value: unknown, min?: number, max?: number, integer?: boolean): value is number {
+  return finiteNumber(value) && (integer !== true || Number.isSafeInteger(value)) &&
+    (min === undefined || value >= min) && (max === undefined || value <= max)
+}
+
+function settingMaxLength(value: unknown): number {
+  if (value === undefined) return 256
+  if (!(typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 256)) {
+    throw settingsError('String setting maxLength must be an integer from 0 to 256')
+  }
+  return value
+}
+
+function validateMeta(value: unknown): void {
+  if (!isRecord(value)) throw settingsError('Invalid component setting definition')
+  if (value.label !== undefined && (typeof value.label !== 'string' || value.label.length > 128)) {
+    throw settingsError('Component setting label must be at most 128 characters')
+  }
+  if (value.description !== undefined && (typeof value.description !== 'string' || value.description.length > 256)) {
+    throw settingsError('Component setting description must be at most 256 characters')
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function normalizeSettingDefinition(value: unknown): ComponentSettingDefinition | undefined {
+  if (!isRecord(value)) return undefined
+  try {
+    if (value.type === 'boolean') return booleanSetting(value as never)
+    if (value.type === 'string') return stringSetting(value as never)
+    if (value.type === 'number') return numberSetting(value as never)
+    if (value.type === 'select') return selectSetting(value as never)
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
+function settingValueIsValid(definition: ComponentSettingDefinition, value: unknown): value is ComponentSettingValue {
+  if (definition.type === 'boolean') return typeof value === 'boolean'
+  if (definition.type === 'string') return typeof value === 'string' && value.length <= (definition.maxLength ?? 256)
+  if (definition.type === 'number') return validNumberValue(value, definition.min, definition.max, definition.integer)
+  return typeof value === 'string' && definition.options.some((option) => option.value === value)
+}
+
+function settingValueError(definition: ComponentSettingDefinition, value: unknown): string {
+  if (definition.type === 'boolean') return 'must be a boolean'
+  if (definition.type === 'string') return typeof value === 'string' ? `must be at most ${definition.maxLength ?? 256} characters` : 'must be a string'
+  if (definition.type === 'number') return typeof value === 'number' ? 'is outside its declared bounds' : 'must be a number'
+  return 'must be one of the declared options'
 }
 
 /**

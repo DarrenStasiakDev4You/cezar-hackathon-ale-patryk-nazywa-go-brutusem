@@ -12,6 +12,7 @@ import {
   KeyboardIcon,
   NotebookPenIcon,
   PaletteIcon,
+  PanelsTopLeftIcon,
 } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
@@ -22,6 +23,7 @@ import { AgentConfigSection } from './agent-config-section'
 import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
 import { BookmarkletsSection } from './bookmarklets-section'
+import { ComponentSettingsSection } from './component-settings-section'
 import { ComponentsSection } from './components-section'
 import { NotificationsSection } from './notifications-section'
 import { ProjectsSection } from './projects-section'
@@ -108,6 +110,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Edit the coding agents’ own config files, per scope.',
     icon: FileCogIcon,
     component: AgentConfigSection,
+    scope: 'project',
+  },
+  {
+    id: 'components',
+    title: 'Components',
+    description: 'Settings the installed component implementations declare.',
+    icon: PanelsTopLeftIcon,
+    component: ComponentSettingsSection,
     scope: 'project',
   },
   {
@@ -210,11 +220,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
 export function visibleSettingsSections(
   scope: SettingsScope,
   capabilities?: Partial<Pick<Capabilities, 'singleProject'>>,
+  options: { readonly omit?: readonly SettingsSectionId[] } = {},
 ): SettingsSection[] {
+  const omitted = new Set(options.omit ?? [])
   return SETTINGS_SECTIONS.filter(
     (section) =>
       !section.hidden &&
       section.scope === scope &&
+      !omitted.has(section.id) &&
       !(capabilities?.singleProject === true && section.id === 'projects'),
   )
 }

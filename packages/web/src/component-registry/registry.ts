@@ -6,6 +6,8 @@ import {
   type ComponentContract,
   type ComponentImplementation,
   type ComponentRegistrationHandle,
+  type ComponentSettingDefinition,
+  type ComponentSettingValue,
   type ComponentSettingsDefinition,
   type ComponentRegistry,
   type ContributionId,
@@ -53,6 +55,7 @@ export interface ComponentMetadata {
 export type ComponentRegistrationIssue =
   | ComponentCompatibilityIssue
   | { readonly code: 'unknown-contract'; readonly message: string; readonly contractId: ContributionId }
+  | { readonly code: 'invalid-settings-definition'; readonly message: string }
 
 /** One implementation of a contract, as the registry holds it. Deeply frozen; never mutated. */
 export interface ComponentRegistration {
@@ -83,6 +86,8 @@ export interface ComponentRegistration {
   readonly compatible: boolean
   readonly issues: readonly ComponentRegistrationIssue[]
   readonly settings?: ComponentSettingsDefinition<unknown>
+  /** A malformed extension definition is isolated without making its component unusable. */
+  readonly settingsIssue?: Extract<ComponentRegistrationIssue, { readonly code: 'invalid-settings-definition' }>
 }
 
 /** A compatible registration of the served contract, as `listUsable` returns it. */
@@ -157,7 +162,9 @@ export class ComponentError extends Error {
 /** The default `onDiagnostic`: one console line per registration the host will not use. */
 export function logComponentDiagnostic(registration: ComponentRegistration): void {
   const who = registration.extensionId ?? 'core'
-  const why = registration.issues.map((issue) => issue.message).join('; ')
+  const why = [...registration.issues, ...(registration.settingsIssue === undefined ? [] : [registration.settingsIssue])]
+    .map((issue) => issue.message)
+    .join('; ')
   console.warn(`[cezar:extensions] ${registration.componentId} (${who}) is not used: ${why}`)
 }
 
@@ -290,7 +297,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
 
   return {
     register(contract, implementation) {
-      const input = prepare(contract, implementation, CORE_PREFIX, (id) => `Core component "${id}" must be under "${CORE_PREFIX}"`)
+       const input = prepare(contract, implementation, CORE_PREFIX, (id) => `Core component "${id}" must be under "${CORE_PREFIX}"`)
       const { componentId, contractId, contractVersion } = input
       assertFree(componentId)
 
@@ -335,18 +342,19 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       return Object.freeze<ComponentRegistry>({
         provide<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>, Settings>) {
           scope.assertLive()
-          const input = prepare(
-            contract,
-            implementation,
-            prefix,
-            (id) => `Extension "${extensionId}" may only provide components under "${prefix}", not "${id}"`,
-          )
+           const input = prepare(
+             contract,
+             implementation,
+             prefix,
+             (id) => `Extension "${extensionId}" may only provide components under "${prefix}", not "${id}"`,
+             true,
+           )
           assertFree(input.componentId)
           // Provenance comes from the scope, never from anything the implementation claims.
           const registration = registrationOf(input, extensionId, fitOf(input))
           // On an ended activation `track` disposes the registration and throws `disposed`.
           const handle = scope.track(add(registration))
-          if (!registration.compatible) report(registration)
+           if (!registration.compatible || registration.settingsIssue !== undefined) report(registration)
           return handleOf<Settings>(registration, handle)
         },
       })
@@ -368,14 +376,29 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
       const registration = registrations.get(componentId); const definition = registration?.settings
       if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
       if (!isRecord(patch)) throw new ComponentSettingsError('invalid-settings', 'Component settings patch must be an object')
-      let existing: unknown; try { existing = await rawSettings(registration, settingsStore, resolveProjectId) } catch (error) { throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
-      let parsed: unknown; try { parsed = definition.parse({ ...(isRecord(existing) ? existing : {}), ...patch }) } catch (error) { throw new ComponentSettingsError('invalid-settings', error instanceof Error ? error.message : 'Invalid component settings') }
-      try { const canonical = sparseSettings(definition, parsed); const target = targetForScope(definition.scope, resolveProjectId); if (Object.keys(canonical).length === 0) await settingsStore.clear(target, componentId); else await settingsStore.set(target, componentId, canonical as unknown as JsonValue) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+      const target = targetForScope(definition.scope, resolveProjectId)
+      try {
+        await settingsStore.update(target, componentId, (existing) => {
+          let parsed: unknown
+          try { parsed = definition.parse({ ...(isRecord(existing) ? existing : {}), ...patch }) }
+          catch (error) { throw new ComponentSettingsError('invalid-settings', error instanceof Error ? error.message : 'Invalid component settings') }
+          const canonical = sparseSettings(definition, parsed)
+          return Object.keys(canonical).length === 0 ? undefined : canonical as unknown as JsonValue
+        })
+      } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
     },
     async resetSettings(componentId, key) {
       const registration = registrations.get(componentId); const definition = registration?.settings
       if (!registration || !definition) throw new ComponentSettingsError('settings-unavailable', 'Component settings are unavailable')
-      try { const target = targetForScope(definition.scope, resolveProjectId); if (key === undefined) return await settingsStore.clear(target, componentId); const existing = await rawSettings(registration, settingsStore, resolveProjectId); if (!isRecord(existing)) return; const next = { ...existing }; delete next[key]; if (Object.keys(next).length === 0) await settingsStore.clear(target, componentId); else await settingsStore.set(target, componentId, next as unknown as JsonValue) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
+      try {
+        const target = targetForScope(definition.scope, resolveProjectId)
+        await settingsStore.update(target, componentId, (existing) => {
+          if (key === undefined || !isRecord(existing)) return undefined
+          const next = { ...existing }
+          delete next[key]
+          return Object.keys(next).length === 0 ? undefined : next as JsonValue
+        })
+      } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
     },
   }
 }
@@ -389,6 +412,7 @@ interface PreparedImplementation {
   readonly declaredCapabilities: readonly ComponentCapability[]
   readonly metadata: ComponentMetadata
   readonly settings?: ComponentSettingsDefinition<unknown>
+  readonly settingsIssue?: Extract<ComponentRegistrationIssue, { readonly code: 'invalid-settings-definition' }>
 }
 
 /** A fit: the check's outcome, or the host's own `unknown-contract`. Frozen. */
@@ -409,6 +433,7 @@ function prepare(
   implementation: unknown,
   prefix: string,
   outsidePrefix: (componentId: ContributionId) => string,
+  allowInvalidSettings = false,
 ): PreparedImplementation {
   const token = tokenOf(contract)
   if (token === undefined) throw new ComponentError('invalid-id', INVALID_CONTRACT)
@@ -430,7 +455,10 @@ function prepare(
   }
   if (!capabilities.ok) throw invalid(`capabilities ${capabilities.rule}`)
   const settingsDefinition = settings === undefined ? undefined : snapshotSettingsDefinition(settings)
-  if (settings !== undefined && settingsDefinition === undefined) throw invalid('settings must be a valid settings definition')
+  const settingsIssue = settings !== undefined && settingsDefinition === undefined
+    ? Object.freeze({ code: 'invalid-settings-definition' as const, message: `Invalid settings definition for component "${id}"` })
+    : undefined
+  if (settingsIssue !== undefined && !allowInvalidSettings) throw invalid('settings must be a valid settings definition')
   const names = capabilities.names ?? []
   for (let index = 0; index < names.length; index += 1) {
     if (typeof names[index] !== 'string') throw invalid(`capabilities[${index}] must be a string`)
@@ -444,6 +472,7 @@ function prepare(
     declaredCapabilities: Object.freeze([...new Set(names as readonly ComponentCapability[])]),
     metadata: Object.freeze(description === undefined ? { title } : { title, description }),
     settings: settingsDefinition,
+    settingsIssue,
   }
 }
 
@@ -463,6 +492,7 @@ function registrationOf(input: PreparedImplementation, extensionId: ExtensionId 
     compatible: fit.issues.length === 0,
     issues: fit.issues,
     ...(input.settings === undefined ? {} : { settings: input.settings }),
+    ...(input.settingsIssue === undefined ? {} : { settingsIssue: input.settingsIssue }),
   })
 }
 
@@ -524,26 +554,31 @@ function implementationFields(implementation: unknown): ImplementationFields {
 }
 
 function snapshotSettingsDefinition(value: unknown): ComponentSettingsDefinition<unknown> | undefined {
-  if (!isRecord(value) || (value.scope !== 'global' && value.scope !== 'project') || typeof value.parse !== 'function' || !isRecord(value.schema) || !isRecord(value.defaults)) return undefined
-  const schema: Record<string, { readonly type: 'boolean'; readonly default: boolean }> = {}
-  for (const key of Object.keys(value.schema)) {
-    const descriptor = value.schema[key]
-    if (!isRecord(descriptor) || descriptor.type !== 'boolean' || typeof descriptor.default !== 'boolean' || key.length === 0 || key.length > 64) return undefined
-    schema[key] = Object.freeze({ type: 'boolean', default: descriptor.default })
+  try {
+    if (!isRecord(value) || (value.scope !== 'global' && value.scope !== 'project') || typeof value.parse !== 'function' || !isRecord(value.schema) || !isRecord(value.defaults)) return undefined
+    const schema: Record<string, ComponentSettingDefinition> = {}
+    for (const key of Object.keys(value.schema)) {
+      if (key.length === 0 || key.length > 64) return undefined
+      const descriptor = snapshotSettingDescriptor(value.schema[key])
+      if (descriptor === undefined) return undefined
+      schema[key] = descriptor
+    }
+    if (Object.keys(schema).length > 64) return undefined
+    const defaults: Record<string, ComponentSettingValue> = {}
+    for (const key of Object.keys(value.defaults)) {
+      if (!Object.prototype.hasOwnProperty.call(schema, key) || !settingValueIsValid(schema[key]!, value.defaults[key])) return undefined
+      defaults[key] = value.defaults[key] as ComponentSettingValue
+    }
+    if (Object.keys(defaults).length !== Object.keys(schema).length || Object.keys(schema).some((key) => defaults[key] !== schema[key]?.default)) return undefined
+    return Object.freeze({
+      scope: value.scope,
+      schema: Object.freeze(schema),
+      defaults: Object.freeze(defaults),
+      parse: value.parse as (input: unknown) => Record<string, ComponentSettingValue>,
+    })
+  } catch {
+    return undefined
   }
-  if (Object.keys(schema).length > 64) return undefined
-  const defaults: Record<string, boolean> = {}
-  for (const key of Object.keys(value.defaults)) {
-    if (!Object.prototype.hasOwnProperty.call(schema, key) || typeof value.defaults[key] !== 'boolean') return undefined
-    defaults[key] = value.defaults[key] as boolean
-  }
-  if (Object.keys(defaults).length !== Object.keys(schema).length || Object.keys(schema).some((key) => defaults[key] !== schema[key]?.default)) return undefined
-  return Object.freeze({
-    scope: value.scope,
-    schema: Object.freeze(schema),
-    defaults: Object.freeze(defaults),
-    parse: value.parse as (input: unknown) => Record<string, boolean>,
-  })
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === 'object' && value !== null && !Array.isArray(value) }
 function targetOf(definition: ComponentSettingsDefinition<unknown>, resolve: () => string | null) { return targetForScope(definition.scope, resolve) }
@@ -554,11 +589,74 @@ async function readSettings(registration: ComponentRegistration | undefined, sto
   try { raw = await rawSettings(registration, store, resolve) } catch (error) { if (error instanceof ComponentSettingsError) throw error; throw new ComponentSettingsError('settings-unavailable', error instanceof Error ? error.message : 'Settings are unavailable') }
   try { return registration.settings.parse(raw ?? {}) } catch (error) { onMalformed?.(registration, error); return registration.settings.defaults }
 }
-function sparseSettings(definition: ComponentSettingsDefinition<unknown>, parsed: unknown): Record<string, boolean> {
+function sparseSettings(definition: ComponentSettingsDefinition<unknown>, parsed: unknown): Record<string, ComponentSettingValue> {
   if (!isRecord(parsed) || !isRecord(definition.defaults)) throw new ComponentSettingsError('invalid-settings', 'Settings parser must return an object')
-  const result: Record<string, boolean> = {}
-  for (const [key, value] of Object.entries(parsed)) { if (typeof value !== 'boolean') throw new ComponentSettingsError('invalid-settings', `Setting "${key}" must be a boolean`); if (value !== definition.defaults[key]) result[key] = value }
+  const result: Record<string, ComponentSettingValue> = {}
+  const keys = Object.keys(definition.schema)
+  if (Object.keys(parsed).some((key) => !keys.includes(key)) || keys.some((key) => !Object.prototype.hasOwnProperty.call(parsed, key))) {
+    throw new ComponentSettingsError('invalid-settings', 'Settings parser must return all declared fields')
+  }
+  for (const key of keys) {
+    const value = parsed[key]
+    const descriptor = definition.schema[key]
+    if (descriptor === undefined || !settingValueIsValid(descriptor, value)) throw new ComponentSettingsError('invalid-settings', `Setting "${key}" is outside its declared bounds`)
+    if (value !== definition.defaults[key]) result[key] = value
+  }
   return result
+}
+
+function snapshotSettingDescriptor(value: unknown): ComponentSettingDefinition | undefined {
+  if (!isRecord(value) || typeof value.type !== 'string') return undefined
+  const meta = {
+    ...(typeof value.label === 'string' ? { label: value.label.slice(0, 128) } : {}),
+    ...(typeof value.description === 'string' ? { description: value.description.slice(0, 256) } : {}),
+  }
+  if (value.label !== undefined && typeof value.label !== 'string') return undefined
+  if (value.description !== undefined && typeof value.description !== 'string') return undefined
+  if (value.type === 'boolean') {
+    return typeof value.default === 'boolean' ? Object.freeze({ type: 'boolean' as const, default: value.default, ...meta }) : undefined
+  }
+  if (value.type === 'string') {
+    const maxLength: number = value.maxLength === undefined ? 256 : typeof value.maxLength === 'number' ? value.maxLength : -1
+    if (typeof value.default !== 'string' || !Number.isInteger(maxLength) || maxLength < 0 || maxLength > 256 || value.default.length > maxLength) return undefined
+    if (value.placeholder !== undefined && typeof value.placeholder !== 'string') return undefined
+    return Object.freeze({ type: 'string' as const, default: value.default, maxLength, ...(value.placeholder === undefined ? {} : { placeholder: value.placeholder }), ...meta })
+  }
+  if (value.type === 'number') {
+    if (!validNumberValue(value.default, value.min, value.max, value.integer)) return undefined
+    if (value.min !== undefined && !finiteNumber(value.min)) return undefined
+    if (value.max !== undefined && !finiteNumber(value.max)) return undefined
+    if (value.min !== undefined && value.max !== undefined && value.min > value.max) return undefined
+    if (value.step !== undefined && !(finiteNumber(value.step) && value.step > 0)) return undefined
+    if (value.integer !== undefined && typeof value.integer !== 'boolean') return undefined
+    return Object.freeze({ type: 'number' as const, default: value.default, ...(value.min === undefined ? {} : { min: value.min }), ...(value.max === undefined ? {} : { max: value.max }), ...(value.step === undefined ? {} : { step: value.step }), ...(value.integer === undefined ? {} : { integer: value.integer }), ...meta })
+  }
+  if (value.type === 'select') {
+    if (!Array.isArray(value.options) || value.options.length < 1 || value.options.length > 64 || typeof value.default !== 'string') return undefined
+    const values = new Set<string>()
+    const options: { readonly value: string; readonly label?: string }[] = []
+    for (const option of value.options) {
+      if (!isRecord(option) || typeof option.value !== 'string' || option.value.length < 1 || option.value.length > 64 || values.has(option.value)) return undefined
+      if (option.label !== undefined && typeof option.label !== 'string') return undefined
+      values.add(option.value)
+      options.push(Object.freeze({ value: option.value, ...(option.label === undefined ? {} : { label: option.label.slice(0, 128) }) }))
+    }
+    if (!values.has(value.default)) return undefined
+    return Object.freeze({ type: 'select' as const, default: value.default, options: Object.freeze(options), ...meta })
+  }
+  return undefined
+}
+
+function finiteNumber(value: unknown): value is number { return typeof value === 'number' && Number.isFinite(value) }
+function validNumberValue(value: unknown, min: unknown, max: unknown, integer: unknown): value is number {
+  return finiteNumber(value) && (integer !== true || Number.isSafeInteger(value)) &&
+    (min === undefined || (finiteNumber(min) && value >= min)) && (max === undefined || (finiteNumber(max) && value <= max))
+}
+function settingValueIsValid(definition: ComponentSettingDefinition, value: unknown): value is ComponentSettingValue {
+  if (definition.type === 'boolean') return typeof value === 'boolean'
+  if (definition.type === 'string') return typeof value === 'string' && value.length <= (definition.maxLength ?? 256)
+  if (definition.type === 'number') return validNumberValue(value, definition.min, definition.max, definition.integer)
+  return typeof value === 'string' && definition.options.some((option) => option.value === value)
 }
 
 /** A copy of an untrusted list of at most {@link MAX_DECLARED_CAPABILITIES} elements. May throw: the caller wraps it. */

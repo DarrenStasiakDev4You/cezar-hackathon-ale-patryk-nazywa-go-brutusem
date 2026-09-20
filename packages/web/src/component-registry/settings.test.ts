@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { booleanSetting, defineComponentContract, defineSettings, type ComponentImplementation } from '@open-mercato/cezar-extension-api'
+import { booleanSetting, defineComponentContract, defineSettings, numberSetting, selectSetting, stringSetting, type ComponentImplementation } from '@open-mercato/cezar-extension-api'
 import { fakeScope } from '../extensions/registry.fixtures'
 import { createComponentRegistry } from './registry'
 import { createMemoryComponentSettingsStore, createPersistentComponentSettingsStore } from './settings'
@@ -54,5 +54,62 @@ describe('component settings registry', () => {
     expect(await fresh.get({ scope: 'project', projectId: 'repo-a' }, 'acme.project-header')).toEqual({ compact: true })
     expect(apiState.workspace().componentSettings).toEqual({ 'acme.global-header': { compact: true }, 'acme.other-header': { compact: false } })
     expect(apiState.project('repo-a').componentSettings).toEqual({ 'acme.project-header': { compact: true } })
+  })
+
+  it('round-trips scalar values through a fresh persistent store in both scopes', async () => {
+    apiState.reset()
+    const first = createPersistentComponentSettingsStore({ resolveProjectId: () => 'repo-a' })
+    const global = { enabled: true, title: 'Header', count: 48, density: 'cozy' }
+    const project = { enabled: false, title: 'Project', count: 16, density: 'compact' }
+    await first.set({ scope: 'global' }, 'acme.scalar-header', global)
+    await first.set({ scope: 'project', projectId: 'repo-a' }, 'acme.scalar-header', project)
+
+    const fresh = createPersistentComponentSettingsStore({ resolveProjectId: () => 'repo-a' })
+    expect(await fresh.get({ scope: 'global' }, 'acme.scalar-header')).toEqual(global)
+    expect(await fresh.get({ scope: 'project', projectId: 'repo-a' }, 'acme.scalar-header')).toEqual(project)
+  })
+
+  it('deduplicates concurrent reads of one target', async () => {
+    apiState.reset()
+    apiState.getWorkspaceUiState.mockClear()
+    let release: (() => void) | undefined
+    const pending = new Promise<void>((resolve) => { release = resolve })
+    apiState.getWorkspaceUiState.mockImplementationOnce(async () => { await pending; return { componentSettings: { 'acme.header': { title: 'Header' } } } })
+    const store = createPersistentComponentSettingsStore({ resolveProjectId: () => 'repo-a' })
+    const first = store.get({ scope: 'global' }, 'acme.header')
+    const second = store.get({ scope: 'global' }, 'acme.header')
+    expect(apiState.getWorkspaceUiState).toHaveBeenCalledTimes(1)
+    release?.()
+    await expect(Promise.all([first, second])).resolves.toEqual([{ title: 'Header' }, { title: 'Header' }])
+  })
+
+  it('merges concurrent field writes inside one implementation atomically', async () => {
+    const store = createMemoryComponentSettingsStore()
+    const registry = createComponentRegistry({ contracts: [Header], settings: store })
+    const definition = defineSettings({
+      scope: 'global',
+      schema: {
+        enabled: booleanSetting({ default: false }),
+        title: stringSetting({ default: 'Header' }),
+        count: numberSetting({ default: 12 }),
+        density: selectSetting({ default: 'cozy', options: [{ value: 'compact' }, { value: 'cozy' }] }),
+      },
+    })
+    const handle = registry.forExtension(fakeScope('acme').scope).provide(Header, {
+      ...implementation,
+      settings: definition,
+      component: () => null,
+    } as unknown as ComponentImplementation<{ title: string }, unknown>)
+
+    await Promise.all([
+      registry.setSettings(handle.componentId, { title: 'Changed' }),
+      registry.setSettings(handle.componentId, { count: 48 }),
+    ])
+    expect(await handle.getSettings()).toMatchObject({ title: 'Changed', count: 48 })
+  })
+
+  it('rejects non-scalar store entries', async () => {
+    const store = createMemoryComponentSettingsStore()
+    await expect(store.set({ scope: 'global' }, 'acme.header', { nested: { value: true } } as never)).rejects.toMatchObject({ code: 'invalid-settings' })
   })
 })

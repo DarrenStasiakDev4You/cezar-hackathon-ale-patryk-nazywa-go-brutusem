@@ -3,9 +3,11 @@ import type { ComponentSettingsScope, ContributionId, JsonValue } from '@open-me
 import { getUiState, getWorkspaceUiState, putUiState, putWorkspaceUiState } from '../api/client'
 
 export type ComponentSettingsTarget = { readonly scope: 'global' } | { readonly scope: 'project'; readonly projectId: string }
+type ComponentSettingsMap = Record<string, Record<string, boolean | string | number>>
 export interface ComponentSettingsStore {
   get(target: ComponentSettingsTarget, componentId: ContributionId): Promise<JsonValue | undefined>
   set(target: ComponentSettingsTarget, componentId: ContributionId, value: JsonValue): Promise<void>
+  update(target: ComponentSettingsTarget, componentId: ContributionId, merge: (current: JsonValue | undefined) => JsonValue | undefined): Promise<void>
   clear(target: ComponentSettingsTarget, componentId: ContributionId): Promise<void>
   subscribe(listener: (target: ComponentSettingsTarget, componentId: ContributionId) => void): () => void
 }
@@ -18,7 +20,14 @@ export function createMemoryComponentSettingsStore(initial: Readonly<Record<stri
   const notify = (target: ComponentSettingsTarget, id: ContributionId) => { for (const listener of [...listeners]) { try { listener(target, id) } catch {} } }
   return {
     async get(target, id) { return values.get(key(target, id)) },
-    async set(target, id, value) { values.set(key(target, id), value); notify(target, id) },
+    async set(target, id, value) { assertSettingsMap(value); values.set(key(target, id), value); notify(target, id) },
+    async update(target, id, merge) {
+      const mapKey = key(target, id)
+      const next = merge(values.get(mapKey))
+      if (next === undefined) values.delete(mapKey)
+      else { assertSettingsMap(next); values.set(mapKey, next) }
+      notify(target, id)
+    },
     async clear(target, id) { values.delete(key(target, id)); notify(target, id) },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
   }
@@ -38,17 +47,40 @@ export function targetForScope(scope: ComponentSettingsScope, resolve: () => str
 }
 
 export function createPersistentComponentSettingsStore(options: { readonly resolveProjectId?: () => string | null } = {}): ComponentSettingsStore {
-  const resolve = options.resolveProjectId ?? resolveComponentProjectId; const listeners = new Set<(target: ComponentSettingsTarget, id: ContributionId) => void>(); const tails = new Map<string, Promise<void>>()
+  const resolve = options.resolveProjectId ?? resolveComponentProjectId; const listeners = new Set<(target: ComponentSettingsTarget, id: ContributionId) => void>(); const tails = new Map<string, Promise<void>>(); const reads = new Map<string, Promise<ComponentSettingsMap>>()
   const verify = (target: ComponentSettingsTarget) => { if (target.scope === 'project' && target.projectId !== resolve()) throw new ComponentSettingsError('settings-unavailable', 'The active project changed before the settings operation completed') }
-  const read = async (target: ComponentSettingsTarget) => { verify(target); const state = target.scope === 'global' ? await getWorkspaceUiState() : await getUiState(); verify(target); const value = state.componentSettings; return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, Record<string, boolean>> : {} }
-  const write = async (target: ComponentSettingsTarget, map: Record<string, Record<string, boolean>>) => { verify(target); if (target.scope === 'global') await putWorkspaceUiState({ componentSettings: map }); else await putUiState({ componentSettings: map }) }
+  const read = async (target: ComponentSettingsTarget): Promise<ComponentSettingsMap> => {
+    verify(target)
+    const targetKey = `${target.scope}:${target.scope === 'project' ? target.projectId : ''}`
+    const pending = reads.get(targetKey)
+    if (pending !== undefined) return pending
+    const request = (async () => {
+      const state = target.scope === 'global' ? await getWorkspaceUiState() : await getUiState()
+      verify(target)
+      const value = state.componentSettings
+      return isSettingsMap(value) ? value : {}
+    })()
+    reads.set(targetKey, request)
+    try { return await request } finally { if (reads.get(targetKey) === request) reads.delete(targetKey) }
+  }
+  const write = async (target: ComponentSettingsTarget, map: ComponentSettingsMap) => { verify(target); if (target.scope === 'global') await putWorkspaceUiState({ componentSettings: map }); else await putUiState({ componentSettings: map }) }
   const notify = (target: ComponentSettingsTarget, id: ContributionId) => { for (const listener of [...listeners]) { try { listener(target, id) } catch {} } }
   const enqueue = (target: ComponentSettingsTarget, task: () => Promise<void>) => { const key = `${target.scope}:${target.scope === 'project' ? target.projectId : ''}`; const previous = tails.get(key) ?? Promise.resolve(); const next = previous.catch(() => {}).then(task); const settled = next.catch(() => {}).finally(() => { if (tails.get(key) === settled) tails.delete(key) }); tails.set(key, settled); return next }
   return {
     async get(target, id) { return (await read(target))[id] },
-    set(target, id, value) { return enqueue(target, async () => { const map = await read(target); if (!isBooleanMap(value)) throw new ComponentSettingsError('invalid-settings', 'Component settings must be a boolean map'); await write(target, { ...map, [id]: value as Record<string, boolean> }); notify(target, id) }) },
+    set(target, id, value) { return enqueue(target, async () => { const map = await read(target); assertSettingsMap(value); await write(target, { ...map, [id]: value }); notify(target, id) }) },
+    update(target, id, merge) { return enqueue(target, async () => { const map = await read(target); const current = map[id]; const value = merge(current); if (value !== undefined) assertSettingsMap(value); const next = { ...map }; if (value === undefined) delete next[id]; else next[id] = value; await write(target, next); notify(target, id) }) },
     clear(target, id) { return enqueue(target, async () => { const map = await read(target); if (!(id in map)) return; const next = { ...map }; delete next[id]; await write(target, next); notify(target, id) }) },
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener) },
   }
 }
-function isBooleanMap(value: unknown): value is Record<string, boolean> { return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every((item) => typeof item === 'boolean') }
+function isSettingsMap(value: unknown): value is ComponentSettingsMap {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every((item) => isSettingsMapEntry(item))
+}
+function isSettingsMapEntry(value: unknown): value is Record<string, boolean | string | number> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every((item) =>
+    typeof item === 'boolean' || typeof item === 'string' && item.length <= 256 || typeof item === 'number' && Number.isFinite(item))
+}
+function assertSettingsMap(value: JsonValue): asserts value is Record<string, boolean | string | number> {
+  if (!isSettingsMapEntry(value)) throw new ComponentSettingsError('invalid-settings', 'Component settings must be a scalar map')
+}

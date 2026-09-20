@@ -41,6 +41,19 @@ export const entryChunkRules = {
   keptOut: [/\/node_modules\/streamdown\//, /\/src\/routes\/task-thread\/run-header\.tsx$/],
 }
 
+/** The configurable-header implementation is test-only and must never enter a release asset. */
+export const fixtureBundleGuard = (): Plugin => ({
+  name: 'cezar:no-test-fixtures',
+  apply: 'build',
+  generateBundle(_options, bundle) {
+    const leaked = Object.entries(bundle)
+      .filter(([, asset]) => asset.type === 'chunk' || asset.type === 'asset')
+      .filter(([, asset]) => 'code' in asset ? asset.code.includes('fixture.configurable-header') : asset.source.toString().includes('fixture.configurable-header'))
+      .map(([fileName]) => fileName)
+    if (leaked.length > 0) this.error(`test fixture leaked into release assets: ${leaked.join(', ')}`)
+  },
+})
+
 /** The parts of an output chunk the check reads. Module ids use forward slashes on every platform. */
 export interface BundledFile {
   readonly type: 'chunk' | 'asset'
@@ -130,7 +143,7 @@ export default defineConfig({
   root: appDir,
   base: '/',
   // Tailwind v4 is CSS-first: the whole theme lives in src/styles/index.css, there is no tailwind.config.js.
-  plugins: [react(), tailwindcss(), entryChunkGuard()],
+  plugins: [react(), tailwindcss(), entryChunkGuard(), fixtureBundleGuard()],
   // `@/…` → packages/web/src — the alias shadcn/ui components import `cn` through. Mirrored in
   // tsconfig.json `paths`.
   //

@@ -1,8 +1,8 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import config, { entryChunkGuard, entryChunkProblems, reactRuntimeChunk, type BundledFile } from '../vite.config'
+import config, { entryChunkGuard, entryChunkProblems, fixtureBundleGuard, reactRuntimeChunk, type BundledFile } from '../vite.config'
 
 describe('production chunking', () => {
   it('keeps the coupled React runtime in a focused vendor chunk', () => {
@@ -136,5 +136,25 @@ describe('the entry chunk check', () => {
         ?.flat()
         .some((plugin) => plugin !== null && typeof plugin === 'object' && 'name' in plugin && plugin.name === guard.name),
     ).toBe(true)
+  })
+
+  it('keeps the configurable-header fixture out of release assets', () => {
+    const guard = fixtureBundleGuard()
+    expect(guard.apply).toBe('build')
+    expect(
+      config.plugins
+        ?.flat()
+        .some((plugin) => plugin !== null && typeof plugin === 'object' && 'name' in plugin && plugin.name === guard.name),
+    ).toBe(true)
+  })
+
+  it('fails when a release asset contains the fixture id', () => {
+    const guard = fixtureBundleGuard()
+    const error = vi.fn()
+    const generateBundle = typeof guard.generateBundle === 'function' ? guard.generateBundle : guard.generateBundle?.handler
+    generateBundle?.call({ error } as never, {} as never, {
+      'assets/leaked.js': { type: 'asset', source: 'fixture.configurable-header' },
+    } as never, false)
+    expect(error).toHaveBeenCalledWith('test fixture leaked into release assets: assets/leaked.js')
   })
 })
