@@ -51,7 +51,7 @@ export type ComponentRegistrationIssue =
 
 /** One implementation of a contract, as the registry holds it. Deeply frozen; never mutated. */
 export interface ComponentRegistration {
-  /** The implementation's id: `cezar.…` for core, `${extensionId}.…` for an extension. Unique
+  /** The implementation's id: `core.…` for core, `${extensionId}.…` for an extension. Unique
    *  across the registry. */
   readonly componentId: ContributionId
   /** The extension that provided it, taken from the activation scope. `null`: core's own. */
@@ -90,8 +90,8 @@ export interface UsableComponent<Props> extends Omit<ComponentRegistration, 'com
 export type AnyComponentContract = Omit<ComponentContract<unknown>, '__props'>
 
 export interface ComponentRegistryOptions {
-  /** The contracts this cockpit serves: the host's own tokens, one major per id, `cezar.*` ids
-   *  only. Default `[]`. */
+  /** The contracts this cockpit serves: provider-neutral host tokens, one major per id. Default
+   *  `[]`. */
   readonly contracts?: readonly AnyComponentContract[]
   /** Called once for each registration recorded with `compatible: false`. Default:
    *  {@link logComponentDiagnostic}. Called inside a try/catch: a throwing reporter is swallowed. */
@@ -99,7 +99,7 @@ export interface ComponentRegistryOptions {
 }
 
 export interface CockpitComponentRegistry {
-  /** Core registration: `cezar.*` implementation ids, for a contract in `options.contracts`, and
+  /** Core registration: `core.*` implementation ids, for a contract in `options.contracts`, and
    *  it must be compatible. Throws `ComponentError`: `invalid-id`, `namespace-violation`,
    *  `duplicate-registration`, `contract-version-mismatch`, `invalid-input`. */
   register<P>(
@@ -155,7 +155,7 @@ export function logComponentDiagnostic(registration: ComponentRegistration): voi
   console.warn(`[cezar:extensions] ${registration.componentId} (${who}) is not used: ${why}`)
 }
 
-const CORE_PREFIX = 'cezar.'
+const CORE_PREFIX = 'core.'
 const INVALID_CONTRACT =
   'Invalid component contract: expected { kind: "component", id, version } with a valid contribution id and a positive integer version'
 const INVALID_COMPONENT_ID =
@@ -517,9 +517,6 @@ function catalogOf(options: ComponentRegistryOptions): ReadonlyMap<ContributionI
     const read = tokenOf(token)
     if (read === undefined) throw new ComponentError('invalid-id', INVALID_CONTRACT)
     const { id, version } = read
-    if (!id.startsWith(CORE_PREFIX)) {
-      throw new ComponentError('namespace-violation', `Served component contract "${id}" must be under "${CORE_PREFIX}"`)
-    }
     const malformed = checkComponentCompatibility(token as AnyComponentContract, { id }).issues.filter(
       (issue) => issue.code === 'malformed',
     )

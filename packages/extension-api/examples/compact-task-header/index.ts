@@ -2,7 +2,7 @@ import { createElement as h } from 'react'
 
 import {
   defineExtension,
-  TaskHeaderMain,
+  TaskHeader,
   type ComponentProps,
   type TaskHeaderActionState,
 } from '@open-mercato/cezar-extension-api'
@@ -13,7 +13,7 @@ import {
 // test reads it and the package needs no JSX setting. It takes over Continue, Stop and Archive
 // (`offers-*`): core then leaves them out of its action bar and keeps its Run actions menu visible.
 
-type Props = ComponentProps<typeof TaskHeaderMain>
+type Props = ComponentProps<typeof TaskHeader>
 
 /** One of the task's actions: shown while it is offered, disabled while it cannot run. */
 function action(label: string, state: TaskHeaderActionState, onPress: () => void) {
@@ -60,10 +60,10 @@ function CompactTaskHeader(props: Props) {
 }
 
 export default defineExtension({
-  // `>=0.11.2`: the first release after 0.11.1 can ship `cezar.task.header.main@1`.
+  // `>=0.11.2`: the first release after 0.11.1 can ship `task.header@1`.
   manifest: { id: 'example.compact-header', name: 'Compact task header', version: '1.0.0', engines: { cezar: '>=0.11.2' } },
   activate(context) {
-    context.components.provide(TaskHeaderMain, {
+    context.components.provide(TaskHeader, {
       id: 'example.compact-header.row',
       title: 'Compact row',
       capabilities: ['shows-title', 'shows-status', 'offers-continue', 'offers-stop', 'offers-archive'],

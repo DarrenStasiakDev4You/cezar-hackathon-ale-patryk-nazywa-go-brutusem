@@ -20,7 +20,7 @@ import type {
   RunEvent,
   RunStatus,
 } from '@open-mercato/cezar-api-client'
-import { TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskHeader } from '@open-mercato/cezar-extension-api'
 
 import { TaskThreadRoute, ThreadView } from './task-thread'
 import { buildTranscriptRows, mainTranscriptSections } from './session-transcript'
@@ -1421,8 +1421,8 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
 
     const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
-    expect(box?.dataset.contract).toBe('cezar.task.header.main')
-    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
+    expect(box?.dataset.contract).toBe('task.header')
+    expect(box?.dataset.component).toBe('core.task-header')
     expect(box?.dataset.state).toBe('resolved')
     expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
     expect(box?.querySelector('[data-slot="run-meta"]')).not.toBeNull()
@@ -1431,7 +1431,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
   it('keeps the replaceable part unresolved when the catalog has no declared default', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS, onDiagnostic: () => {} })
-    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeaderMain, {
+    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeader, {
       id: 'acme.jira.task-header',
       title: 'Jira header',
       capabilities: ['shows-title', 'shows-status'],
@@ -1454,7 +1454,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     expect(document.querySelector('[data-slot="run-actions"]')?.textContent).toContain('Notes')
     expect(document.querySelector('[data-slot="run-tabs"]')?.textContent).toContain('Changes')
     expect(consoleError.mock.calls.filter(([first]) => typeof first === 'string' && first.startsWith('[cezar:extensions]'))).toEqual([
-      ['[cezar:extensions] cezar.task.header.main has no default implementation: nothing renders in its host'],
+      ['[cezar:extensions] task.header has no default implementation: nothing renders in its host'],
     ])
   })
 
@@ -1464,7 +1464,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     const BrokenHeader = (): never => {
       throw new Error('Jira is down')
     }
-    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeaderMain, {
+    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeader, {
       id: 'acme.jira.task-header',
       title: 'Jira header',
       capabilities: ['shows-title', 'shows-status'],
@@ -1488,7 +1488,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
         <CommandsProvider>
           <ComponentsProvider
             registry={registry}
-            preferenceOf={(contractId) => (contractId === TaskHeaderMain.id ? 'acme.jira.task-header' : null)}
+            preferenceOf={(contractId) => (contractId === TaskHeader.id ? 'acme.jira.task-header' : null)}
             onImplementationError={onImplementationError}
           >
             <MemoryRouter>
@@ -1502,7 +1502,7 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     const header = document.querySelector<HTMLElement>('[data-slot="run-header"]')!
     const box = header.querySelector<HTMLElement>('[data-slot="component-host"]')
     expect(box?.dataset.state).toBe('fallback')
-    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
+    expect(box?.dataset.component).toBe('core.task-header')
     expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
     expect(onImplementationError).toHaveBeenCalledTimes(1)
     // The task's controls, the thread and the composer are all still there.

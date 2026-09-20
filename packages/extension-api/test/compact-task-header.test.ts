@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   checkComponentCompatibility,
-  TaskHeaderMain,
+  TaskHeader,
   validateManifest,
   type ComponentProps,
 } from '@open-mercato/cezar-extension-api'
@@ -15,7 +15,7 @@ import { createFakeContext } from './fake-context.ts'
 // package and `react` alone (spec `2026-09-19-task-header-contract`, Q9). The cockpit's own test
 // (`packages/web/src/routes/task-thread/external-task-header.test.tsx`) uses it on the task page.
 
-type Props = ComponentProps<typeof TaskHeaderMain>
+type Props = ComponentProps<typeof TaskHeader>
 
 const idle = { available: false, enabled: false, pending: false }
 const ready = { available: true, enabled: true, pending: false }
@@ -59,18 +59,18 @@ describe('the compact task header example', () => {
     expect(validateManifest(compact.manifest)).toEqual([])
   })
 
-  it('provides example.compact-header.row against cezar.task.header.main@1', async () => {
+  it('provides example.compact-header.row against task.header@1', async () => {
     const { fake, row } = await provided()
 
     expect([...fake.components.keys()]).toEqual(['example.compact-header.row'])
-    expect(row.contract).toEqual(TaskHeaderMain)
+    expect(row.contract).toEqual(TaskHeader)
     expect(row.implementation.title).toBe('Compact row')
   })
 
   it('takes over Continue, Stop and Archive, and the check sees it', async () => {
     const { row } = await provided()
 
-    expect(checkComponentCompatibility(TaskHeaderMain, row.implementation, row.contract)).toEqual({
+    expect(checkComponentCompatibility(TaskHeader, row.implementation, row.contract)).toEqual({
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status', 'offers-continue', 'offers-stop', 'offers-archive'],

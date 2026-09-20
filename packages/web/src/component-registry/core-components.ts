@@ -1,14 +1,14 @@
-import { TaskHeaderMain, type ComponentImplementation, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import { TaskHeader, type ComponentImplementation, type TaskHeaderProps } from '@open-mercato/cezar-extension-api'
 
-import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'
+import { CoreTaskHeader } from '@/routes/task-thread/core-task-header'
 
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
 import { createComponentRegistry, type CockpitComponentRegistry, type ComponentRegistryOptions } from './registry'
 
 /**
  * Core's default implementations (spec `.ai/specs/2026-09-19-component-host.md`): one per contract
- * in `CORE_COMPONENT_CONTRACTS`, each registered as `coreDefaultComponentId(contract.id)`, so the
- * resolver always has core's default to render and to fall back to.
+ * in `CORE_COMPONENT_CONTRACTS`, each registered with `{ default: true }`, so the resolver always
+ * has a declared default to render and to fall back to.
  *
  * The ONE module that imports a core implementation, and it keeps the implementation objects to
  * itself: a page renders them only through `ComponentHost`, and `boundary.test.ts` fails on any
@@ -17,17 +17,17 @@ import { createComponentRegistry, type CockpitComponentRegistry, type ComponentR
 
 /** Core's task header main part: today's title row and meta row, rendered from the contract's props
  *  alone (spec `2026-09-19-task-header-contract`). It shows everything the contract offers. */
-const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.freeze({
-  id: 'cezar.task.header.main.default',
+const coreTaskHeader: ComponentImplementation<TaskHeaderProps> = Object.freeze({
+  id: 'core.task-header',
   title: 'Task header',
   description: 'Cezar’s own title, status and meta row',
   capabilities: Object.freeze(['shows-title', 'shows-status', 'shows-meta']),
-  component: CoreTaskHeaderMain,
+  component: CoreTaskHeader,
 })
 
 /** Registers core's default of every served contract. */
 export function registerCoreComponents(registry: Pick<CockpitComponentRegistry, 'register'>): void {
-  registry.register(TaskHeaderMain, coreTaskHeaderMain, { default: true })
+  registry.register(TaskHeader, coreTaskHeader, { default: true })
 }
 
 /**

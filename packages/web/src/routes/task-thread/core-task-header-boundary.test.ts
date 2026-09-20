@@ -16,13 +16,13 @@ import { importSites, type SourceFile } from '@/lib/import-scan'
 
 /** `packages/web`, the root every scanned path is relative to. */
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
-const CORE_HEADER = 'src/routes/task-thread/core-task-header-main.tsx'
+const CORE_HEADER = 'src/routes/task-thread/core-task-header.tsx'
 
 /** Where core's default may not reach: exact modules, and every module under a prefix. */
 const FORBIDDEN_PREFIXES = ['src/api/', 'src/commands/', '@tanstack/react-query', 'react-router', '@open-mercato/cezar-api-client']
 const FORBIDDEN_MODULES = new Set([
   'src/lib/project-router',
-  'src/routes/task-thread/task-header-main',
+  'src/routes/task-thread/task-header-model',
   'src/routes/task-thread/run-header',
   'src/routes/task-thread/thread-draft',
   'src/routes/task-thread/continuation-provider',
@@ -48,7 +48,7 @@ describe('the core task header boundary', () => {
   it.each<[string, string, string]>([
     ['the alias', "import { useRuns } from '@/api/queries'", '@/api/queries'],
     ['a relative path', "import { useRuns } from '../../api/queries'", '../../api/queries'],
-    ['a sibling', "import { useTaskHeaderModel } from './task-header-main'", './task-header-main'],
+    ['a sibling', "import { useTaskHeaderModel } from './task-header-model'", './task-header-model'],
     ['a type-only import', "import type { ApiRun } from '@open-mercato/cezar-api-client'", '@open-mercato/cezar-api-client'],
     ['a package subpath', "import { useQuery } from '@tanstack/react-query/build/modern'", '@tanstack/react-query/build/modern'],
     ['the router', "import { Link } from '@/lib/project-router'", '@/lib/project-router'],
@@ -63,7 +63,7 @@ describe('the core task header boundary', () => {
 
   it('lets the presentational UI kit and the contract’s types through', () => {
     const source = [
-      "import type { TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'",
+      "import type { TaskHeaderProps } from '@open-mercato/cezar-extension-api'",
       "import { Pill } from '@/components/pill'",
       "import { ReferenceChip } from '@/components/reference-chip'",
       "import { formatCost } from '@/lib/tasks-table'",

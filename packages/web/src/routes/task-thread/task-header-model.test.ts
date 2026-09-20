@@ -15,7 +15,7 @@ import { deriveAttention } from '@/lib/attention'
 import { workflowLabel } from '@/lib/tasks-table'
 
 import { resolveConflictsPrompt, runActionFlags } from './run-actions'
-import { useTaskHeaderModel, type TaskHeaderModel, type TaskHeaderModelOptions } from './task-header-main'
+import { useTaskHeaderModel, type TaskHeaderModel, type TaskHeaderModelOptions } from './task-header-model'
 
 afterEach(() => {
   act(() => resetToasts())

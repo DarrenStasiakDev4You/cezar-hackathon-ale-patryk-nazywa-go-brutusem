@@ -4,7 +4,7 @@ import { Fragment, useEffect, useId, useReducer, useRef, useState, type ReactEle
 import type {
   TaskHeaderActionState,
   TaskHeaderEngine,
-  TaskHeaderMainProps,
+  TaskHeaderProps,
   TaskHeaderReference,
 } from '@open-mercato/cezar-extension-api'
 import { DiffStatLabel } from '@/components/diff-stat'
@@ -27,7 +27,7 @@ import { formatCost } from '@/lib/tasks-table'
 import { cn } from '@/lib/utils'
 
 /**
- * Core's default for `cezar.task.header.main@1` (spec `.ai/specs/2026-09-19-task-header-contract.md`):
+ * Core's default for `task.header@1` (spec `.ai/specs/2026-09-19-task-header-contract.md`):
  * the task header's title row and meta row, rendered from the contract's props ALONE. It reads no
  * run record, query, router, command or core-only context — only core's presentational UI kit —
  * so an extension's header gets exactly what core's own header gets. `RunHeader` renders it only
@@ -51,7 +51,7 @@ function toneOf(tone: string): StatusDotTone {
   return TONES.has(tone) ? (tone as StatusDotTone) : 'neutral'
 }
 
-export function CoreTaskHeaderMain(props: TaskHeaderMainProps): ReactElement {
+export function CoreTaskHeader(props: TaskHeaderProps): ReactElement {
   const { task, attention, plan } = props
 
   // The phone-width meta disclosure (#765). The map is the state — a re-render bump rather than a
@@ -123,7 +123,7 @@ export function CoreTaskHeaderMain(props: TaskHeaderMainProps): ReactElement {
 /** workflow · branch chip · references · ± · automation on the left; tokens · cost · agent badge on
  *  the right (mockup `.meta-row`, #416). Each part renders only when the props carry it — absence
  *  is absence, not a placeholder. */
-function MetaRow(props: TaskHeaderMainProps) {
+function MetaRow(props: TaskHeaderProps) {
   const { meta, task, actions } = props
   const parts: ReactNode[] = [<span key="workflow">{meta.workflow}</span>]
   if (meta.branch) parts.push(<CopyBranchChip key="branch" branch={meta.branch} />)

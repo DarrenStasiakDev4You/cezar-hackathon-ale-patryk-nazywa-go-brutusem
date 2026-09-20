@@ -23,9 +23,11 @@ Non-goals: changing commands or events, adding preference storage, changing HTTP
 
 ### Phase 2: Provider-neutral task header
 
-- [ ] 2.1 Rename the public contract, exports, core implementation, adapter files, ids, and all affected consumers/tests.
-- [ ] 2.2 Add the provider-neutral/core namespace rule to `AGENTS.md` and the extension API README, with boundary assertions for the old id.
+- [x] 2.1 Rename the public contract, exports, core implementation, adapter files, ids, and all affected consumers/tests.
+- [x] 2.2 Add the provider-neutral/core namespace rule to `AGENTS.md` and the extension API README, with boundary assertions for the old id.
 - [ ] 2.3 Run the configured validation gate, review the complete diff, and resolve any findings.
+
+Validation so far: `npm run typecheck`, `npm run test:unit`, `npm run build`, and `npm run test:package` pass. The focused component/task-header suites pass, and `npm test -- packages/extension-api packages/web --exclude packages/web/src/routes.test.tsx` passes (4,695 tests). The full gate remains open because the unrelated `routes.test.tsx` automations case hangs in its loading state and the full parallel Vitest run also hit pre-existing server-suite failures before timeout.
 
 ## Risks
 
@@ -45,6 +47,6 @@ Non-goals: changing commands or events, adding preference storage, changing HTTP
 
 ### Phase 2: Provider-neutral task header
 
-- [ ] 2.1 Rename the public contract, exports, core implementation, adapter files, ids, and all affected consumers/tests.
-- [ ] 2.2 Add the provider-neutral/core namespace rule to `AGENTS.md` and the extension API README, with boundary assertions for the old id.
+- [x] 2.1 Rename the public contract, exports, core implementation, adapter files, ids, and all affected consumers/tests.
+- [x] 2.2 Add the provider-neutral/core namespace rule to `AGENTS.md` and the extension API README, with boundary assertions for the old id.
 - [ ] 2.3 Run the configured validation gate, review the complete diff, and resolve any findings.

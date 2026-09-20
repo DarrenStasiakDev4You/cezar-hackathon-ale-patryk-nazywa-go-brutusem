@@ -1,7 +1,7 @@
 import { defineComponentContract } from './components.ts'
 
 /**
- * Core's public component contracts — the `cezar.*` tokens the cockpit renders through its
+ * Core's public component contracts — provider-neutral tokens the cockpit renders through its
  * component host, and any extension may implement through `context.components.provide`. Providing
  * never selects: the user picks an implementation per contract, and core's default renders until
  * they do, and whenever the chosen one throws.
@@ -120,7 +120,7 @@ export interface TaskHeaderActions {
   readonly chooseEngine: TaskHeaderActionState
 }
 
-export interface TaskHeaderMainProps {
+export interface TaskHeaderProps {
   readonly task: TaskHeaderTask
   readonly attention: TaskHeaderAttention
   readonly engine: TaskHeaderEngine
@@ -164,7 +164,7 @@ export interface TaskHeaderMainProps {
  *   is swapped. Core's title editor covers this band while the user renames. The shell around it
  *   is sticky; this part is not.
  */
-export const TaskHeaderMain = defineComponentContract<TaskHeaderMainProps>('cezar.task.header.main', {
+export const TaskHeader = defineComponentContract<TaskHeaderProps>('task.header', {
   version: 1,
   requiredCapabilities: ['shows-title', 'shows-status'],
   optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],

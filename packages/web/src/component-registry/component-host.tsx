@@ -30,7 +30,7 @@ import { resolveComponent, type ComponentResolution } from './resolve'
  */
 
 export interface ComponentHostProps<P> {
-  /** A served token from `CORE_COMPONENT_CONTRACTS`, e.g. `TaskHeaderMain`. */
+  /** A served token from `CORE_COMPONENT_CONTRACTS`, e.g. `TaskHeader`. */
   readonly contract: ComponentContract<P>
   /** What this host shows, e.g. the task id. A failure sets the implementation aside for this
    *  subject only. Default `''`: one subject per contract. */

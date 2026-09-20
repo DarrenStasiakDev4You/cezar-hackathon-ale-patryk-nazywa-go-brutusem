@@ -403,7 +403,7 @@ describe('the components service', () => {
   /** A cockpit serving the fixture contract, with core's default registered before the host starts. */
   function bootServingHeader(extensions: readonly Extension[]) {
     const components = createComponentRegistry({ contracts: [TaskHeader] })
-    components.register(TaskHeader, header('cezar.fixture.task-header.default', 'Task header'))
+    components.register(TaskHeader, header('core.fixture.task-header.default', 'Task header'), { default: true })
     return bootCockpit(extensions, {}, components)
   }
 
@@ -419,7 +419,7 @@ describe('the components service', () => {
     await ready
 
     expect(provenance(components)).toEqual([
-      ['cezar.fixture.task-header.default', null],
+      ['core.fixture.task-header.default', null],
       ['acme.jira.task-header', 'acme.jira'],
       ['acme.compact.task-header', 'acme.compact'],
     ])
@@ -441,7 +441,7 @@ describe('the components service', () => {
     await registry.deactivate('acme.jira')
 
     expect(provenance(components)).toEqual([
-      ['cezar.fixture.task-header.default', null],
+      ['core.fixture.task-header.default', null],
       ['acme.compact.task-header', 'acme.compact'],
     ])
   })
@@ -465,7 +465,7 @@ describe('the components service', () => {
     expect(registry.get('acme.compact')?.status).toBe('active')
     // The failed activation's first registration went with it.
     expect(provenance(components)).toEqual([
-      ['cezar.fixture.task-header.default', null],
+      ['core.fixture.task-header.default', null],
       ['acme.jira.task-header', 'acme.jira'],
       ['acme.compact.task-header', 'acme.compact'],
     ])
@@ -487,7 +487,7 @@ describe('the components service', () => {
   })
 
   describe('resolving which implementation renders', () => {
-    const DEFAULT = 'cezar.fixture.task-header.default'
+    const DEFAULT = 'core.fixture.task-header.default'
     const JIRA = 'acme.jira.task-header'
     const COMPACT = 'acme.compact.task-header'
 

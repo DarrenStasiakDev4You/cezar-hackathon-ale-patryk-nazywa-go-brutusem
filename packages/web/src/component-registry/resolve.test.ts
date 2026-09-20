@@ -50,9 +50,9 @@ const TaskList = defineComponentContract<ListProps>('cezar.fixture.task-list', {
 const Render: ComponentType<HeaderProps> = () => null
 const RenderList: ComponentType<ListProps> = () => null
 
-const DEFAULT_ID = 'cezar.fixture.task-header.primary'
+const DEFAULT_ID = 'core.fixture.task-header.primary'
 const OLD_DEFAULT_ID = 'cezar.fixture.task-header.default'
-const COMPACT_ID = 'cezar.fixture.task-header.compact'
+const COMPACT_ID = 'core.fixture.task-header.compact'
 const JIRA_ID = 'acme.jira.task-header'
 const ACME_COMPACT_ID = 'acme.compact.task-header'
 const JIRA_LIST_ID = 'acme.jira.task-list'
@@ -500,7 +500,7 @@ describe('missingDefaults', () => {
   const registerListDefault = (registry: CockpitComponentRegistry) =>
     registry.register(
       TaskList,
-      { id: 'cezar.fixture.task-list.default', title: 'Task list', component: RenderList },
+      { id: 'core.fixture.task-list.default', title: 'Task list', component: RenderList },
       { default: true },
     )
 

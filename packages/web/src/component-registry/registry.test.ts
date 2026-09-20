@@ -42,7 +42,7 @@ const CoreHeader: ComponentType<HeaderProps> = () => null
 
 /** Core's default: declares an optional capability first, a repeat and a name the contract ignores. */
 const coreDefault: ComponentImplementation<HeaderProps> = {
-  id: 'cezar.fixture.task-header.default',
+  id: 'core.fixture.task-header.default',
   title: 'Task header',
   description: 'Core’s own header',
   capabilities: ['shows-status', 'shows-title', 'not-in-the-contract', 'shows-title'],
@@ -50,7 +50,7 @@ const coreDefault: ComponentImplementation<HeaderProps> = {
 }
 
 const coreCompact: ComponentImplementation<HeaderProps> = {
-  id: 'cezar.fixture.task-header.compact',
+  id: 'core.fixture.task-header.compact',
   title: 'Compact header',
   capabilities: ['shows-title'],
   component: CoreHeader,
@@ -58,7 +58,7 @@ const coreCompact: ComponentImplementation<HeaderProps> = {
 
 const declaredDefault: ComponentImplementation<HeaderProps> = {
   ...coreCompact,
-  id: 'cezar.fixture.task-header.declared',
+  id: 'core.fixture.task-header.declared',
 }
 
 /** A registry that serves the fixture contract at major 1. */
@@ -125,13 +125,10 @@ describe('createComponentRegistry and its catalog', () => {
     expect(error.message).not.toContain('getter broke')
   })
 
-  it('refuses a served contract outside cezar. with namespace-violation', () => {
+  it('accepts a provider-neutral served contract outside core.', () => {
     const Foreign = defineComponentContract<HeaderProps>('acme.jira.task-header', { version: 1 })
 
-    const error = thrown(() => createComponentRegistry({ contracts: [Foreign] }))
-
-    expect(error.code).toBe('namespace-violation')
-    expect(error.message).toBe('Served component contract "acme.jira.task-header" must be under "cezar."')
+    expect(() => createComponentRegistry({ contracts: [Foreign] })).not.toThrow()
   })
 
   it('refuses two majors of one contract id with duplicate-registration', () => {
@@ -250,9 +247,9 @@ describe('core register', () => {
     const error = thrown(() => createComponentRegistry().register(Header, coreDefault))
 
     expect(error.code).toBe('invalid-input')
-    expect(error.componentId).toBe('cezar.fixture.task-header.default')
+    expect(error.componentId).toBe('core.fixture.task-header.default')
     expect(error.message).toBe(
-      'Core component "cezar.fixture.task-header.default" implements cezar.fixture.task-header@1, which is not in options.contracts',
+      'Core component "core.fixture.task-header.default" implements cezar.fixture.task-header@1, which is not in options.contracts',
     )
   })
 
@@ -261,8 +258,8 @@ describe('core register', () => {
 
     registry.register(Header, coreDefault)
 
-    expect(registry.get('cezar.fixture.task-header.default')).toEqual({
-      componentId: 'cezar.fixture.task-header.default',
+    expect(registry.get('core.fixture.task-header.default')).toEqual({
+      componentId: 'core.fixture.task-header.default',
       extensionId: null,
       isDefault: false,
       contractId: 'cezar.fixture.task-header',
@@ -274,7 +271,7 @@ describe('core register', () => {
       compatible: true,
       issues: [],
     })
-    expect(registry.get('cezar.fixture.task-header.default')?.component).toBe(CoreHeader)
+    expect(registry.get('core.fixture.task-header.default')?.component).toBe(CoreHeader)
   })
 
   it('leaves description out of the metadata when the implementation gives none', () => {
@@ -308,17 +305,17 @@ describe('core register', () => {
     const registry = createComponentRegistry({ contracts: [Header, Other] })
     const first = registry.register(Header, declaredDefault, { default: true })
 
-    const error = thrown(() => registry.register(Header, { ...coreCompact, id: 'cezar.fixture.task-header.other' }, { default: true }))
+    const error = thrown(() => registry.register(Header, { ...coreCompact, id: 'core.fixture.task-header.other' }, { default: true }))
 
     expect(error.code).toBe('invalid-input')
     expect(error.message).toContain('cezar.fixture.task-header')
-    expect(error.message).toContain('cezar.fixture.task-header.other')
+    expect(error.message).toContain('core.fixture.task-header.other')
     expect(registry.get(declaredDefault.id)?.isDefault).toBe(true)
 
-    registry.register(Other, { ...coreCompact, id: 'cezar.fixture.other-header.default' }, { default: true })
+    registry.register(Other, { ...coreCompact, id: 'core.fixture.other-header.default' }, { default: true })
     first.dispose()
-    registry.register(Header, { ...declaredDefault, id: 'cezar.fixture.task-header.replacement' }, { default: true })
-    expect(registry.get('cezar.fixture.task-header.replacement')?.isDefault).toBe(true)
+    registry.register(Header, { ...declaredDefault, id: 'core.fixture.task-header.replacement' }, { default: true })
+    expect(registry.get('core.fixture.task-header.replacement')?.isDefault).toBe(true)
   })
 
   it('freezes the registration deeply', () => {
@@ -340,8 +337,8 @@ describe('core register', () => {
     registry.register(Header, coreCompact)
 
     expect(registry.list('cezar.fixture.task-header').map((registration) => registration.componentId)).toEqual([
-      'cezar.fixture.task-header.default',
-      'cezar.fixture.task-header.compact',
+      'core.fixture.task-header.default',
+      'core.fixture.task-header.compact',
     ])
   })
 
@@ -352,14 +349,14 @@ describe('core register', () => {
     const error = thrown(() => registry.register(Header, { ...coreCompact, id: coreDefault.id }))
 
     expect(error.code).toBe('duplicate-registration')
-    expect(error.message).toBe('Component "cezar.fixture.task-header.default" is already provided by core')
+    expect(error.message).toBe('Component "core.fixture.task-header.default" is already provided by core')
     expect(registry.list(Header.id)).toHaveLength(1)
   })
 
   it('refuses a contract the host does not serve with invalid-input', () => {
     const Other = defineComponentContract<HeaderProps>('cezar.fixture.other', { version: 1 })
 
-    const error = thrown(() => servedRegistry().register(Other, { ...coreDefault, id: 'cezar.fixture.other.default' }))
+    const error = thrown(() => servedRegistry().register(Other, { ...coreDefault, id: 'core.fixture.other.default' }))
 
     expect(error.code).toBe('invalid-input')
   })
@@ -369,7 +366,7 @@ describe('core register', () => {
 
     expect(error.code).toBe('contract-version-mismatch')
     expect(error.message).toBe(
-      'cezar.fixture.task-header.default implements cezar.fixture.task-header@2, but this Cezar serves cezar.fixture.task-header@1',
+      'core.fixture.task-header.default implements cezar.fixture.task-header@2, but this Cezar serves cezar.fixture.task-header@1',
     )
   })
 
@@ -380,16 +377,16 @@ describe('core register', () => {
 
     expect(error.code).toBe('invalid-input')
     expect(error.message).toBe(
-      'cezar.fixture.task-header.compact does not declare "shows-title", required by cezar.fixture.task-header@1',
+      'core.fixture.task-header.compact does not declare "shows-title", required by cezar.fixture.task-header@1',
     )
     expect(registry.list(Header.id)).toEqual([])
   })
 
-  it('refuses a core component id outside cezar. with namespace-violation', () => {
+  it('refuses a core component id outside core. with namespace-violation', () => {
     const error = thrown(() => servedRegistry().register(Header, { ...coreDefault, id: 'acme.jira.task-header' }))
 
     expect(error.code).toBe('namespace-violation')
-    expect(error.message).toBe('Core component "acme.jira.task-header" must be under "cezar."')
+    expect(error.message).toBe('Core component "acme.jira.task-header" must be under "core."')
   })
 
   it('refuses a malformed component id with invalid-id', () => {
@@ -420,8 +417,8 @@ describe('core register', () => {
     )
 
     expect(error.code).toBe('invalid-input')
-    expect(error.componentId).toBe('cezar.fixture.task-header.default')
-    expect(error.message).toContain(`Invalid component "cezar.fixture.task-header.default": ${rule}`)
+    expect(error.componentId).toBe('core.fixture.task-header.default')
+    expect(error.message).toContain(`Invalid component "core.fixture.task-header.default": ${rule}`)
     expect(error.message).not.toContain('SECRET')
   })
 
@@ -452,13 +449,13 @@ describe('core register', () => {
         }),
       }),
       'invalid-input',
-      'Invalid component "cezar.fixture.task-header.default": title could not be read',
+      'Invalid component "core.fixture.task-header.default": title could not be read',
     ],
     [
       'a revoked proxy as capabilities',
       () => ({ contract: Header, implementation: { ...coreDefault, capabilities: revoked() } }),
       'invalid-input',
-      'Invalid component "cezar.fixture.task-header.default": capabilities could not be read',
+      'Invalid component "core.fixture.task-header.default": capabilities could not be read',
     ],
     [
       'a capability list whose length throws',
@@ -475,7 +472,7 @@ describe('core register', () => {
         },
       }),
       'invalid-input',
-      'Invalid component "cezar.fixture.task-header.default": capabilities could not be read',
+      'Invalid component "core.fixture.task-header.default": capabilities could not be read',
     ],
     [
       'a revoked proxy as the implementation',
@@ -505,7 +502,7 @@ describe('core register', () => {
   })
 
   it('refuses a malformed token with invalid-id before it reads the implementation', () => {
-    const read = vi.fn(() => 'cezar.fixture.task-header.default')
+    const read = vi.fn(() => 'core.fixture.task-header.default')
     const implementation = Object.defineProperty({ ...coreDefault }, 'id', { get: read })
 
     const error = thrown(() =>
@@ -528,8 +525,8 @@ describe('disposal', () => {
     first.dispose()
 
     expect(registry.list(Header.id).map((registration) => registration.componentId)).toEqual([
-      'cezar.fixture.task-header.compact',
-      'cezar.fixture.task-header.default',
+      'core.fixture.task-header.compact',
+      'core.fixture.task-header.default',
     ])
 
     second.dispose()
@@ -623,7 +620,7 @@ describe('reading the registry', () => {
 
     const typeOnly = () =>
       // @ts-expect-error — the component's props are not the contract's
-      registry.register(Header, { id: 'cezar.fixture.task-header.other', title: 'Other', component: Other })
+      registry.register(Header, { id: 'core.fixture.task-header.other', title: 'Other', component: Other })
 
     expectTypeOf(typeOnly).toBeFunction()
   })
@@ -662,7 +659,7 @@ describe('forExtension(scope).provide', () => {
 
   it.each<[string, string]>([
     ['another extension’s namespace', 'acme.compact.task-header'],
-    ['the core namespace', 'cezar.fixture.task-header.jira'],
+    ['the core namespace', 'core.fixture.task-header.jira'],
     ['its own id without a name under it', 'acme.jira'],
   ])('refuses an id in %s with namespace-violation', (_label, id) => {
     const { scope } = fakeScope('acme.jira')
@@ -693,15 +690,14 @@ describe('forExtension(scope).provide', () => {
     expect(registry.list(Header.id)).toEqual([])
   })
 
-  it('refuses a built-in cezar.* extension providing an id core already registered, naming core', () => {
+  it('refuses an extension from taking a core id', () => {
     const registry = servedRegistry()
     registry.register(Header, coreDefault)
     const { scope } = fakeScope('cezar.fixture')
 
     const error = thrown(() => registry.forExtension(scope).provide(Header, coreDefault))
 
-    expect(error.code).toBe('duplicate-registration')
-    expect(error.message).toBe('Component "cezar.fixture.task-header.default" is already provided by core')
+    expect(error.code).toBe('namespace-violation')
     expect(registry.get(coreDefault.id)?.extensionId).toBeNull()
   })
 

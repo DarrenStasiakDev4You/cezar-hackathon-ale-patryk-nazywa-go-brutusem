@@ -18,7 +18,7 @@ import {
   TaskStop,
   type TaskRef,
   type TaskHeaderActionState,
-  type TaskHeaderMainProps,
+  type TaskHeaderProps,
   type TaskHeaderReference,
 } from '@open-mercato/cezar-extension-api'
 import { useCommand } from '@/commands/provider'
@@ -39,9 +39,9 @@ import { useDraft } from './thread-draft'
 
 /**
  * The task header's model (spec `.ai/specs/2026-09-19-task-header-contract.md`): the ONE reader of
- * the run behind `cezar.task.header.main@1`'s props and behind Continue, Stop and Archive. It turns
+ * the run behind `task.header@1`'s props and behind Continue, Stop and Archive. It turns
  * the run, the queries, the commands and the router into the contract's JSON data and its seven
- * intents, so core's default (`CoreTaskHeaderMain`) and any extension's implementation render the
+ * intents, so core's default (`CoreTaskHeader`) and any extension's implementation render the
  * same model, and the shell's own Continue, Cancel and Archive buttons draw from it too.
  *
  * Every field comes from the helper that fed the header before the split, so there is one rule per
@@ -56,7 +56,7 @@ export interface TaskHeaderModel {
    * identity for the life of the header, and each call reads the latest run and state through a
    * ref, so after a switch from task A to task B (the header is not remounted) it acts on B.
    */
-  readonly props: TaskHeaderMainProps
+  readonly props: TaskHeaderProps
   /** Runs the stop. The shell calls it when the user confirms. */
   readonly stopTask: () => void
   /** Core's title editor: today's `useTitleEditor` with the saved draft (`useDraft(taskId, 'title')`) and `usePatchRun`. */
@@ -73,12 +73,12 @@ export interface TaskHeaderModelOptions {
 
 /** The contract's data, without the intents. */
 type TaskHeaderData = Omit<
-  TaskHeaderMainProps,
+  TaskHeaderProps,
   'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveConflicts' | 'onNavigate' | 'onChooseEngine'
 >
 
 type Intents = Pick<
-  TaskHeaderMainProps,
+  TaskHeaderProps,
   'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveConflicts' | 'onNavigate' | 'onChooseEngine'
 > & { readonly stopTask: () => void }
 
@@ -298,7 +298,7 @@ export function useTaskHeaderModel(run: ApiRun, options: TaskHeaderModelOptions)
     }
   })
 
-  const props = useMemo<TaskHeaderMainProps>(
+  const props = useMemo<TaskHeaderProps>(
     () =>
       Object.freeze({
         ...data,
@@ -407,7 +407,7 @@ function engineOf(
   run: ApiRun,
   defaultRunner: string | undefined,
   profiles: readonly { id: string; label: string }[] | undefined,
-): TaskHeaderMainProps['engine'] {
+): TaskHeaderProps['engine'] {
   const runner = run.runner ?? defaultRunner ?? 'claude'
   const model = run.model ?? 'auto'
   const accountId = [...run.steps].reverse().find((step) => step.profileId)?.profileId

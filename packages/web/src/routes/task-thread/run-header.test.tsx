@@ -13,7 +13,7 @@ import { createCoreComponentRegistry } from '@/component-registry/core-component
 import { ComponentsProvider } from '@/component-registry/provider'
 import { fakeScope } from '@/extensions/registry.fixtures'
 import type { ApiRun, RunStatus, StepState } from '@open-mercato/cezar-api-client'
-import { TaskHeaderMain, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import { TaskHeader, type TaskHeaderProps } from '@open-mercato/cezar-extension-api'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
 import { RunHeader } from './run-header'
@@ -427,7 +427,7 @@ describe('actions run through commands (spec 2026-09-19-command-api)', () => {
     // The header's own actions stay in run-header.tsx; Continue, Cancel and Archive run through
     // the header's model after the split (spec 2026-09-19-task-header-contract), where `useCommand` lives.
     const shell = read('run-header.tsx')
-    const model = read('task-header-main.ts')
+    const model = read('task-header-model.ts')
     // Every import of the client, however many statements there are.
     const clientNames = (source: string) =>
       [...source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*'@\/api\/client'/g)]
@@ -1626,7 +1626,7 @@ describe('the shell around the task header part', () => {
     renderHeader(run('waiting'))
 
     const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
-    expect(box?.dataset.component).toBe('cezar.task.header.main.default')
+    expect(box?.dataset.component).toBe('core.task-header')
     expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
     const menu = screen.getByRole('button', { name: 'Run actions' })
     expect(box?.contains(menu)).toBe(false)
@@ -1719,7 +1719,7 @@ describe('an implementation that offers task actions', () => {
   const ROW_ID = 'acme.compact.row'
   const behaviour = { throws: false }
 
-  function OfferingRow({ task }: TaskHeaderMainProps) {
+  function OfferingRow({ task }: TaskHeaderProps) {
     if (behaviour.throws) throw new Error('row bug')
     return <h1 data-slot="acme-row">{task.title}</h1>
   }
@@ -1727,7 +1727,7 @@ describe('an implementation that offers task actions', () => {
   /** The header, with an extension's row preferred for the task header part. */
   function renderWithRow(record: ApiRun, offers: readonly string[]) {
     const registry = createCoreComponentRegistry({ onDiagnostic: () => {} })
-    registry.forExtension(fakeScope('acme.compact').scope).provide(TaskHeaderMain, {
+    registry.forExtension(fakeScope('acme.compact').scope).provide(TaskHeader, {
       id: ROW_ID,
       title: 'Compact row',
       capabilities: ['shows-title', 'shows-status', ...offers],
@@ -1738,7 +1738,7 @@ describe('an implementation that offers task actions', () => {
         <CommandsProvider>
           <ComponentsProvider
             registry={registry}
-            preferenceOf={(contractId) => (contractId === TaskHeaderMain.id ? ROW_ID : null)}
+            preferenceOf={(contractId) => (contractId === TaskHeader.id ? ROW_ID : null)}
             onImplementationError={() => {}}
           >
             <MemoryRouter initialEntries={[`/tasks/${record.id}`]}>

@@ -35,24 +35,24 @@ const scan = (filePath: string, source: string) =>
 
 describe('findCoreImplementationImports', () => {
   it.each<[string, string, string]>([
-    ['the alias', 'src/routes/task-thread/run-header.tsx', "import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'"],
-    ['the alias with an extension', 'src/app.tsx', "import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main.tsx'"],
-    ['a sibling', 'src/routes/task-thread/run-header.tsx', "import { CoreTaskHeaderMain } from './core-task-header-main'"],
-    ['a relative path from elsewhere', 'src/component-registry/component-host.tsx', "import { CoreTaskHeaderMain } from '../routes/task-thread/core-task-header-main'"],
-    ['a re-export', 'src/routes/task-thread/index.ts', "export { CoreTaskHeaderMain as Header } from './core-task-header-main'"],
-    ['an export-all', 'src/routes/task-thread/index.ts', "export * from './core-task-header-main'"],
-    ['a dynamic import', 'src/routes.tsx', "const Header = lazy(() => import('./routes/task-thread/core-task-header-main'))"],
+    ['the alias', 'src/routes/task-thread/run-header.tsx', "import { CoreTaskHeader } from '@/routes/task-thread/core-task-header'"],
+    ['the alias with an extension', 'src/app.tsx', "import { CoreTaskHeader } from '@/routes/task-thread/core-task-header.tsx'"],
+    ['a sibling', 'src/routes/task-thread/run-header.tsx', "import { CoreTaskHeader } from './core-task-header'"],
+    ['a relative path from elsewhere', 'src/component-registry/component-host.tsx', "import { CoreTaskHeader } from '../routes/task-thread/core-task-header'"],
+    ['a re-export', 'src/routes/task-thread/index.ts', "export { CoreTaskHeader as Header } from './core-task-header'"],
+    ['an export-all', 'src/routes/task-thread/index.ts', "export * from './core-task-header'"],
+    ['a dynamic import', 'src/routes.tsx', "const Header = lazy(() => import('./routes/task-thread/core-task-header'))"],
   ])('catches an import through %s', (_label, filePath, source) => {
     expect(scan(filePath, source)).toHaveLength(1)
   })
 
   it('passes a type-only import, other modules and a quoted example', () => {
     const source = [
-      "import type { CoreTaskHeaderMain } from './core-task-header-main'",
+      "import type { CoreTaskHeader } from './core-task-header'",
       "import { RunHeader } from './run-header'",
-      "import { useTaskHeaderMainProps } from './task-header-main'",
-      "type Header = typeof import('./core-task-header-main')",
-      "// import { CoreTaskHeaderMain } from './core-task-header-main'",
+      "import { useTaskHeaderModel } from './task-header-model'",
+      "type Header = typeof import('./core-task-header')",
+      "// import { CoreTaskHeader } from './core-task-header'",
     ].join('\n')
 
     expect(scan('src/routes/task-thread/x.tsx', source)).toEqual([])
@@ -63,12 +63,12 @@ describe('findCoreImplementationImports', () => {
 
     expect(scan('src/component-registry/core-components.ts', registration)).toEqual([])
     // The scan is not blind to how that module really writes its import.
-    expect(scan('src/component-registry/elsewhere.ts', registration)).toEqual(['@/routes/task-thread/core-task-header-main'])
+    expect(scan('src/component-registry/elsewhere.ts', registration)).toEqual(['@/routes/task-thread/core-task-header'])
   })
 })
 
 describe('the cockpit', () => {
-  it('renders core’s task header main part only through ComponentHost: nothing but core-components.ts imports it', () => {
+  it('renders core’s task header only through ComponentHost: nothing but core-components.ts imports it', () => {
     const sources = cockpitSources()
 
     expect(sources.length).toBeGreaterThan(100)

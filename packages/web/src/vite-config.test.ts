@@ -43,7 +43,7 @@ describe('workspace source aliases', () => {
 describe('the entry chunk check', () => {
   const MAIN = '/repo/packages/web/src/main.tsx'
   const CORE_COMPONENTS = '/repo/packages/web/src/component-registry/core-components.ts'
-  const CORE_HEADER = '/repo/packages/web/src/routes/task-thread/core-task-header-main.tsx'
+  const CORE_HEADER = '/repo/packages/web/src/routes/task-thread/core-task-header.tsx'
   const CHIP = '/repo/packages/web/src/components/reference-chip.tsx'
   const RUN_HEADER = '/repo/packages/web/src/routes/task-thread/run-header.tsx'
   const MARKDOWN = '/repo/packages/web/src/routes/task-thread/markdown.tsx'
@@ -84,7 +84,7 @@ describe('the entry chunk check', () => {
     const lazyOnly = { ...bundle, 'assets/provider.js': chunk([CHIP]), 'assets/core.js': chunk([CORE_HEADER]) }
 
     expect(entryChunkProblems({ bundle: lazyOnly, staticImportsOf: edges({}) })).toEqual([
-      'no module matching /\\/src\\/routes\\/task-thread\\/core-task-header-main\\.tsx$/ loads with the entry',
+      'no module matching /\\/src\\/routes\\/task-thread\\/core-task-header\\.tsx$/ loads with the entry',
     ])
   })
 

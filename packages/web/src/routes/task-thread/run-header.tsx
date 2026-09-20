@@ -28,7 +28,7 @@ import {
   useRuns,
 } from '@/api/queries'
 import type { ApiRun, OpenTarget } from '@open-mercato/cezar-api-client'
-import { TaskHeaderMain, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import { TaskHeader, type TaskHeaderProps } from '@open-mercato/cezar-extension-api'
 import { ComponentHost, useHostedComponent } from '@/component-registry/component-host'
 import { TitleEditInput } from '@/components/editable-title'
 import { StatusDot } from '@/components/status-dot'
@@ -60,7 +60,7 @@ import { usableRunners } from '@/lib/provider-status'
 import { Markdown } from './markdown'
 import { cliTargetResumes, cliTargetRunner, finishTitle, resumeHint, runActionFlags } from './run-actions'
 import { WorkflowSteps } from './step-rail'
-import { useTaskHeaderModel } from './task-header-main'
+import { useTaskHeaderModel } from './task-header-model'
 import { useFinishRun } from './use-finish-run'
 
 /**
@@ -71,9 +71,9 @@ import { useFinishRun } from './use-finish-run'
  * run context.
  *
  * It is core's SHELL (spec `.ai/specs/2026-09-19-task-header-contract.md`, § The split): the title
- * row and meta row are the replaceable `cezar.task.header.main@1`, rendered only through
+ * row and meta row are the replaceable `task.header@1`, rendered only through
  * `ComponentHost` from the props `useTaskHeaderModel` builds, and core's default for them is
- * `CoreTaskHeaderMain`. Everything that controls the task stays here, beside the part: the action
+ * `CoreTaskHeader`. Everything that controls the task stays here, beside the part: the action
  * bar and the Run actions menu (whose Continue, Cancel and Archive draw from the same model and
  * call the same intents), the tabs, the monitoring and dispatch lines, the step rail, the resume
  * hint, the notes and the title editor. The one exception (spec Q3): an implementation that declares
@@ -142,7 +142,7 @@ function RunHeaderView({
   const editor = model.titleEditor
   // Which of Continue, Stop and Archive the implementation the host renders now takes over (spec
   // Q3). The host makes the same choice from the same failure record, so the two cannot disagree.
-  const offered = offeredActions(useHostedComponent(TaskHeaderMain, run.id)?.capabilities)
+  const offered = offeredActions(useHostedComponent(TaskHeader, run.id)?.capabilities)
 
   return (
     <header
@@ -150,7 +150,7 @@ function RunHeaderView({
       className="relative z-20 border-b border-border bg-background/95 px-3 pt-2 backdrop-blur md:sticky md:top-0 md:px-6 md:pt-3"
     >
       <div className="mx-auto w-full max-w-[var(--measure)]">
-        {/* The title, the status and the basic meta are `cezar.task.header.main@1`: rendered
+        {/* The title, the status and the basic meta are `task.header@1`: rendered
             through the host, so an extension may replace them, with core's default one error
             boundary away. The Run actions menu sits beside the host, not inside it, so no
             replacement can take a task's controls away. */}
@@ -165,7 +165,7 @@ function RunHeaderView({
               </div>
             ) : null}
             <div data-slot="task-header-main" inert={editor.editing} className={editor.editing ? 'invisible' : undefined}>
-              <ComponentHost contract={TaskHeaderMain} subject={run.id} props={props} />
+              <ComponentHost contract={TaskHeader} subject={run.id} props={props} />
             </div>
           </div>
           <ActionsKebab
@@ -617,7 +617,7 @@ function ActionsKebab({
 }: {
   run: ApiRun
   actions: RunActions
-  header: TaskHeaderMainProps
+  header: TaskHeaderProps
   /** The part offers a task action itself: the menu stays at every width, not only below `md`. */
   alwaysVisible: boolean
   onToggleNotes: () => void

@@ -27,7 +27,7 @@ const Header = defineComponentContract<HeaderProps>('cezar.fixture.task-header',
   layout: { minBlockSize: 30 },
 })
 
-const DEFAULT_ID = 'cezar.fixture.task-header.default'
+const DEFAULT_ID = 'core.fixture.task-header.default'
 const JIRA_ID = 'acme.jira.task-header'
 const COMPACT_ID = 'acme.compact.task-header'
 
@@ -476,7 +476,7 @@ describe('ComponentHost: the box', () => {
       layout: { sticky: 'top', sizing: 'fill', minBlockSize: 30 },
     })
     const registry = createComponentRegistry({ contracts: [Sticky], onDiagnostic: () => {} })
-    registry.register(Sticky, { id: 'cezar.fixture.sticky.default', title: 'Sticky', component: CoreHeader }, { default: true })
+    registry.register(Sticky, { id: 'core.fixture.sticky.default', title: 'Sticky', component: CoreHeader }, { default: true })
     const { container } = render(tree(<ComponentHost contract={Sticky} props={{ title: 'x' }} />, { registry }))
 
     expect(hostBox(container).className).toBe('relative z-20 md:sticky md:top-0 flex min-h-0 flex-1 flex-col')
@@ -643,7 +643,7 @@ describe('useHostedComponent: what the host renders now', () => {
       optionalCapabilities: ['shows-meta'],
     })
     const registry = createComponentRegistry({ contracts: [Rich], onDiagnostic: () => {} })
-    registry.register(Rich, { id: 'cezar.fixture.rich-header.default', title: 'Rich header', capabilities: ['shows-title'], component: CoreHeader }, { default: true })
+    registry.register(Rich, { id: 'core.fixture.rich-header.default', title: 'Rich header', capabilities: ['shows-title'], component: CoreHeader }, { default: true })
     registry.forExtension(fakeScope('acme.rich').scope).provide(Rich, {
       id: 'acme.rich.header',
       title: 'Acme header',

@@ -12,7 +12,7 @@ import { ComponentsProvider } from '@/component-registry/provider'
 import { createEventBus } from '@/events/bus'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost } from '@/extensions/host'
 import type { ApiRun, RunStatus } from '@open-mercato/cezar-api-client'
-import { TaskArchive, TaskContinue, TaskHeaderMain, TaskStop, type ContributionId } from '@open-mercato/cezar-extension-api'
+import { TaskArchive, TaskContinue, TaskHeader, TaskStop, type ContributionId } from '@open-mercato/cezar-extension-api'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
 // A test-only reach into another package, ugly on purpose (AGENTS.md): the example is the proof
@@ -25,7 +25,7 @@ import { ThreadView } from './task-thread'
 /**
  * The brief's Definition of Done on the task page (spec `.ai/specs/2026-09-19-task-header-contract.md`,
  * Implementation Plan step 10): the compact example, activated through the extension host the way
- * `main.tsx` activates extensions and preferred for `cezar.task.header.main`, renders the task's
+ * `main.tsx` activates extensions and preferred for `task.header`, renders the task's
  * header and runs Continue, Stop (after core's confirmation) and Archive through core's intents.
  */
 
@@ -108,7 +108,7 @@ async function renderTaskPage(record: ApiRun) {
   const records = await host.ready
   expect(records.map((entry) => [entry.id, entry.status])).toEqual([['example.compact-header', 'active']])
   const execute = vi.spyOn(commands, 'execute')
-  const preferenceOf = (contractId: ContributionId): ContributionId | null => (contractId === TaskHeaderMain.id ? ROW_ID : null)
+  const preferenceOf = (contractId: ContributionId): ContributionId | null => (contractId === TaskHeader.id ? ROW_ID : null)
 
   render(
     <QueryClientProvider client={queryClient}>

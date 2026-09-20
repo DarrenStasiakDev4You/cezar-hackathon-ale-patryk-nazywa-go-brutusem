@@ -2,12 +2,12 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import {
   checkComponentCompatibility,
-  TaskHeaderMain,
+  TaskHeader,
   type ComponentContract,
   type ComponentImplementation,
   type IsJson,
   type TaskHeaderActionState,
-  type TaskHeaderMainProps,
+  type TaskHeaderProps,
   type TaskHeaderTask,
   type TaskRef,
 } from '@open-mercato/cezar-extension-api'
@@ -19,37 +19,37 @@ type Intent = 'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveCon
 type FunctionKeys<T> = { [K in keyof T]-?: NonNullable<T[K]> extends (...args: never[]) => unknown ? K : never }[keyof T]
 
 describe('core component contracts', () => {
-  it('declares cezar.task.header.main@1 as a frozen token', () => {
-    expect(TaskHeaderMain).toEqual({
+  it('declares task.header@1 as a frozen token', () => {
+    expect(TaskHeader).toEqual({
       kind: 'component',
-      id: 'cezar.task.header.main',
+      id: 'task.header',
       version: 1,
       requiredCapabilities: ['shows-title', 'shows-status'],
       optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
       layout: { minBlockSize: 30 },
     })
-    expect(Object.isFrozen(TaskHeaderMain)).toBe(true)
-    expect(Object.isFrozen(TaskHeaderMain.requiredCapabilities)).toBe(true)
-    expect(Object.isFrozen(TaskHeaderMain.optionalCapabilities)).toBe(true)
-    expect(Object.isFrozen(TaskHeaderMain.layout)).toBe(true)
+    expect(Object.isFrozen(TaskHeader)).toBe(true)
+    expect(Object.isFrozen(TaskHeader.requiredCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskHeader.optionalCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskHeader.layout)).toBe(true)
   })
 
   it('types the token with its props', () => {
-    expectTypeOf(TaskHeaderMain).toEqualTypeOf<ComponentContract<TaskHeaderMainProps>>()
+    expectTypeOf(TaskHeader).toEqualTypeOf<ComponentContract<TaskHeaderProps>>()
   })
 
   it('keeps every data prop JSON', () => {
-    expectTypeOf<IsJson<Omit<TaskHeaderMainProps, Intent>>>().toEqualTypeOf<true>()
+    expectTypeOf<IsJson<Omit<TaskHeaderProps, Intent>>>().toEqualTypeOf<true>()
     // The check is not blind: the props with their intents are not JSON.
-    expectTypeOf<IsJson<TaskHeaderMainProps>>().toEqualTypeOf<false>()
+    expectTypeOf<IsJson<TaskHeaderProps>>().toEqualTypeOf<false>()
   })
 
   it('holds no function but the seven intents, and every intent returns void', () => {
-    expectTypeOf<FunctionKeys<TaskHeaderMainProps>>().toEqualTypeOf<Intent>()
-    expectTypeOf<ReturnType<TaskHeaderMainProps[Intent]>>().toEqualTypeOf<void>()
-    expectTypeOf<TaskHeaderMainProps['onResolveConflicts']>().parameters.toEqualTypeOf<[prNumber: number]>()
-    expectTypeOf<TaskHeaderMainProps['onNavigate']>().parameters.toEqualTypeOf<[href: string]>()
-    expectTypeOf<Parameters<TaskHeaderMainProps['onContinue']>>().toEqualTypeOf<[]>()
+    expectTypeOf<FunctionKeys<TaskHeaderProps>>().toEqualTypeOf<Intent>()
+    expectTypeOf<ReturnType<TaskHeaderProps[Intent]>>().toEqualTypeOf<void>()
+    expectTypeOf<TaskHeaderProps['onResolveConflicts']>().parameters.toEqualTypeOf<[prNumber: number]>()
+    expectTypeOf<TaskHeaderProps['onNavigate']>().parameters.toEqualTypeOf<[href: string]>()
+    expectTypeOf<Parameters<TaskHeaderProps['onContinue']>>().toEqualTypeOf<[]>()
   })
 
   it('names the task so it can be passed straight to the task commands', () => {
@@ -57,11 +57,11 @@ describe('core component contracts', () => {
   })
 
   it('gives every action the same state', () => {
-    expectTypeOf<TaskHeaderMainProps['actions'][keyof TaskHeaderMainProps['actions']]>().toEqualTypeOf<TaskHeaderActionState>()
+    expectTypeOf<TaskHeaderProps['actions'][keyof TaskHeaderProps['actions']]>().toEqualTypeOf<TaskHeaderActionState>()
   })
 
   it('lets an implementation offer Continue, Stop and Archive one by one', () => {
-    const offering = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderMainProps> => ({
+    const offering = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderProps> => ({
       id: 'acme.compact.row',
       title: 'Compact row',
       capabilities,
@@ -69,32 +69,32 @@ describe('core component contracts', () => {
     })
 
     expect(
-      checkComponentCompatibility(TaskHeaderMain, offering(['shows-title', 'shows-status', 'offers-stop', 'offers-continue'])).capabilities,
+      checkComponentCompatibility(TaskHeader, offering(['shows-title', 'shows-status', 'offers-stop', 'offers-continue'])).capabilities,
     ).toEqual(['shows-title', 'shows-status', 'offers-continue', 'offers-stop'])
     // A name the contract does not know is ignored, never an offer.
     expect(
-      checkComponentCompatibility(TaskHeaderMain, offering(['shows-title', 'shows-status', 'offers-delete'])).capabilities,
+      checkComponentCompatibility(TaskHeader, offering(['shows-title', 'shows-status', 'offers-delete'])).capabilities,
     ).toEqual(['shows-title', 'shows-status'])
   })
 
   it('needs shows-title and shows-status, and takes shows-meta as optional', () => {
     const Header = () => null
-    const implementation = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderMainProps> => ({
+    const implementation = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderProps> => ({
       id: 'acme.jira.task-header',
       title: 'Jira header',
       capabilities,
       component: Header,
     })
 
-    expect(checkComponentCompatibility(TaskHeaderMain, implementation(['shows-status', 'shows-title']))).toEqual({
+    expect(checkComponentCompatibility(TaskHeader, implementation(['shows-status', 'shows-title']))).toEqual({
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status'],
     })
     expect(
-      checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,
+      checkComponentCompatibility(TaskHeader, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,
     ).toEqual(['shows-title', 'shows-status', 'shows-meta'])
-    expect(checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title'])).issues).toEqual([
+    expect(checkComponentCompatibility(TaskHeader, implementation(['shows-title'])).issues).toEqual([
       expect.objectContaining({ code: 'missing-capability', capability: 'shows-status' }),
     ])
   })
