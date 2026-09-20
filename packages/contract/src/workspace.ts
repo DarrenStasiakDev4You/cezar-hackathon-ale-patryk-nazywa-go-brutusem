@@ -214,6 +214,11 @@ export const workspaceLastLocationSchema = z.strictObject({
 });
 export type WorkspaceLastLocation = z.infer<typeof workspaceLastLocationSchema>;
 
+/** Settings → Components: the user's chosen implementation per replaceable contract. */
+const componentPreferencesSchema = z.looseObject({
+  implementations: z.record(z.string(), z.string()).optional(),
+});
+
 export const workspaceUiStateSchema = z.looseObject({
   sidebar: z
     .looseObject({
@@ -264,6 +269,8 @@ export const workspaceUiStateSchema = z.looseObject({
    *  curated", so every default skill shows; a PRESENT array (even `[]`) means only those names
    *  show from that repo. */
   importedSkills: z.array(z.string()).optional(),
+  /** Contract id without its major → compatible implementation id. */
+  components: componentPreferencesSchema.optional(),
   componentSettings: componentSettingsSchema.optional(),
 });
 export type WorkspaceUiState = z.infer<typeof workspaceUiStateSchema>;
@@ -307,6 +314,16 @@ export const setWorkspaceUiStateInputSchema = z
     importedSkills: z
       .array(z.string().min(1).max(200))
       .max(WORKSPACE_UI_STATE_MAX_KEYS)
+      .optional(),
+    components: z
+      .looseObject({
+        implementations: z
+          .record(z.string().min(1).max(128), z.string().min(1).max(128))
+          .refine((map) => Object.keys(map).length <= WORKSPACE_UI_STATE_MAX_KEYS, {
+            message: `components.implementations must have at most ${WORKSPACE_UI_STATE_MAX_KEYS} entries`,
+          })
+          .optional(),
+      })
       .optional(),
     taskTable: taskTableUiStateSchema
       .extend({

@@ -1,13 +1,16 @@
 import {
   TaskComposer,
   TaskHeaderMain,
+  TaskMetadata,
   type ComponentImplementation,
   type TaskComposerProps,
   type TaskHeaderMainProps,
+  type TaskMetadataProps,
 } from '@open-mercato/cezar-extension-api'
 
 import { CoreTaskComposer } from '@/routes/task-thread/core-task-composer'
 import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'
+import { CoreTaskMetadata } from '@/routes/task-thread/core-task-metadata'
 
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
 import { createComponentRegistry, type CockpitComponentRegistry, type ComponentRegistryOptions } from './registry'
@@ -23,14 +26,21 @@ import { coreDefaultComponentId } from './resolve'
  * other import of one.
  */
 
-/** Core's task header main part: today's title row and meta row, rendered from the contract's props
- *  alone (spec `2026-09-19-task-header-contract`). It shows everything the contract offers. */
+/** Core's task header main part: today's title row, rendered from the contract's props alone. */
 const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.freeze({
   id: coreDefaultComponentId(TaskHeaderMain.id),
   title: 'Task header',
-  description: 'Cezar’s own title, status and meta row',
-  capabilities: Object.freeze(['shows-title', 'shows-status', 'shows-meta']),
+  description: 'Cezar’s own title and status row',
+  capabilities: Object.freeze(['shows-title', 'shows-status']),
   component: CoreTaskHeaderMain,
+})
+
+const coreTaskMetadata: ComponentImplementation<TaskMetadataProps> = Object.freeze({
+  id: coreDefaultComponentId(TaskMetadata.id),
+  title: 'Task metadata',
+  description: 'Cezar’s own metadata row: workflow, branch, references, diff, usage and agent',
+  capabilities: Object.freeze(['shows-metadata', 'offers-links', 'offers-copy']),
+  component: CoreTaskMetadata,
 })
 
 const coreTaskComposer: ComponentImplementation<TaskComposerProps> = Object.freeze({
@@ -44,6 +54,7 @@ const coreTaskComposer: ComponentImplementation<TaskComposerProps> = Object.free
 /** Registers core's default of every served contract. */
 export function registerCoreComponents(registry: Pick<CockpitComponentRegistry, 'register'>): void {
   registry.register(TaskHeaderMain, coreTaskHeaderMain)
+  registry.register(TaskMetadata, coreTaskMetadata)
   registry.register(TaskComposer, coreTaskComposer)
 }
 

@@ -3,10 +3,13 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import {
   checkComponentCompatibility,
   TaskComposer,
+  TaskMetadata,
   TaskHeaderMain,
   type ComponentContract,
   type ComponentImplementation,
   type IsJson,
+  type TaskMetadataProps,
+  type TaskMetadataIntents,
   type TaskHeaderActionState,
   type TaskHeaderMainProps,
   type TaskHeaderTask,
@@ -32,6 +35,30 @@ type ComposerIntent =
 type FunctionKeys<T> = { [K in keyof T]-?: NonNullable<T[K]> extends (...args: never[]) => unknown ? K : never }[keyof T]
 
 describe('core component contracts', () => {
+  it('declares cezar.task.metadata@1 as a frozen token', () => {
+    expect(TaskMetadata).toEqual({
+      kind: 'component',
+      id: 'cezar.task.metadata',
+      version: 1,
+      requiredCapabilities: ['shows-metadata'],
+      optionalCapabilities: ['offers-links', 'offers-copy'],
+      layout: { minBlockSize: 20 },
+    })
+    expect(Object.isFrozen(TaskMetadata)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.requiredCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.optionalCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.layout)).toBe(true)
+  })
+
+  it('keeps metadata data JSON and makes every intent optional', () => {
+    expectTypeOf<IsJson<Omit<TaskMetadataProps, 'intents'>>>().toEqualTypeOf<true>()
+    expectTypeOf<IsJson<TaskMetadataProps>>().toEqualTypeOf<false>()
+    expectTypeOf<keyof TaskMetadataIntents>().toEqualTypeOf<'resolveConflicts' | 'navigate' | 'chooseEngine'>()
+    expectTypeOf<NonNullable<TaskMetadataIntents['resolveConflicts']>>().returns.toEqualTypeOf<void>()
+    expectTypeOf<NonNullable<TaskMetadataIntents['navigate']>>().returns.toEqualTypeOf<void>()
+    expectTypeOf<NonNullable<TaskMetadataIntents['chooseEngine']>>().returns.toEqualTypeOf<void>()
+  })
+
   it('declares cezar.task.composer@1 as a frozen token', () => {
     expect(TaskComposer).toEqual({
       kind: 'component',
@@ -70,7 +97,7 @@ describe('core component contracts', () => {
       id: 'cezar.task.header.main',
       version: 1,
       requiredCapabilities: ['shows-title', 'shows-status'],
-      optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
+      optionalCapabilities: ['offers-continue', 'offers-stop', 'offers-archive'],
       layout: { minBlockSize: 30 },
     })
     expect(Object.isFrozen(TaskHeaderMain)).toBe(true)
@@ -122,7 +149,7 @@ describe('core component contracts', () => {
     ).toEqual(['shows-title', 'shows-status'])
   })
 
-  it('needs shows-title and shows-status, and takes shows-meta as optional', () => {
+  it('needs shows-title and shows-status, and ignores the retired shows-meta capability', () => {
     const Header = () => null
     const implementation = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderMainProps> => ({
       id: 'acme.jira.task-header',
@@ -138,9 +165,10 @@ describe('core component contracts', () => {
       missingCapabilities: [],
       customCapabilities: [],
     })
-    expect(
-      checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,
-    ).toEqual(['shows-title', 'shows-status', 'shows-meta'])
+    expect(checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities).toEqual([
+      'shows-title',
+      'shows-status',
+    ])
     expect(checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title'])).issues).toEqual([
       expect.objectContaining({ code: 'missing-capability', capability: 'shows-status' }),
     ])

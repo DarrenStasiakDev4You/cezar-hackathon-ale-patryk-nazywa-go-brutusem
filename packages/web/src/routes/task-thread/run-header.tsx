@@ -3,6 +3,7 @@ import {
   ArchiveIcon,
   ArchiveRestoreIcon,
   CheckIcon,
+  ChevronDownIcon,
   CircleStopIcon,
   CopyIcon,
   EllipsisVerticalIcon,
@@ -14,7 +15,7 @@ import {
   SquareTerminalIcon,
   Trash2Icon,
 } from 'lucide-react'
-import { memo, useState } from 'react'
+import { memo, useId, useReducer, useState } from 'react'
 import { Link, useNavigate } from '@/lib/project-router'
 
 import { ApiError, deleteRun, openRunIn, openRunInCli } from '@/api/client'
@@ -28,7 +29,7 @@ import {
   useRuns,
 } from '@/api/queries'
 import type { ApiRun, OpenTarget } from '@open-mercato/cezar-api-client'
-import { TaskHeaderMain, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
+import { TaskHeaderMain, TaskMetadata, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
 import { ComponentHost, useHostedComponent } from '@/component-registry/component-host'
 import { TitleEditInput } from '@/components/editable-title'
 import { StatusDot } from '@/components/status-dot'
@@ -61,6 +62,7 @@ import { Markdown } from './markdown'
 import { cliTargetResumes, cliTargetRunner, finishTitle, resumeHint, runActionFlags } from './run-actions'
 import { WorkflowSteps } from './step-rail'
 import { useTaskHeaderModel } from './task-header-main'
+import { useTaskMetadataController } from './task-metadata'
 import { useFinishRun } from './use-finish-run'
 
 /**
@@ -121,6 +123,8 @@ export const RunHeader = memo(RunHeaderView, (before, after) =>
   compareHeaderProps.every((compare) => compare(before, after)),
 )
 
+const detailsOpenByTask = new Map<string, boolean>()
+
 function RunHeaderView({
   run,
   planTally,
@@ -131,12 +135,20 @@ function RunHeaderView({
   const flags = runActionFlags(run)
   const hint = resumeHint(run)
   const [notesOpen, setNotesOpen] = useState(false)
+  const [, bumpDetails] = useReducer((count: number) => count + 1, 0)
+  const detailsId = useId()
   const actions = useRunActions(run, onMarkedUnread)
+  const metadata = useTaskMetadataController(run, { chooseEngine: onChooseEngine })
+  const detailsOpen = detailsOpenByTask.get(run.id) ?? false
+  const toggleDetails = () => {
+    detailsOpenByTask.set(run.id, !detailsOpen)
+    bumpDetails()
+  }
   // The one reader of the run behind the replaceable part and the three task actions it models.
   const model = useTaskHeaderModel(run, {
     planTally,
     requestStopConfirmation: () => actions.setConfirming('cancel'),
-    chooseEngine: onChooseEngine,
+    metadata,
   })
   const { props } = model
   const editor = model.titleEditor
@@ -167,7 +179,25 @@ function RunHeaderView({
             <div data-slot="task-header-main" inert={editor.editing} className={editor.editing ? 'invisible' : undefined}>
               <ComponentHost contract={TaskHeaderMain} subject={run.id} props={props} />
             </div>
+            <div
+              id={detailsId}
+              data-slot="run-details"
+              className={detailsOpen ? 'mt-1 md:mt-1.5' : 'mt-1 hidden md:block md:mt-1.5'}
+            >
+              <ComponentHost contract={TaskMetadata} subject={run.id} props={metadata} />
+            </div>
           </div>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="self-start md:hidden"
+            aria-label={detailsOpen ? 'Hide run details' : 'Show run details'}
+            aria-controls={detailsId}
+            aria-expanded={detailsOpen}
+            onClick={toggleDetails}
+          >
+            <ChevronDownIcon aria-hidden="true" className={detailsOpen ? 'rotate-180' : undefined} />
+          </Button>
           <ActionsKebab
             run={run}
             actions={actions}

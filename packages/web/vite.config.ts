@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 
+import { CORE_IMPLEMENTATION_SOURCES } from './src/component-registry/core-sources'
+
 const appDir = dirname(fileURLToPath(import.meta.url))
 const packagesDir = resolve(appDir, '..')
 
@@ -34,10 +36,7 @@ export const reactRuntimeChunk = {
  */
 export const entryChunkRules = {
   /** Core's defaults: in the entry chunk, or in a chunk it imports statically. */
-  eager: [
-    /\/src\/routes\/task-thread\/core-task-header-main\.tsx$/,
-    /\/src\/routes\/task-thread\/core-task-composer\.tsx$/,
-  ],
+  eager: CORE_IMPLEMENTATION_SOURCES.map(({ source }) => new RegExp(`${source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.tsx$`)),
   /** What a core default must not reach through its static imports. */
   keptOut: [/\/node_modules\/streamdown\//, /\/src\/routes\/task-thread\/run-header\.tsx$/],
 }
