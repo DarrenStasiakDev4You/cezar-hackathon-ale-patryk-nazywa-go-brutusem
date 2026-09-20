@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import {
   checkComponentCompatibility,
+  TaskComposer,
   TaskHeaderMain,
   type ComponentContract,
   type ComponentImplementation,
@@ -9,16 +10,60 @@ import {
   type TaskHeaderActionState,
   type TaskHeaderMainProps,
   type TaskHeaderTask,
+  type TaskComposerFile,
+  type TaskComposerProps,
   type TaskRef,
 } from '@open-mercato/cezar-extension-api'
 
 /** The seven intents: the only functions a header's props may hold. */
 type Intent = 'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveConflicts' | 'onNavigate' | 'onChooseEngine'
+type ComposerIntent =
+  | 'onTextChange'
+  | 'onSubmit'
+  | 'onAttachFiles'
+  | 'onRemoveAttachment'
+  | 'onSelectRunner'
+  | 'onSelectModel'
+  | 'onRequestCompletions'
+  | 'onUseSkill'
+  | 'onNavigate'
 
 /** Every key of `T` whose value is a function. */
 type FunctionKeys<T> = { [K in keyof T]-?: NonNullable<T[K]> extends (...args: never[]) => unknown ? K : never }[keyof T]
 
 describe('core component contracts', () => {
+  it('declares cezar.task.composer@1 as a frozen token', () => {
+    expect(TaskComposer).toEqual({
+      kind: 'component',
+      id: 'cezar.task.composer',
+      version: 1,
+      requiredCapabilities: ['edits-draft', 'sends', 'shows-availability'],
+      optionalCapabilities: ['attaches-files', 'chooses-engine'],
+      layout: { minBlockSize: 88 },
+    })
+    expect(Object.isFrozen(TaskComposer)).toBe(true)
+    expect(Object.isFrozen(TaskComposer.requiredCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskComposer.optionalCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskComposer.layout)).toBe(true)
+  })
+
+  it('keeps the composer model JSON and limits functions to its nine intents', () => {
+    expectTypeOf<TaskComposerProps>().toHaveProperty('draft')
+    expectTypeOf<TaskComposerFile>().toHaveProperty('arrayBuffer')
+    expectTypeOf<FunctionKeys<TaskComposerProps>>().toEqualTypeOf<ComposerIntent>()
+    expectTypeOf<IsJson<Omit<TaskComposerProps, ComposerIntent>>>().toEqualTypeOf<true>()
+    expectTypeOf<ReturnType<TaskComposerProps[ComposerIntent]>>().toEqualTypeOf<void>()
+    expectTypeOf<TaskComposerProps['onAttachFiles']>().parameters.toEqualTypeOf<[
+      files: readonly TaskComposerFile[],
+      source: 'file' | 'clipboard',
+    ]>()
+    expectTypeOf<TaskComposerProps['onSubmit']>().parameters.toEqualTypeOf<[]>()
+  })
+
+  it('types the composer token with its public props', () => {
+    expectTypeOf(TaskComposer).toEqualTypeOf<ComponentContract<TaskComposerProps>>()
+  })
+
   it('declares cezar.task.header.main@1 as a frozen token', () => {
     expect(TaskHeaderMain).toEqual({
       kind: 'component',
@@ -90,6 +135,8 @@ describe('core component contracts', () => {
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
     expect(
       checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,

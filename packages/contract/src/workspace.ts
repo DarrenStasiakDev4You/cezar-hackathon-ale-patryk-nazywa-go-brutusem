@@ -128,6 +128,11 @@ const taskTableUiStateSchema = z.looseObject({
   expandedColumns: z.record(z.string(), z.boolean()).optional(),
 });
 
+export const componentSettingsSchema = z.record(
+  z.string().min(1).max(128),
+  z.record(z.string().min(1).max(64), z.boolean()).refine((value) => Object.keys(value).length <= 64),
+).refine((value) => Object.keys(value).length <= 200);
+
 /**
  * `GET/PUT /api/v1/ui-state` — the per-repo GUI prefs in `.ai/cezar/ui-state.json`.
  *
@@ -185,6 +190,7 @@ export const uiStateSchema = z.looseObject({
   /** The open-mercato/skills promo banner (#391), dismissed for good. Legacy — the banner is
    *  gone, replaced by `WorkspaceUiState.importedSkills`; retained so old files round-trip. */
   dismissedSkillsBanner: z.boolean().optional(),
+  componentSettings: componentSettingsSchema.optional(),
 });
 export type UiState = z.infer<typeof uiStateSchema>;
 
@@ -260,6 +266,7 @@ export const workspaceUiStateSchema = z.looseObject({
       implementations: z.record(z.string(), z.string()).optional(),
     })
     .optional(),
+  componentSettings: componentSettingsSchema.optional(),
 });
 export type WorkspaceUiState = z.infer<typeof workspaceUiStateSchema>;
 

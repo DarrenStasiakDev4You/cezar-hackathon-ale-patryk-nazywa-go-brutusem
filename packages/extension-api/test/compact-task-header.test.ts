@@ -74,6 +74,8 @@ describe('the compact task header example', () => {
       compatible: true,
       issues: [],
       capabilities: ['shows-title', 'shows-status', 'offers-continue', 'offers-stop', 'offers-archive'],
+      missingCapabilities: [],
+      customCapabilities: [],
     })
   })
 

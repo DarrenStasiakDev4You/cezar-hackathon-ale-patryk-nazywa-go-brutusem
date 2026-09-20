@@ -204,6 +204,8 @@ describe('logComponentDiagnostic', () => {
     component: () => null,
     declaredCapabilities: [],
     capabilities: [],
+    missingCapabilities: [],
+    customCapabilities: [],
     metadata: { title: 'Jira header' },
     compatible: false,
     issues: [
@@ -263,6 +265,8 @@ describe('core register', () => {
       component: CoreHeader,
       declaredCapabilities: ['shows-status', 'shows-title', 'not-in-the-contract'],
       capabilities: ['shows-title', 'shows-status'],
+      missingCapabilities: [],
+      customCapabilities: ['not-in-the-contract'],
       metadata: { title: 'Task header', description: 'Core’s own header' },
       compatible: true,
       issues: [],
@@ -288,6 +292,8 @@ describe('core register', () => {
     expect(Object.isFrozen(registration?.metadata)).toBe(true)
     expect(Object.isFrozen(registration?.declaredCapabilities)).toBe(true)
     expect(Object.isFrozen(registration?.capabilities)).toBe(true)
+    expect(Object.isFrozen(registration?.missingCapabilities)).toBe(true)
+    expect(Object.isFrozen(registration?.customCapabilities)).toBe(true)
     expect(Object.isFrozen(registration?.issues)).toBe(true)
   })
 
@@ -611,6 +617,8 @@ describe('forExtension(scope).provide', () => {
       contractId: 'cezar.fixture.task-header',
       contractVersion: 1,
       capabilities: ['shows-title', 'compact'],
+      missingCapabilities: [],
+      customCapabilities: [],
       metadata: { title: 'Jira header', description: 'Shows the linked Jira issue' },
       compatible: true,
       issues: [],
@@ -719,6 +727,8 @@ describe('forExtension(scope).provide', () => {
       contractVersion: contract.version,
       compatible: false,
       capabilities: [],
+      missingCapabilities: expect.any(Array),
+      customCapabilities: expect.any(Array),
       issues: [issue],
     })
     expect(Object.isFrozen(registration?.issues[0])).toBe(true)
@@ -974,7 +984,7 @@ describe('change notification', () => {
       ([, specifier]) => specifier,
     )
 
-    expect(runtime).toEqual(['@open-mercato/cezar-extension-api'])
+    expect(runtime).toEqual(['@open-mercato/cezar-extension-api', './settings'])
     // A dynamic import names its module in quotes; a comment's "import (" does not.
     expect(source).not.toMatch(/\bimport[ \t]*\([ \t]*['"`]/)
   })

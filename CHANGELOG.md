@@ -316,3 +316,7 @@ The cockpit learns to delegate: a running task may now dispatch other tasks with
 - @pkarw
 - @pat-lewczuk
 - @patzick
+# Unreleased
+
+## ✨ Features
+- ✨ Component implementations can declare typed global or project-scoped settings with host-owned defaults, persistence and reset semantics. (spec `2026-09-19-component-settings-api`)

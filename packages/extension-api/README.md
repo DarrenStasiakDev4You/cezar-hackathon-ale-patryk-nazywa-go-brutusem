@@ -3,9 +3,11 @@
 > **Experimental and private.** The cockpit's extension registry
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
 > extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands`
-> (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`) and
-> `components` (spec `2026-09-19-component-registry`) are honoured; storage arrives in a later
-> item, and every host item may still revise these types in the PR that implements them.
+> (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`),
+> `components` (spec `2026-09-19-component-registry`) including implementation-owned settings
+> (spec `2026-09-19-component-settings-api`) and notifications are honoured; storage remains a
+> placeholder behind its permission until its host item lands. Each host item may still revise
+> these types in the PR that implements it.
 > `context.components` records implementations, while rendering and selection arrive with the slot
 > and picker items. Component contracts are checkable anywhere — `checkComponentCompatibility`
 > runs in your own tests too (spec `2026-09-19-component-contract-api`). The package is versioned
@@ -52,6 +54,22 @@ The worked example is `examples/hello-extension/index.ts` — it imports only th
   compile-time checking; the host matches tokens **by `id` (and `version`)**, never by object
   identity, because every bundle carries its own copy of the package.
 
+```ts
+const extension = defineExtension({
+  manifest: {
+    id: 'acme.hello',
+    name: 'Hello',
+    version: '1.0.0',
+    engines: { cezar: '^0.11.0' },
+    permissions: ['storage', 'events'],
+  },
+  activate(context) {
+    // The host supplies the matching grant before this runs.
+    context.events.emit(defineEvent('acme.hello.started'))
+  },
+})
+```
+
 ### Ids
 
 | Kind | Grammar | Example |
@@ -91,6 +109,47 @@ How the host runs it:
   reference to an old context.
 - **Page unload does not call `deactivate`.** Closing or reloading the page discards everything
   without deactivating it, so never rely on `deactivate` to save data: write it as you go.
+
+### Permissions
+
+The manifest's `permissions` list is a **request**, not an approval. The installer will pass the
+approved list to `register(extension, { grantedPermissions })`; compiled-in extensions receive a
+host-policy grant. An omitted list or grant is empty. `context.permissions` is the frozen effective
+set for this activation, and there are no run-time permission prompts.
+
+The host checks compatibility before calling `activate`. Every requested name must be supported by
+this Cezar and present in the grant. An unknown or planned name fails closed with
+`unsupported-permission`; a missing approval fails with `permission-not-granted`. No extension
+code runs in either case. A grant that contains names the manifest did not request is ignored.
+
+| Permission | Allows | Status |
+| --- | --- | --- |
+| `ui.components` | Providing component implementations and UI contributions | supported |
+| `commands.execute` | Public Cezar commands and other extensions' commands | supported |
+| `storage` | This extension's namespaced storage (and future secrets) | supported |
+| `events` | Listening to public events and emitting this extension's events | supported |
+| `notifications` | Transient plain-text messages in Cezar's notification UI | supported |
+| `network` | Declares intent only; it currently protects nothing | reserved / not enforceable |
+| `filesystem`, `shell`, `backend.routes`, `commands.intercept` | Future privileged APIs | planned |
+
+`context.extension`, `context.subscriptions`, `context.permissions`, `commands.register` and an
+extension's own `${extension.id}.` commands are always available. A different command requires
+`commands.execute`; without it, `commands.has` is `false` and `execute` rejects. All other denied
+services remain present and fail with `permission-denied`. The error has `permission` and `api`
+fields and is checked portably with `isExtensionError(error, 'permission-denied')`. Liveness wins:
+after deactivation a call reports `disposed` instead.
+
+This is an API guarantee, not a sandbox. Extension code still runs in the cockpit's origin and can
+use capabilities outside this context, including direct browser APIs. `network` is deliberately
+reserved and must never be presented as a security boundary.
+
+### Notifications
+
+`context.notifications.info`, `.warning` and `.error` show a transient plain-text message prefixed
+with the extension's display name. Messages must be non-empty strings of at most 500 characters.
+The cockpit allows five messages per extension in a sliding ten-second window; additional messages
+are dropped and reported by the host without throwing. Notifications are page-local, not stored,
+and have no markup or actions.
 
 ### Commands
 
@@ -238,11 +297,15 @@ what you read (the example does). Like all Cezar state it may be deleted; work f
 
 ### Replacing a component
 
-`context.components.provide(contract, { id, title, capabilities?, component })` offers an
+`context.components.provide(contract, { id, title, capabilities?, settings?, component })` offers an
 implementation of a core contract. Providing never selects: the user picks an implementation per
 contract, core's default always stays available, and a replacement that throws while rendering
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
-goes through the same check.
+goes through the same check. A settings definition is declared with `defineSettings({ scope, schema })`
+and the first supported field is `booleanSetting({ default })`. The host stores sparse overrides under
+the exact implementation id in global or active-project UI state, fills defaults before rendering,
+and exposes them only through the implementation-only `useComponentSettings()` reader. The returned
+registration handle can read or observe its own settings, but has no setter or cross-implementation access.
 
 **Status.** The cockpit serves one core contract, the task header's main part (below). It keeps
 every implementation per contract with the id of the extension that provided it, and renders a
@@ -305,6 +368,27 @@ task. If your part throws, core's default comes back and so do core's buttons.
 `examples/compact-task-header/index.ts` declares all three; `test/compact-task-header.test.ts`
 checks it as a host does, and the cockpit's `external-task-header.test.tsx` uses it on the task page.
 
+**The task composer.** `TaskComposer` (`cezar.task.composer@1`) is the task thread's reply box.
+It is a controlled view: core owns the draft, delivery, continuation engine, completion lists and
+quick replies, while an implementation receives `TaskComposerProps` and reports the user's actions
+through nine `void` intents. Every data prop is JSON; `onAttachFiles` accepts a structural file
+(`name`, `type`, `size`, `arrayBuffer()`), so an extension does not import a DOM type.
+
+The model includes `draft`, `status`, `availability`, `actions`, `completions`, attachment
+`limits`, and an optional `engine` with runner and model choices. Its intents are
+`onTextChange`, `onSubmit`, attachment and engine selection, completion loading and usage, and
+navigation. The required capabilities are `edits-draft`, `sends` and `shows-availability`.
+`attaches-files` and `chooses-engine` are optional: when an implementation does not declare one,
+core renders the corresponding attachment row or engine picker beside it. Core reserves 88 px while
+the box loads or swaps.
+
+See `examples/plain-task-composer/` for a minimal implementation that imports only this package
+and React; the cockpit test exercises it through the real extension registry.
+
+The contract intentionally does not expose a query client, draft store, router, command token or
+React node. A minimal implementation can render `draft.text` and call `onSubmit()` without
+knowing how a task is delivered or persisted.
+
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a
 malformed implementation id, `namespace-violation` for an id outside `${extension.id}.`,
@@ -325,7 +409,9 @@ A contract made with `defineComponentContract<Props>(id, options)` has three par
   are the ones every implementation must declare; `optionalCapabilities` are the ones it may
   declare, and the host relies on one only for an implementation that declares it (otherwise it
   hides that feature, for example). An implementation lists what it honours in `capabilities`;
-  names the contract does not know are ignored. Names are one or more dot-separated segments of
+  names the contract does not know are kept as custom capabilities and never affect the fit. An
+  extension should prefix custom names with its id (for example `example.hello.preview`) so a
+  custom capability stays clear of names core may add later. Names are one or more dot-separated segments of
   `[a-z0-9][a-z0-9-]*`, at most 64 characters, unique, and at most 32 across both lists.
 - **Layout**, optional and advisory: the box the host gives every implementation.
   `sizing: 'content' | 'fill'` (`fill` means stretch into the remaining space), `sticky: 'top' |
@@ -337,11 +423,14 @@ issue. Capabilities are **declared, not verified**: the check below compares dec
 behaviour that is wrong without throwing is the implementation author's responsibility.
 
 **Checking an implementation.** `checkComponentCompatibility(contract, implementation, implemented?)`
-never throws and never touches React. It returns `{ compatible, issues, capabilities }`. `issues`
+never throws and never touches React. It returns `{ compatible, issues, capabilities,
+missingCapabilities, customCapabilities }`. `issues`
 holds whatever stops the check first: every `malformed` field (at most one per capability list,
 and a list over 256 names is not read), else one `contract-id-mismatch`, else one
 `contract-version-mismatch`, else every `missing-capability` at once. `capabilities` is what the
-host may rely on: the required ones plus the optional ones you declare. The host passes its own
+host may rely on: the required ones plus the optional ones you declare. `missingCapabilities`
+lists required names not declared, and `customCapabilities` lists declared names this contract does
+not know. The host passes its own
 token, your implementation and the token `provide` received; in your tests the third argument
 defaults to the contract. From the example extension (`examples/hello-extension/index.ts`):
 
@@ -362,7 +451,13 @@ test context only. Its test (`test/example.test.ts`) checks it as a host does:
 
 ```ts
 const outcome = checkComponentCompatibility(Greeting, loud.implementation, loud.contract)
-expect(outcome).toEqual({ compatible: true, issues: [], capabilities: ['greets-by-name'] })
+expect(outcome).toEqual({
+  compatible: true,
+  issues: [],
+  capabilities: ['greets-by-name'],
+  missingCapabilities: [],
+  customCapabilities: [],
+})
 ```
 
 A contract is named `id@version` (`example.hello.greeting@1`) in docs, messages and issues.
@@ -389,6 +484,6 @@ notice; at publication each core contract is listed with its major in `BACKWARD_
 `instanceof`, so an error from another copy of the package is still classified. `invalid-manifest`
 and `invalid-id` come from this package's helpers (the host raises `invalid-id` too, for a
 malformed command, event or component contract token, or a malformed component implementation id); `namespace-violation`, `duplicate-registration`, `command-not-found`,
-`contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed` and
-`command-timeout` come from the host. The union grows additively: a copy of this package older than
+`contract-version-mismatch`, `storage-quota`, `disposed`, `invalid-input`, `command-failed`,
+`command-timeout` and `permission-denied` come from the host. The union grows additively: a copy of this package older than
 the host does not recognise the newer codes.

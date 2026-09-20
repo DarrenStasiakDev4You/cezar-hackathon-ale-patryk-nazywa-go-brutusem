@@ -323,9 +323,11 @@ export function Composer({
       const intake = screenFiles(files, imagesRef.current.length)
       for (const reason of intake.rejected) toast(reason, { tone: 'danger' })
       for (const file of intake.accepted) {
-        void fileToPendingAttachment(file, source).then((attachment) =>
-          setImages((prev) => (prev.length >= MAX_ATTACHMENTS ? prev : [...prev, attachment])),
-        )
+        void fileToPendingAttachment(file, source)
+          .then((attachment) =>
+            setImages((prev) => (prev.length >= MAX_ATTACHMENTS ? prev : [...prev, attachment])),
+          )
+          .catch((error) => toast(error instanceof Error ? error.message : String(error), { tone: 'danger' }))
       }
     },
     [disabled],

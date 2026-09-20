@@ -2,10 +2,12 @@ import type {
   CommandOptions,
   ComponentContract,
   ComponentImplementation,
+  ComponentRegistrationHandle,
   Disposable,
   ExtensionContext,
   ExtensionManifest,
   JsonValue,
+  Notifications,
 } from '@open-mercato/cezar-extension-api'
 
 // A RECORDING ExtensionContext for tests — test-only, never exported by the package.
@@ -58,6 +60,7 @@ export function createFakeContext(manifest: ExtensionManifest): FakeContext {
 
   const context: ExtensionContext = {
     extension: manifest,
+    permissions: Object.freeze([...(manifest.permissions ?? [])]),
     subscriptions: [],
     commands: {
       register(command, handler, options) {
@@ -104,14 +107,19 @@ export function createFakeContext(manifest: ExtensionManifest): FakeContext {
       },
     },
     components: {
-      provide(contract, implementation) {
+      provide<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>, Settings>): ComponentRegistrationHandle<Settings> {
         components.set(implementation.id, {
           contract: contract as ComponentContract<unknown>,
           implementation: implementation as ComponentImplementation<never>,
         })
-        return noop
+        return { componentId: implementation.id, dispose: noop.dispose, async getSettings() { return undefined }, onSettingsChange: () => noop }
       },
     },
+    notifications: {
+      info(_message: string) {},
+      warning(_message: string) {},
+      error(_message: string) {},
+    } satisfies Notifications,
   }
 
   return { context, commands, emitted, listeners, storage, components }
