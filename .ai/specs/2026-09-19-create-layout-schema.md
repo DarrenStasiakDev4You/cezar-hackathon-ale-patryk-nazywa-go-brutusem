@@ -10,16 +10,16 @@ Proponujemy wersjonowany, serializowalny model `LayoutSchema`, w którym strona 
 wersję schematu, named zones oraz ordered placements. Placement przechowuje wyłącznie stabilny
 identyfikator i referencje do contract/component; nie przechowuje `ReactNode`, `ComponentType`,
 callbacków, DOM references ani runtime props. Implementacja dostarczy także domyślny opis Task
-Page i czyste `parse`/`serialize`, ale nie dodaje jeszcze mechanizmu zapisu do serwera ani UI
-edytora.
+Page dla obecnych replaceable headera i composera oraz czyste `parse`/`serialize`, ale nie dodaje
+jeszcze mechanizmu zapisu do serwera ani UI edytora.
 
 ## 📝 Problem Statement
 
 Component Platform ma już rozdzielone contract, registry, resolver i host:
 
 - `packages/extension-api` opisuje contract wraz z `id` i `version`;
-- `packages/web/src/component-registry/` przechowuje implementacje oraz wybiera preferowaną
-  implementację z core fallbackiem;
+- `packages/web/src/component-registry/` przechowuje implementacje (`TaskHeaderMain` i
+  `TaskComposer`) oraz wybiera preferowaną implementację z core fallbackiem;
 - `ComponentHost` renderuje wybraną implementację i używa contract layout hints;
 - `packages/web/src/lib/layout-elements.ts` opisuje bieżące elementy edytowalnego layoutu,
   ale jest rejestrem runtime drzewa DOM, a nie źródłem prawdy, które można zapisać jako JSON.
@@ -69,7 +69,13 @@ Przykładowy zapis:
         "component": { "id": "cezar.task.header.main.default" }
       }
     ],
-    "main": [],
+    "main": [
+      {
+        "id": "task-composer",
+        "contract": { "id": "cezar.task.composer", "version": 1 },
+        "component": { "id": "cezar.task.composer.default" }
+      }
+    ],
     "sidebar": []
   }
 }
@@ -92,7 +98,7 @@ których contract nie zadeklarował. Contract-specific props pozostają runtime 
 | Q2 | Jak placement ma wskazywać contract/component? | Stable `id`, `contract: { id, version }` oraz `component: { id }`. | Rozdziela wersję contractu od identyfikatora implementacji i odpowiada istniejącemu `ComponentContract`/`ComponentRegistration`; nie wymaga parsowania stringa `id@version`. | reversible |
 | Q3 | Czy placement może mieć dowolne props/config? | Nie w schema v1. | Props są zależne od contractu i powinny być dostarczone przez runtime binding; otwarty rekord w JSON utrudniłby wersjonowanie i walidację. | reversible |
 | Q4 | Gdzie ma mieszkać model? | W `packages/web/src/lib/layout-schema.ts`, jako wewnętrzny model cockpit. | Nie rozszerza eksperymentalnego publicznego `extension-api` bez realnego konsumenta zewnętrznego; eksport do extension API pozostaje późniejszą, addytywną decyzją. | reversible |
-| Q5 | Co zawiera domyślny Task Page w v1? | `header` zawiera istniejący `cezar.task.header.main@1`; `main` i `sidebar` są jawnie obecne i mogą być puste, dopóki ich własne contract specs nie dołączą implementacji. | Nie tworzymy fikcyjnych publicznych contractów ani nie zmieniamy zakresu specyfikacji Task Header. Puste strefy są ważnym, serializowalnym stanem domyślnym. | reversible |
+| Q5 | Co zawiera domyślny Task Page w v1? | `header` zawiera `cezar.task.header.main@1`, `main` zawiera `cezar.task.composer@1`, a `sidebar` pozostaje puste. Transcript, shell headera i dockowe elementy pomocnicze pozostają core-owned. | Oba kontrakty są już serwowane przez `CORE_COMPONENT_CONTRACTS` i mają core defaults; model opisuje istniejące replaceable boundaries, bez tworzenia fikcyjnych tokenów ani udawania, że cały transcript jest placementem. | reversible |
 
 ## 📝 Architecture
 
@@ -101,8 +107,8 @@ których contract nie zadeklarował. Contract-specific props pozostają runtime 
 - `packages/web/src/lib/layout-schema.ts` — typy, literal `LAYOUT_SCHEMA_VERSION = 1`,
   walidacja nieznanego JSON, `parseLayoutSchema` i `serializeLayoutSchema`.
 - `packages/web/src/routes/task-thread/task-layout-schema.ts` — niezmienny
-  `defaultTaskPageLayout`, zbudowany wyłącznie z plain data i referencji do istniejących lub
-  jawnie planowanych contract ids.
+  `defaultTaskPageLayout`, zbudowany wyłącznie z plain data i referencji do istniejących
+  `TaskHeaderMain` oraz `TaskComposer` contract ids.
 - Przyszły adapter strony — mapuje placement do catalogu `ComponentContract`, resolvera i
   `ComponentHost`; nie należy do parsera i nie może dopisywać runtime objects do modelu.
 - `packages/web/src/lib/layout-elements.ts` — pozostaje runtime projection dla edit mode,
@@ -174,7 +180,9 @@ jest częścią wire format.
 
 ### Domyślny Task Page
 
-`defaultTaskPageLayout` opisuje bieżący minimalny contract-backed układ:
+`defaultTaskPageLayout` opisuje bieżący minimalny contract-backed układ. `main` jest strefą
+strony, w której v1 umieszcza dockowany composer; transcript, plan dock i status hints pozostają
+core-owned, a kolejność placementów w strefie nie udaje kolejności tych elementów:
 
 ```ts
 {
@@ -186,16 +194,20 @@ jest częścią wire format.
       contract: { id: 'cezar.task.header.main', version: 1 },
       component: { id: 'cezar.task.header.main.default' },
     }],
-    main: [],
+    main: [{
+      id: 'task-composer',
+      contract: { id: 'cezar.task.composer', version: 1 },
+      component: { id: 'cezar.task.composer.default' },
+    }],
     sidebar: [],
   },
 }
 ```
 
-Pusta `main`/`sidebar` nie usuwa obecnego transcriptu ani core-owned actions; oznacza tylko, że
-nie są jeszcze replaceable placements w tym contract item. Kolejne specyfikacje mogą dodać
-placements dla timeline, composera lub sidebaru przez nowy domyślny dokument albo migrację,
-bez zmiany znaczenia wersji 1.
+Pusta `sidebar` nie usuwa obecnego layoutu; oznacza tylko, że nie ma jeszcze sidebar placementu.
+Transcript, action bar, plan/agent docks i fallback capability controls pozostają poza tym
+serializowalnym opisem, dopóki nie otrzymają własnych contractów i adaptera. Kolejne specyfikacje
+mogą dodać placementy przez jawną migrację lub nowy default bez zmiany znaczenia wersji 1.
 
 ## 📝 API Contracts
 
@@ -282,8 +294,8 @@ i JSON round-trip. Nie zmieniać jeszcze wizualnego renderowania.
 ### Phase 3 — Handoff do renderera
 
 Udokumentować seam dla przyszłego adaptera, który wybierze implementation przez resolver i
-zarejestruje runtime projection przez `LayoutRegistry`. Ta faza może pozostać jako osobny
-implementation PR, jeśli obecny Task Page nie ma jeszcze wszystkich core contracts.
+zarejestruje runtime projection przez `LayoutRegistry`. Ta faza pozostaje osobnym implementation
+PR-em, bo schema v1 nie zmienia jeszcze render tree ani nie obejmuje core-owned transcriptu.
 
 ## 📋 Implementation Plan
 
@@ -302,9 +314,9 @@ implementation PR, jeśli obecny Task Page nie ma jeszcze wszystkich core contra
 ### Phase 2: Default Task Page
 
 4. Dodać `packages/web/src/routes/task-thread/task-layout-schema.ts` z
-   `defaultTaskPageLayout`, używając `cezar.task.header.main@1` jako jedynego obecnie
-   zarejestrowanego replaceable placementu. *Test:* schema ma `page === 'task'`, version `1`,
-   dokładnie zones `header`, `main`, `sidebar`, a header wskazuje core default component.
+   `defaultTaskPageLayout`, używając `cezar.task.header.main@1` w `header` oraz
+   `cezar.task.composer@1` w `main`. *Test:* schema ma `page === 'task'`, version `1`, dokładnie
+   zones `header`, `main`, `sidebar`, a oba placementy wskazują core default components.
 5. Dodać test graniczny, który serializuje default i sprawdza brak wartości funkcyjnych,
    React/DOM objects oraz brak task-specific runtime props. *Test:* JSON jest plain data i po
    odczycie jest równy modelowi.
@@ -317,8 +329,9 @@ implementation PR, jeśli obecny Task Page nie ma jeszcze wszystkich core contra
 7. Zaprojektować adapter page-specific, który mapuje placement ids na runtime bindings i
    `ComponentHost`, bez przenoszenia props do JSON. *Test:* contract-specific props powstają z
    page context, a unknown component nie przerywa renderu.
-8. Po dostarczeniu właściwych timeline/composer/sidebar contracts migrować Task Page z kolejności
-   replaceable slots w JSX do `defaultTaskPageLayout`. *Test:* screenshot/DOM smoke test potwierdza
+8. Po dostarczeniu właściwych timeline/sidebar contracts migrować Task Page z kolejności
+   replaceable slots w JSX do `defaultTaskPageLayout`; header i composer są już kontraktami v1.
+   *Test:* screenshot/DOM smoke test potwierdza
    ten sam wygląd i fallback po usunięciu extension.
 
 ## 📝 Acceptance Criteria
@@ -328,6 +341,7 @@ implementation PR, jeśli obecny Task Page nie ma jeszcze wszystkich core contra
 - [ ] Każdy placement ma `id`, `contract.id + contract.version` oraz `component.id`.
 - [ ] Model nie zawiera React-specific data, props, callbacków ani DOM references.
 - [ ] `schemaVersion: 1` jest jawnie walidowane; nieznana wersja nie jest zgadywana.
-- [ ] `defaultTaskPageLayout` opisuje stronę `task` ze strefami `header`, `main`, `sidebar`.
+- [ ] `defaultTaskPageLayout` opisuje stronę `task` ze strefami `header`, `main`, `sidebar`,
+  w tym header placement i composer placement.
 - [ ] Obecny Task Page nie zmienia wyglądu ani zachowania w fazie modelu.
 - [ ] Brak nowych tras HTTP, storage migrations i publicznego exportu extension API w tym PR.
