@@ -39,9 +39,11 @@ against internals that move with every refactor.
 ## Writing an extension
 
 The worked example is `examples/hello-extension/index.ts` — it imports only this package, and
-`test/example.test.ts` activates it. The worked example for a core contract is
-`examples/compact-task-header/index.ts`, a one-row task header that imports only this package and
-`react` (below). The shape:
+`test/example.test.ts` activates it. The worked examples for a core contract are
+`examples/compact-task-header/index.ts`, the minimal one-row task header that takes over the task's
+actions, and `examples/jira-task-header/index.ts`, a task header with its own React state and its
+own draft feature while taking over those same actions. Both import only this package and `react`.
+The shape:
 
 - `defineExtension({ manifest, activate, deactivate? })` validates at module load and throws
   `ExtensionDefinitionError` (code `invalid-manifest`, with every issue) on a broken manifest.
@@ -304,6 +306,13 @@ Stop keeps core's confirmation: `onStop()` asks the user, and only **Cancel the 
 task. If your part throws, core's default comes back and so do core's buttons.
 `examples/compact-task-header/index.ts` declares all three; `test/compact-task-header.test.ts`
 checks it as a host does, and the cockpit's `external-task-header.test.tsx` uses it on the task page.
+`examples/jira-task-header/index.ts` adds a local-state Jira draft that copies plain text to the
+clipboard; it does not contact Jira. Its `test/jira-task-header.test.ts` covers the draft rules and
+the same capability check.
+
+An extension component that uses hooks must import `react` but never bundle a second copy. React is
+the cockpit's runtime: a duplicate makes every hook fail, after which the host renders core's
+default implementation as its fallback. Keep `react` aligned with the cockpit's version range.
 
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a
