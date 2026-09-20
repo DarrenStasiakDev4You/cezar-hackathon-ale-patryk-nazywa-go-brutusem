@@ -62,10 +62,12 @@ design follows.
 | Q1 | Where does the form live — a new Settings section, or inside the component-overrides UI (PR #58)? | **One new section, `components`, at project scope** (`/p/:projectId/settings/components`), declared once in `SETTINGS_SECTIONS`. If #58's override picker lands under the same id, the generated form mounts inside its per-implementation card rather than becoming a second section. | `resolveComponentProjectId()` reads the project from a `/p/<id>/` URL, so a **project**-scoped definition can only be written from a project URL; a global-scope section could never edit half the settings it lists. One id keeps "components" a single destination. | reversible |
 | Q2 | Which field types ship, and as what public API? | **`boolean` (exists) plus `stringSetting`, `numberSetting`, `selectSetting`**, each an additive descriptor with optional `label`/`description` and its own bounds. No other type, no free-form JSON field. | Exactly the brief's four. Additive to `defineSettings`, so every implementation written against the boolean-only API keeps compiling. | reversible |
 | Q3 | Does the persisted value type widen beyond boolean? | **Yes** — `componentSettingsSchema` values become `boolean \| string \| number`, with a 256-character string cap and a 32 KiB cap on the whole map. Existing boolean files parse unchanged. | Storing a string as a boolean is not possible; the schema is an additive widening of an optional UI-state key, and BACKWARD_COMPATIBILITY.md §2 records the new shape in the same PR. | reversible |
-| Q4 | Save on change, or an explicit Save button? | **Save on change**: switches and dropdowns write immediately, text and number fields write on blur or after a 500 ms pause, with a per-field error shown inline on rejection. | Every other Settings section (Resources, Appearance, Worktrees) writes immediately and toasts on failure; an explicit Save would be the odd one out and would add draft state to reconcile against external changes. | reversible |
+| Q4 | Save on change, or an explicit Save button? | **Both, split the way this repo already splits them**: a switch or a dropdown writes on change; a text or number field is edited locally and saved with the card's **Save** button, disabled until the card is dirty and valid, with the invalid rule shown inline. | That is the house rhythm, not a compromise: Appearance's segmented controls write on change, while Resources' memory limit and monitoring interval (`resources-section.tsx:220,273`) and Worktrees' retention (`worktrees-section.tsx:116`) all use a dirty-and-valid-gated Save. A debounced write for typed fields would be a new mechanism with no precedent in Settings. | reversible |
 | Q5 | How is "the user changes it and the component reacts" proven, given no extension ships in the cockpit today? | **Through the cockpit's own test of the real extension host** — the `compact-task-header` example is activated, the section is rendered, a control is changed and the header's output is asserted. `BUILTIN_EXTENSIONS` stays empty, so the released cockpit gains no example extension. | Shipping an example extension to every user is a product decision beyond this brief, and the platform's other items (task header, composer, capability validation) all proved themselves this way. Manual verification is documented: add the example to `BUILTIN_EXTENSIONS` locally and run `CEZ_DRY_RUN=1 npm run dev`. | reversible — **override this row if the DoD means clicking it in the shipped cockpit**; the change is then one line in `builtin-extensions.ts` plus a QA pass |
 | Q6 | Does this item add the "custom settings renderer" the brief anticipates? | **No.** The renderer is an internal table keyed by descriptor `type`, private to the cockpit. An unknown type renders as a disabled, read-only row naming the type. | Smallest surface that ships something working; a public renderer API would be a second extension contract (component-contract shaped) and deserves its own item. The internal table is where it would attach. | reversible |
 | Q7 | Does the section also list implementations with no settings, or offer the override picker? | **No** — only implementations that declare a settings definition, grouped by contract. | Scope cohesion: choosing which implementation renders is `2026-09-19-component-implementation-preferences` / PR #58. Listing unconfigurable rows would make the section's empty state meaningless. | reversible |
+| Q8 | The item changes the public extension API, a protected UI-state shape **and** adds a Settings surface. Split it? | **No, ship it as one item** — but in the phase order below, where phase 3 alone is deployable against today's boolean-only API. | The brief names the four control types as the deliverable, and a boolean-only picker would be shipped and immediately rewritten. The split line, if the owner wants one, is exactly phase 3 (the section, booleans) versus phases 1–2 (the vocabulary and its persistence) — the phases are written so either order works. | reversible — this is a product call about the brief's scope, not a design constraint |
+| Q9 | A stock cockpit has no configurable implementation. Does the nav entry still appear? | **No.** The section is always *routed* (a pasted URL shows the empty state), but the nav and the Settings index **omit** it while no registration declares settings. `visibleSettingsSections` gains an `omit` argument and the shell computes it from the live registry. | A permanent nav entry that can never show anything for any user is a dead end, and the alternative — giving a core implementation a setting it does not need — trades a working default for a knob (AGENTS.md § Zero config). Visibility is discovered from the registry, like every other capability here. | reversible |
 
 ## 📝 Proposed Solution
 
@@ -74,21 +76,30 @@ design follows.
    (`ComponentSettingDefinition`), one value union (`ComponentSettingValue`) and an `InferSettings`
    that maps each descriptor to its TypeScript type. Optional `label` and `description` on every
    descriptor are what make a generated form readable; the UI falls back to a humanized key.
-2. **Keep the host the validator.** `snapshotSettingsDefinition` already re-derives the definition
-   from untrusted extension input and today rejects anything non-boolean; it grows the same
-   re-derivation for the new descriptors, bounds included. A new `canonicalSettings()` replaces
+2. **Keep the host the validator, and stop a settings mistake from costing a component.**
+   `snapshotSettingsDefinition` already re-derives the definition from untrusted extension input and
+   today rejects anything non-boolean; it grows the same re-derivation for the new descriptors,
+   bounds and the new `label`/`description` included. A new `canonicalSettings()` replaces
    `sparseSettings()`'s boolean check and validates the parsed value against the **snapshotted**
    schema — an extension-supplied `parse()` that returns a 10 KB string never reaches the wire.
+   One behavior change comes with it: today a definition the host cannot re-derive makes `prepare`
+   throw `invalid-input` (`registry.ts:432`) and `provide` does not catch it, so an extension built
+   against a newer extension-api loses its **whole component**, not just its settings. From this item
+   an extension's unrecognizable definition registers the implementation **without settings** and
+   records the issue; core's `register` still throws, because that is the author's own mistake.
 3. **Widen persistence by one union.** `componentSettingsSchema` in `packages/contract/src/workspace.ts`
    accepts `boolean | string(≤256) | number(finite)`, keeps the 64-field and 200-entry caps and adds
    a serialized-size cap; `isBooleanMap` in `settings.ts` becomes a settings-value guard. No new
    route: both scopes keep using the existing UI-state families.
 4. **Generate the form.** A new `packages/web/src/routes/settings/component-settings-section.tsx`
-   walks `CORE_COMPONENT_CONTRACTS` × `registry.list(contract.id)`, keeps the compatible
-   registrations that carry a `settings` definition, and renders one card per implementation with one
-   row per field. The control comes from a private renderer table keyed by descriptor `type`; every
-   write goes through `registry.setSettings(componentId, { [key]: value })` and every reset through
-   `registry.resetSettings(componentId, key?)`. The section knows nothing about any extension.
+   asks `listComponentChoices(registry, contract)` for each contract in `CORE_COMPONENT_CONTRACTS`
+   — the reader AGENTS.md mandates, which already returns compatible implementations sorted by id and
+   keeps the incompatible ones apart — keeps those that carry a `settings` definition, and renders one
+   card per implementation with one row per field. The control comes from a private renderer table
+   keyed by descriptor `type`; every write goes through `registry.setSettings(componentId, patch)` and
+   every reset through `registry.resetSettings(componentId, key?)`, and a successful write invalidates
+   both UI-state query keys so the rest of the cockpit does not keep a stale snapshot. The section
+   knows nothing about any extension.
 5. **Prove it on a real extension.** The `compact-task-header` example declares four settings (one
    per type) and renders from them, so the DoD's three guarantees are asserted against extension
    code that Cezar has never special-cased.
@@ -161,17 +172,21 @@ the revision chain would be the one silent way to fail this item.
   parsed value against the snapshotted schema before persistence. No change to `getSettings`,
   `setSettings`, `resetSettings` or `forExtension`'s surface.
 - `packages/web/src/component-registry/settings.ts` — the map guard accepts the widened value union,
-  and reads of one target are deduplicated while one is in flight (see Risks: the section reads once
-  per configurable implementation).
+  `update()` makes one implementation's read-modify-write atomic inside the write queue, and reads of
+  one target are deduplicated while one is in flight (see Risks: the section reads once per
+  configurable implementation).
 - `packages/contract/src/workspace.ts` — `componentSettingsSchema` widens its value type and gains a
   serialized-size bound. Both UI-state shapes keep their open sibling-key behavior.
-- `packages/web/src/routes/settings/component-settings-section.tsx` (new) — the section: discovery,
-  grouping, per-card state, writes, resets and the unavailable/empty states.
+- `packages/web/src/routes/settings/component-settings-section.tsx` (new) — the section: discovery
+  through `listComponentChoices`, grouping with the contract display-name map, per-card edit state,
+  writes, resets, UI-state query invalidation and the unavailable/empty states.
 - `packages/web/src/routes/settings/component-settings-field.tsx` (new) — the renderer table and the
   four controls, built from the cockpit's existing `Switch`, `Input`, `Select` and `Label` primitives
   and the `SettingsField` rhythm.
 - `packages/web/src/routes/settings/registry.tsx` — one `SETTINGS_SECTIONS` entry (`components`,
-  project scope) and one `SettingsSectionId` member. The shell routes and lists it from there.
+  project scope), one `SettingsSectionId` member, and the `omit` argument on
+  `visibleSettingsSections`; `settings-shell.tsx` computes `omit` from the live registry so the entry
+  appears only when something is configurable.
 - `packages/extension-api/examples/compact-task-header/index.ts` — the worked example gains four
   settings and reads them through `useComponentSettings()`.
 - Docs: `packages/extension-api/README.md` (the settings paragraph), the component-settings row in
@@ -264,7 +279,7 @@ package boundary and the host trusts nothing that crosses it.
 | Bound | Value | Where it bites |
 |---|---|---|
 | Field key | 1…64 characters, ≤ 64 fields per implementation | unchanged from PR #50 |
-| `label` / `description` | ≤ 128 / ≤ 256 characters | truncated in the form, rejected in the definition |
+| `label` / `description` | ≤ 128 / ≤ 256 characters | `defineSettings` throws above it; the host's snapshot **copies and clamps** rather than rejecting, so a long label never costs an implementation its settings |
 | `string` value and `default` | ≤ `maxLength` ≤ 256 characters | write rejected as `invalid-settings` |
 | `number` value and `default` | finite; safe integer when `integer`; within `min`…`max` when declared | write rejected as `invalid-settings` |
 | `select` | 1…64 unique options, value 1…64 characters, `default` ∈ options | definition rejected when `default` is not an option |
@@ -332,15 +347,27 @@ DOM-free and single-entry-point; Zod is neither imported nor exported.
 ### Registry (host-side, unchanged surface)
 
 `getSettings`, `setSettings` and `resetSettings` keep their signatures and their error codes
-(`invalid-settings`, `settings-unavailable`, `disposed`). Two internals change:
+(`invalid-settings`, `settings-unavailable`, `disposed`). Four internals change:
 
-- `snapshotSettingsDefinition()` re-derives every descriptor type with its bounds. A definition it
-  cannot re-derive is rejected exactly as today — the registration throws for core, and is recorded
-  with its issue for an extension.
+- `snapshotSettingsDefinition()` re-derives every descriptor type with its bounds, and **copies
+  `label` and `description`** (clamped) — the section renders from the snapshot, so a dropped label
+  would silently degrade every generated control to its humanized key.
+- A definition the host cannot re-derive no longer costs the implementation. Today `prepare` throws
+  `invalid-input` (`registry.ts:432`) and `provide` does not catch it, so an extension that declares
+  a descriptor this cockpit does not know loses its component entirely. From this item `provide`
+  registers the implementation **without settings** and records the issue through the existing
+  diagnostic path; `register` (core) keeps throwing.
 - `canonicalSettings(definition, parsed)` replaces `sparseSettings`: it checks each value against the
   **snapshotted** descriptor (type, length, range, option membership) and returns only the fields
   that differ from their default. An extension `parse()` that returns an out-of-bounds value fails
   here with `invalid-settings` and nothing is persisted.
+- **The per-implementation read-modify-write becomes atomic.** `setSettings` currently reads the
+  stored value outside the store's write queue (`registry.ts:371`) and then writes the whole entry,
+  so two writes to different fields of one implementation started in the same tick both merge onto
+  the same snapshot and the second erases the first. The store gains
+  `update(target, componentId, merge)` — read, merge and write inside the queue — and `setSettings`
+  and `resetSettings` go through it. This matters more after this item, not less: a card with four
+  fields is exactly where two quick changes overlap.
 
 ### Contract schema
 
@@ -361,9 +388,34 @@ export const componentSettingsSchema = z
   .refine((value) => JSON.stringify(value).length <= 32 * 1024);
 ```
 
-Both UI-state shapes keep `componentSettings` optional and both remain open bags. `contract-parity`
-and `typed-bodies` tests cover the route families as before; the widening is additive, so a stored
-file written by the current release still parses.
+Both UI-state shapes keep `componentSettings` optional and both remain open bags, and
+`setWorkspaceUiStateInputSchema` picks the widened record up through its existing `.shape` spread, so
+one definition still covers both route families. `contract-parity` and `typed-bodies` tests cover
+them as before; the widening is additive, so a stored file written by the current release still
+parses.
+
+### Store seam
+
+```ts
+export interface ComponentSettingsStore {
+  get(target: ComponentSettingsTarget, componentId: ContributionId): Promise<JsonValue | undefined>
+  set(target: ComponentSettingsTarget, componentId: ContributionId, value: JsonValue): Promise<void>
+  /** NEW: read, merge and write one implementation's entry inside the write queue. */
+  update(
+    target: ComponentSettingsTarget,
+    componentId: ContributionId,
+    merge: (current: JsonValue | undefined) => JsonValue | undefined,
+  ): Promise<void>
+  clear(target: ComponentSettingsTarget, componentId: ContributionId): Promise<void>
+  subscribe(listener: (target: ComponentSettingsTarget, componentId: ContributionId) => void): () => void
+}
+```
+
+`merge` returning `undefined` clears the entry, which is what a canonical value equal to every
+default produces. The store stays free of TanStack Query on purpose — `main.tsx:46` builds it before
+the provider tree exists — so the **section**, which does live in the tree, invalidates
+`queryKeys.uiState` and `workspaceQueryKeys.uiState` after a successful write. Concurrent reads of
+one target share a single in-flight request.
 
 ## 📝 UI/UX
 
@@ -385,28 +437,41 @@ header re-rendering after the setting changed, with no reload.
 
 **Where.** Settings → Components, `/p/:projectId/settings/components`, between "Agent config" and
 "Worktrees" in the project nav. Title "Components", description "Settings the installed component
-implementations declare."
+implementations declare." The route always exists, so a pasted link lands on the empty state rather
+than a 404; the **nav entry and the Settings index card are omitted** while no registration declares
+settings (Q9), which on a stock cockpit is every time. `visibleSettingsSections(scope, capabilities,
+{ omit })` stays a pure filter and the shell computes `omit` from the registry, re-reading it through
+`registry.subscribe`/`revision` so activating an extension reveals the entry without a reload.
 
-**The list.** One group per served contract (heading: the implementation's contract, e.g.
-`cezar.task.header.main@1`), one card per configurable implementation inside it, sorted by component
-id. Each card shows the implementation's `metadata.title`, its provider (the extension id, or
-"Cezar" for core), the component id in small monospace, and a scope badge — **All projects** for a
-`global` definition, **This project** for a `project` one — so the blast radius of a change is
-visible before it is made.
+**The list.** One group per served contract, one card per configurable implementation inside it,
+sorted by component id. A contract has no human name of its own (`ComponentContract` carries id,
+version, capabilities and layout only), so the group heading comes from a host-owned display-name map
+— the `agent-descriptors.ts` precedent — with the raw `id@version` in small monospace beside it and
+as the fallback when a contract is not in the map. Each card shows the implementation's
+`metadata.title`, its provider (the extension id, or "Cezar" for core), the component id in small
+monospace, and a scope badge — **All projects** for a `global` definition, **This project** for a
+`project` one — so the blast radius of a change is visible before it is made.
 
-**The rows.** One per declared field, in schema order, following the existing `SettingsField` rhythm
-(label, one-line hint, control):
+**The rows.** One per declared field, in schema order, in the label / one-line hint / control rhythm
+the rest of Settings uses. The row is its own component rather than `SettingsField`: that chassis
+renders an `<h2>` and requires a hint, which would nest a heading under the card title and invent
+copy for a field that declares no `description`. It shares the same tokens and adds the
+`<Label htmlFor>` the accessibility rule below promises.
 
 | Descriptor | Control | Write |
 |---|---|---|
 | `boolean` | `Switch` | on change |
 | `select` | `Select` with one item per option | on change |
-| `string` | single-line `Input` (`placeholder` honored) | on blur, or 500 ms after the last keystroke |
-| `number` | `Input type="number"` (`min`/`max`/`step` honored) | on blur, or 500 ms after the last keystroke |
+| `string` | single-line `Input` (`placeholder` honored) | local, saved with the card's **Save** |
+| `number` | `Input type="number"` (`min`/`max`/`step` honored) | local, saved with the card's **Save** |
 | unknown `type` | disabled read-only row: "This setting needs a newer Cezar (`type`)" | never |
 
-A row whose value differs from its default shows a **Reset** action; the card shows **Restore
-defaults** when any field does. Reset writes through `registry.resetSettings(componentId, key?)`.
+**Save** sits in the card footer beside **Restore defaults**, disabled until that card has an edited
+and valid typed field — the shape Resources and Worktrees already use — and a row whose stored value
+differs from its default shows a **Reset** action. Reset and Restore defaults write through
+`registry.resetSettings(componentId, key?)`. The unknown-type row is reachable only once the host
+snapshots a descriptor it cannot render (a later renderer item, or a field type added after this
+one); until then an unrecognizable definition registers the implementation without settings.
 
 **States.**
 
@@ -416,25 +481,26 @@ defaults** when any field does. Reset writes through `registry.resetSettings(com
 - *Unavailable* — a read or write fails with `settings-unavailable` (UI state offline or read-only):
   the card's controls are disabled with the reason underneath, and the values shown are the declared
   defaults. Nothing else on the page is affected.
-- *Rejected* — a write fails with `invalid-settings` (out of range, too long): the control keeps the
-  typed value, an inline error names the field and the rule ("Must be 1–120"), and the stored value
-  is unchanged. A failure that is not field-specific also raises one `toast(..., { tone: 'danger' })`,
-  as the other sections do.
+- *Rejected* — a typed value outside its declared bounds keeps **Save** disabled and shows the rule
+  inline ("Must be 16–120"); no write is attempted. A write that the host still rejects
+  (`invalid-settings`) leaves the stored value unchanged, keeps the edited value on screen and raises
+  one `toast(..., { tone: 'danger' })`, as the other sections do.
 
 **Accessibility.** Every control has a `<Label htmlFor>`; the hint and any error are wired through
 `aria-describedby`, and the error row is a live region. The switch is the cockpit's own primitive, so
 keyboard and screen-reader behavior match the rest of Settings. Reset is a real button, reachable in
 tab order, labelled "Reset <field> to default".
 
-**What the user sees end to end.** Open Settings → Components, flip "Show engine" off on the compact
-task header, return to a task: the header renders without the runner/model chip. No reload, no
-restart — the store write bumps the registry revision and the host re-reads.
+**What the user sees end to end.** Activate an extension that declares settings and the Components
+entry appears. Flip "Show engine" off on the compact task header, return to a task: the header
+renders without the runner/model chip. No reload, no restart — the store write bumps the registry
+revision and the host re-reads.
 
 ## 📝 Edge Cases & Failure Scenarios
 
 | Scenario | Behavior |
 |---|---|
-| No implementation declares settings | The empty state renders; no UI-state request is made. |
+| No implementation declares settings | The nav entry and index card are omitted; a pasted URL still renders the empty state, and no UI-state request is made. |
 | An implementation declares settings but is incompatible (`unknown-contract`, missing capability) | Not listed: it can never render, so its settings are moot. Its diagnostic stays the registry's. |
 | A `project`-scoped definition on a page with no project | Unreachable by construction — the section only exists under `/p/:projectId/`. A project that disappears mid-edit fails the write as `settings-unavailable` and the card explains it. |
 | A `global`-scoped definition edited from a project page | Written to workspace UI state; the badge says "All projects" before the change is made. |
@@ -442,14 +508,15 @@ restart — the store write bumps the registry revision and the host re-reads.
 | Stored value out of the declared range after the author tightened `max` | Same path: the value is ignored for rendering, the field shows the default, and the next write canonicalizes the entry. |
 | The user types a number outside `min`/`max` | The write is not attempted; the inline error names the rule. The previous persisted value is untouched. |
 | The user clears a `string` field | An empty string is a legal value when `maxLength ≥ 0`; if it differs from the default it is stored, otherwise the key is dropped. |
-| Two fields of one card are edited quickly | Each write is a sparse patch merged by the registry against the current stored value; the store serializes writes per target, so neither drops the other. |
+| Two fields of one card are edited quickly | Each write is a sparse patch merged **inside the store's write queue** through `update()`, so the second sees the first. Without that change the merge happens on a snapshot read outside the queue and the second write erases the first field — the reason `update()` is in scope. |
 | Two cockpit tabs edit different implementations | Unchanged from PR #50: read-modify-write plus the server's merge-write preserves both entries. |
 | The same implementation is edited in two tabs | Last writer wins, as documented for UI state; the other tab reconciles on its next revision-driven read. |
 | An extension is deactivated while its card is open | The registry change bumps the revision; the card disappears on the next render. Its stored entry stays and is reused if it is provided again. |
 | An extension's `parse()` throws or returns a malformed value on write | `setSettings` rejects with `invalid-settings`; nothing is persisted and the section shows the error on the card. The extension is not unregistered. |
-| An extension declares an unknown descriptor type (newer API than this cockpit) | `snapshotSettingsDefinition` rejects the whole definition today, so the implementation registers without settings and the card does not appear; the read-only "needs a newer Cezar" row covers the forward case where a type is snapshotted but not renderable. |
+| An extension declares an unknown descriptor type (newer API than this cockpit) | The implementation registers **without settings** and the issue is recorded: the component keeps rendering and only its card is missing. That is a deliberate change from today, where `prepare` throws and `provide` does not catch, costing the extension its whole component. The read-only "needs a newer Cezar" row covers the narrower case of a type the host snapshots but cannot render. |
 | UI state is offline, read-only or corrupt | Reads resolve to defaults with the existing single warning; writes reject as `settings-unavailable`. The rest of Settings and the cockpit keep working. |
 | A settings write happens while a task is running | Nothing in the run path reads component settings; only the rendering implementation re-reads. |
+| Another cockpit surface reads UI state right after a write | The section invalidates both UI-state query keys on success, so no reader keeps a stale snapshot. Sibling keys were never at risk: the server merges shallowly at the top level. |
 | A setting is used to hold a token | Unchanged product rule: component settings are UI state, never a secret store. The README and the section's own copy say so; secrets belong in extension storage. |
 
 ## 📝 Risks & Impact Review
@@ -468,12 +535,23 @@ restart — the store write bumps the registry revision and the host re-reads.
   bound must exist in `snapshotSettingsDefinition` and `canonicalSettings`, not only in
   `defineSettings` — an author-side-only check is bypassed by an extension that constructs the
   definition object literally.
+- **Relaxing the definition check is a deliberate behavior change.** An extension's bad settings
+  definition stops failing its registration and starts registering the implementation without
+  settings. It makes a newer extension forward-compatible with an older cockpit, and it means a
+  typo in a schema now shows up as a missing card plus one diagnostic line rather than a missing
+  component. Core keeps the strict path, so a core mistake still fails the gate.
+- **A dead nav entry avoided, a new visibility rule accepted.** The section's entry is computed from
+  the registry rather than declared statically, which is one more thing the shell re-reads on a
+  registry revision. The alternative — an always-visible section that is empty for every user who
+  installs no extension — was judged worse; the filter stays pure and testable.
 - **Read amplification.** The section reads one value per configurable implementation, and the
-  persistent store fetches UI state per read, so N implementations mean N GETs per revision bump —
-  including the bump the section's own write causes. Mitigation in scope: the store deduplicates
-  concurrent reads of the same target behind one in-flight promise, and the form renders from its
-  local controlled value rather than re-fetching after its own write. With today's handful of
-  implementations the bound is small; a cache with invalidation is the follow-on if it grows.
+  persistent store fetches UI state per read (`settings.ts:43`), so N implementations mean N GETs per
+  revision bump — including the bump the section's own write causes. Mitigations in scope:
+  concurrent reads of one target share a single in-flight request, and the card renders from its own
+  edited value rather than re-fetching after its own write. Routing the store through the cockpit's
+  TanStack queries would be the structural fix, but the store is built in `main.tsx` before the
+  provider tree exists; the section invalidates those query keys instead, and moving the store behind
+  the query client stays a follow-on.
 - **Coordination with the override picker (PR #58).** Both want a `components` section. Whichever
   lands second mounts into the existing one and does not add a second `SettingsSectionId`; the
   generated form is a standalone component precisely so it can be dropped into a card.
@@ -490,17 +568,21 @@ restart — the store write bumps the registry revision and the host re-reads.
 
 ## 📋 Phasing
 
-1. **Phase 1 — The vocabulary.** The three descriptors, their helpers, `InferSettings`, and the
-   host-side re-derivation and canonicalization. Provable entirely in unit tests; nothing renders
-   yet, and a boolean-only implementation behaves identically.
-2. **Phase 2 — Persistence.** The widened contract schema, the store's value guard and read
-   deduplication, plus the UI-state route tests. After this phase a widened value survives a reload.
+1. **Phase 1 — The vocabulary.** The three descriptors, their helpers, `InferSettings`, the
+   host-side re-derivation and canonicalization, and the change that keeps an unrecognizable
+   definition from costing an extension its component. Provable entirely in unit tests; nothing
+   renders yet, and a boolean-only implementation behaves identically.
+2. **Phase 2 — Persistence.** The widened contract schema, the store's value guard, its atomic
+   per-implementation `update()` and read deduplication, plus the UI-state route tests. After this
+   phase a widened value survives a reload and two quick edits of one card cannot drop each other.
 3. **Phase 3 — The section.** The renderer table, the Components section, the registry entry and
    every state (loading, empty, unavailable, rejected). After this phase a user can change a value.
 4. **Phase 4 — The worked example and the docs.** The example's settings, the end-to-end cockpit
    proof, and the README/AGENTS/BACKWARD_COMPATIBILITY updates.
 
-Each phase leaves the application working and shippable on its own.
+Each phase leaves the application working and shippable on its own. Phase 3 is the one that is
+independently *useful* — it renders today's boolean settings without phases 1–2 — which is why it is
+also the split line if the owner would rather ship this as two items (Q8).
 
 ## 📋 Implementation Plan
 
@@ -526,68 +608,88 @@ only way to know a new test is not green either way.
    - Code: `snapshotSettingsDefinition` and `canonicalSettings` in
      `packages/web/src/component-registry/registry.ts`.
    - Test: a hand-built definition object (not from `defineSettings`) with an over-long string
-     default is rejected at registration; a `parse()` that returns an out-of-bounds value makes
-     `setSettings` reject with `invalid-settings` and persists nothing; a value equal to its default
-     is dropped from the canonical override for every type.
+     default is rejected; a `parse()` that returns an out-of-bounds value makes `setSettings` reject
+     with `invalid-settings` and persists nothing; a value equal to its default is dropped from the
+     canonical override for every type; a declared `label`/`description` survives the snapshot and
+     reaches `registration.settings.schema` (the section renders from it), with an over-long one
+     clamped rather than rejected.
+4. **Stop a bad definition from costing the component.**
+   - Code: `provide` in `registry.ts` records the issue and registers without settings; `register`
+     (core) keeps throwing.
+   - Test: an extension whose definition the host cannot re-derive still has a rendering component
+     and no settings card, and one diagnostic is reported; core's `register` still throws
+     `invalid-input`; prove the test fails against today's `prepare`-throws behavior.
 
 ### Phase 2 — Persistence
 
-4. **Widen the contract schema.**
+5. **Widen the contract schema.**
    - Code: `packages/contract/src/workspace.ts`.
    - Test: an old boolean-only fixture parses; mixed boolean/string/number entries parse; a
      257-character string, a 65-field entry, a 201-entry map and a >32 KiB map each fail;
      contract-parity and typed-body suites stay green for both UI-state route families.
-5. **Widen the store and deduplicate reads.**
-   - Code: `packages/web/src/component-registry/settings.ts`.
+6. **Widen the store, add the atomic `update()`, deduplicate reads.**
+   - Code: `packages/web/src/component-registry/settings.ts`, and `setSettings`/`resetSettings` in
+     `registry.ts` routed through `update()`.
    - Test: a string/number map round-trips through both scope targets; a non-scalar value is
-     rejected as `invalid-settings`; two concurrent `get`s of one target issue one HTTP read; a
+     rejected as `invalid-settings`; **two `setSettings` calls for different fields of one
+     implementation started in the same tick both persist** (prove it fails against today's
+     read-outside-the-queue merge); two concurrent `get`s of one target issue one HTTP read; a
      project change mid-operation still fails as `settings-unavailable`.
-6. **Prove reload persistence for the new types.**
+7. **Prove reload persistence for the new types.**
    - Test: write one global and one project value of each type, dispose the store, recreate it and
      read both back — the settings-API item's Definition-of-Done test, extended past booleans.
 
 ### Phase 3 — The section
 
-7. **Build the renderer table.**
+8. **Build the renderer table.**
    - Code: `packages/web/src/routes/settings/component-settings-field.tsx`.
    - Test: each descriptor renders its control with label, hint and current value; a missing `label`
      humanizes the key; an unknown type renders the disabled read-only row; a value differing from
      the default shows Reset.
-8. **Build the section.**
-   - Code: `packages/web/src/routes/settings/component-settings-section.tsx` and the
-     `SETTINGS_SECTIONS` entry in `routes/settings/registry.tsx`.
+9. **Build the section.**
+   - Code: `packages/web/src/routes/settings/component-settings-section.tsx`, discovery through
+     `listComponentChoices(registry, contract)` (never a hand-composed `list`/`listUsable`), the
+     contract display-name map, and the `SETTINGS_SECTIONS` entry in `routes/settings/registry.tsx`.
    - Test: only compatible registrations with a definition are listed, grouped by contract and sorted
-     by component id; the scope badge follows the definition; the empty state renders with no
-     implementation; the section appears in the project nav and at
+     by component id; an incompatible registration with settings is excluded; the scope badge follows
+     the definition; the group heading uses the display name and falls back to `id@version`; the
+     empty state renders with no implementation; the route answers at
      `/p/<projectId>/settings/components`.
-9. **Wire writes, resets and failures.**
-   - Test: a switch writes `{ key: value }` through `setSettings` immediately; a text field writes
-     once after the debounce, not per keystroke; an out-of-range number shows the inline error and
-     issues no write; `settings-unavailable` disables the card with its reason; Reset and Restore
-     defaults call `resetSettings` with and without a key; a failed write leaves the previous value
-     visible.
+10. **Show the entry only when something is configurable.**
+   - Code: the `omit` argument on `visibleSettingsSections` and the shell's registry-driven
+     computation of it (`useSyncExternalStore(registry.subscribe, registry.revision)`).
+   - Test: with no configurable implementation the nav and the index card omit Components while the
+     route still renders; registering one reveals the entry without a remount; the filter stays pure
+     (a unit test calls it with an explicit `omit`).
+11. **Wire writes, resets and failures.**
+   - Test: a switch and a select write `{ key: value }` through `setSettings` on change; a text or
+     number field writes only when Save is pressed, and Save is disabled until the card is dirty and
+     valid; an out-of-range number shows the inline rule and issues no write; a successful write
+     invalidates both UI-state query keys; `settings-unavailable` disables the card with its reason;
+     Reset and Restore defaults call `resetSettings` with and without a key; a failed write leaves
+     the previous value visible.
 
 ### Phase 4 — The worked example and the docs
 
-10. **Give the example settings.**
+12. **Give the example settings.**
     - Code: `packages/extension-api/examples/compact-task-header/index.ts` declares `showEngine`
       (boolean), `density` (select: compact/cozy), `titleMaxLength` (number, 16–120, integer) and
       `statusPrefix` (string, ≤ 8) and renders from them.
     - Test: `packages/extension-api/test/compact-task-header.test.ts` asserts the declared schema and
       that the component reads it; the example still imports only itself, the package and `react`
       (`test/boundary.test.ts`).
-11. **Prove the Definition of Done end to end.**
+13. **Prove the Definition of Done end to end.**
     - Test: a cockpit test activates the example through the real extension host, renders the
       Components section and the task header together, changes `showEngine` and `density`, and
       asserts the store received the canonical override **and** the header re-rendered with the new
       value; a second case asserts core's default is unaffected.
-12. **Document the durable contract.**
+14. **Document the durable contract.**
     - Docs: the settings paragraph in `packages/extension-api/README.md` (the four field types, the
       generated form, the non-secret rule), the component-settings row in `AGENTS.md` (the section,
       the host-side bounds, the renderer table as the seam a custom renderer would attach to), the
       `componentSettings` paragraph in `BACKWARD_COMPATIBILITY.md` §2 (the widened value union and
       its caps), and the release notes.
-13. **Run the full gate.** The five configured commands, plus the focused extension-api,
+15. **Run the full gate.** The five configured commands, plus the focused extension-api,
     component-registry, component-host, settings-section and UI-state suites. Manual verification
     (optional, documented in the PR): add the example to `BUILTIN_EXTENSIONS` locally and run
     `CEZ_DRY_RUN=1 npm run dev` to click the flow end to end.
