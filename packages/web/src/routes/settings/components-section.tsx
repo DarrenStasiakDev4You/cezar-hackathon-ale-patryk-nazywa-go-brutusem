@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import { CORE_COMPONENT_CONTRACTS } from '@/component-registry/core-contracts'
+import { listComponentChoices } from '@/component-registry/choices'
 import { coreDefaultComponentId } from '@/component-registry/resolve'
 import { useComponentPreferences } from '@/component-registry/stored-components-provider'
 import { useComponentRegistry } from '@/component-registry/provider'
@@ -66,7 +67,9 @@ export function ComponentsSection() {
 
       <div className="flex flex-col gap-3" data-slot="component-override-list">
         {CORE_COMPONENT_CONTRACTS.map((contract) => {
-          const choices = registry.listUsable(contract)
+          const listed = listComponentChoices(registry, contract as never)
+          if (listed.status === 'unresolved') return null
+          const choices = [listed.default, ...listed.overrides]
           const defaultId = coreDefaultComponentId(contract.id)
           const storedId = preferences.get(contract.id)
           const current = choices.find((choice) => choice.componentId === storedId) ??
