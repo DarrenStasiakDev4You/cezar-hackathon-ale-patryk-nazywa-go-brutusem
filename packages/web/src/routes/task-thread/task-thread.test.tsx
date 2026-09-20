@@ -10,6 +10,8 @@ import { createQueryClient } from '@/api/query-client'
 import { CommandsProvider } from '@/commands/provider'
 import { createCoreComponentRegistry } from '@/component-registry/core-components'
 import { ComponentsProvider } from '@/component-registry/provider'
+import { CORE_COMPONENT_CONTRACTS } from '@/component-registry/core-contracts'
+import { createComponentRegistry, type CockpitComponentRegistry } from '@/component-registry/registry'
 import { fakeScope } from '@/extensions/registry.fixtures'
 import type {
   ApiRun,
@@ -45,6 +47,8 @@ function renderView(
     ],
   },
   health: Partial<HealthResponse> = {},
+  registry?: CockpitComponentRegistry,
+  preferenceOf?: (contractId: string) => string | null,
 ) {
   vi.stubGlobal(
     'fetch',
@@ -69,7 +73,7 @@ function renderView(
     ...render(
       <QueryClientProvider client={queryClient}>
         <CommandsProvider>
-          <ComponentsProvider>
+          <ComponentsProvider registry={registry} preferenceOf={preferenceOf}>
             <MemoryRouter>{ui}</MemoryRouter>
           </ComponentsProvider>
         </CommandsProvider>
@@ -1422,6 +1426,36 @@ describe('ThreadView — the header’s replaceable main part (spec 2026-09-19-c
     expect(box?.dataset.state).toBe('resolved')
     expect(box?.querySelector('h1')?.textContent).toBe('Do the thing')
     expect(box?.querySelector('[data-slot="run-meta"]')).not.toBeNull()
+  })
+
+  it('keeps the replaceable part unresolved when the catalog has no declared default', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS, onDiagnostic: () => {} })
+    registry.forExtension(fakeScope('acme.jira').scope).provide(TaskHeaderMain, {
+      id: 'acme.jira.task-header',
+      title: 'Jira header',
+      capabilities: ['shows-title', 'shows-status'],
+      component: () => <h1>Jira</h1>,
+    })
+
+    renderView(
+      <ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />,
+      undefined,
+      {},
+      registry,
+      () => 'acme.jira.task-header',
+    )
+
+    const box = document.querySelector<HTMLElement>('[data-slot="run-header"] [data-slot="component-host"]')
+    expect(box?.dataset.state).toBe('unresolved')
+    expect(box?.dataset.component).toBeUndefined()
+    expect(box?.querySelector('h1')).toBeNull()
+    expect(box?.querySelector('[data-slot="run-meta"]')).toBeNull()
+    expect(document.querySelector('[data-slot="run-actions"]')?.textContent).toContain('Notes')
+    expect(document.querySelector('[data-slot="run-tabs"]')?.textContent).toContain('Changes')
+    expect(consoleError.mock.calls.filter(([first]) => typeof first === 'string' && first.startsWith('[cezar:extensions]'))).toEqual([
+      ['[cezar:extensions] cezar.task.header.main has no default implementation: nothing renders in its host'],
+    ])
   })
 
   it('shows core’s title row when a chosen extension header throws, and the task stays usable', () => {

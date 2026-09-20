@@ -69,7 +69,7 @@ const jiraHeader: ComponentImplementation<HeaderProps> = {
 /** Core's default and two extension implementations, as in `resolve.test.ts`. */
 function fixture() {
   const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
-  registry.register(Header, { id: DEFAULT_ID, title: 'Task header', capabilities: ['shows-title'], component: CoreHeader })
+  registry.register(Header, { id: DEFAULT_ID, title: 'Task header', capabilities: ['shows-title'], component: CoreHeader }, { default: true })
   const jira = fakeScope('acme.jira')
   const provideJira = () => registry.forExtension(jira.scope).provide(Header, jiraHeader)
   const jiraHandle = provideJira()
@@ -170,7 +170,7 @@ describe('ComponentHost: which implementation renders', () => {
 
   it('swaps in an implementation that is provided after the first paint', () => {
     const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
-    registry.register(Header, { id: DEFAULT_ID, title: 'Task header', capabilities: ['shows-title'], component: CoreHeader })
+    registry.register(Header, { id: DEFAULT_ID, title: 'Task header', capabilities: ['shows-title'], component: CoreHeader }, { default: true })
     render(tree(header(), { registry, preferenceOf: prefer(JIRA_ID) }))
     expect(screen.getByTestId('core-header')).toBeTruthy()
 
@@ -348,7 +348,7 @@ describe('ComponentHost: an extension implementation that throws', () => {
     expect(onImplementationError).toHaveBeenCalledTimes(1)
     // One line for core's failure: the boundary that renders core's default at once reports
     // nothing, and the host's own retry of it does.
-    expect(extensionLines(consoleError)).toEqual([`[cezar:extensions] core's ${DEFAULT_ID} failed while rendering`])
+    expect(extensionLines(consoleError)).toEqual([`[cezar:extensions] default implementation ${DEFAULT_ID} failed while rendering`])
   })
 })
 
@@ -371,7 +371,7 @@ describe('ComponentHost: core’s default throws', () => {
     expect(hostBox(container).dataset.state).toBe('failed')
     expect(screen.getByTestId('sibling')).toBeTruthy()
     expect(onImplementationError).not.toHaveBeenCalled()
-    expect(extensionLines(consoleError)).toEqual([`[cezar:extensions] core's ${DEFAULT_ID} failed while rendering`])
+    expect(extensionLines(consoleError)).toEqual([`[cezar:extensions] default implementation ${DEFAULT_ID} failed while rendering`])
 
     behaviour.core = 'ok'
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
@@ -442,7 +442,7 @@ describe('ComponentHost: an unresolved contract', () => {
     rerender(tree(header(), options))
 
     expect(extensionLines(consoleError)).toEqual([
-      '[cezar:extensions] cezar.fixture.task-header has no core default: nothing renders in its host',
+      '[cezar:extensions] cezar.fixture.task-header has no default implementation: nothing renders in its host',
     ])
   })
 })
@@ -476,7 +476,7 @@ describe('ComponentHost: the box', () => {
       layout: { sticky: 'top', sizing: 'fill', minBlockSize: 30 },
     })
     const registry = createComponentRegistry({ contracts: [Sticky], onDiagnostic: () => {} })
-    registry.register(Sticky, { id: 'cezar.fixture.sticky.default', title: 'Sticky', component: CoreHeader })
+    registry.register(Sticky, { id: 'cezar.fixture.sticky.default', title: 'Sticky', component: CoreHeader }, { default: true })
     const { container } = render(tree(<ComponentHost contract={Sticky} props={{ title: 'x' }} />, { registry }))
 
     expect(hostBox(container).className).toBe('relative z-20 md:sticky md:top-0 flex min-h-0 flex-1 flex-col')
@@ -486,7 +486,7 @@ describe('ComponentHost: the box', () => {
   it('keeps the box, empty, while the implementation suspends', () => {
     const Suspended = lazy(() => new Promise<{ default: (props: HeaderProps) => ReactNode }>(() => {}))
     const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
-    registry.register(Header, { id: DEFAULT_ID, title: 'Task header', capabilities: ['shows-title'], component: Suspended })
+    registry.register(Header, { id: DEFAULT_ID, title: 'Task header', capabilities: ['shows-title'], component: Suspended }, { default: true })
     const { container } = render(tree(header(), { registry }))
 
     const box = hostBox(container)
@@ -643,7 +643,7 @@ describe('useHostedComponent: what the host renders now', () => {
       optionalCapabilities: ['shows-meta'],
     })
     const registry = createComponentRegistry({ contracts: [Rich], onDiagnostic: () => {} })
-    registry.register(Rich, { id: 'cezar.fixture.rich-header.default', title: 'Rich header', capabilities: ['shows-title'], component: CoreHeader })
+    registry.register(Rich, { id: 'cezar.fixture.rich-header.default', title: 'Rich header', capabilities: ['shows-title'], component: CoreHeader }, { default: true })
     registry.forExtension(fakeScope('acme.rich').scope).provide(Rich, {
       id: 'acme.rich.header',
       title: 'Acme header',

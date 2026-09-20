@@ -24,12 +24,6 @@ import type {
 /** The reads the resolver needs. The cockpit's registry is one. */
 export type ResolverRegistry = Pick<CockpitComponentRegistry, 'listUsable' | 'get'>
 
-/** The id of core's default implementation of a contract:
- *  `cezar.task.header` → `cezar.task.header.default`. */
-export function coreDefaultComponentId(contractId: ContributionId): ContributionId {
-  return `${contractId}.default`
-}
-
 /** Why a preference was set aside. `invalid` never echoes the value it was given. */
 export type PreferenceRejection =
   | { readonly reason: 'invalid' }
@@ -46,7 +40,7 @@ interface Resolved<P> {
   readonly status: 'resolved'
   /** What to render: the preferred implementation when it is a candidate, otherwise `fallback`. */
   readonly component: UsableComponent<P>
-  /** Core's default for this contract. It is always present, and it is what to render when
+  /** The declared default for this contract. It is always present, and it is what to render when
    *  `component` fails while rendering. It is the same object as `component` when `source` is
    *  `'default'`. */
   readonly fallback: UsableComponent<P>
@@ -58,8 +52,8 @@ export type ResolvedComponent<P> =
   | (Resolved<P> & { readonly source: 'preference' })
   | (Resolved<P> & { readonly source: 'default'; readonly rejected?: PreferenceRejection })
 
-/** No usable core default for this token: the cockpit does not serve it at this major, or core
- *  registered no default for it. A core bug, which `missingCoreDefaults` reports. */
+/** No usable default for this token: the cockpit does not serve it at this major, or no default
+ *  was registered for it. A catalog bug, which `missingDefaults` reports. */
 export interface UnresolvedComponent {
   readonly status: 'unresolved'
 }
@@ -80,11 +74,8 @@ export function resolveComponent<P>(
   // 1. `[]` for a malformed token and for one the cockpit does not serve at this major.
   const candidates = registry.listUsable(contract)
 
-  // 2. Core's default, found by its id so that registration order cannot pick it. The id comes
-  //    from the candidate, so the token is not read a second time.
-  const fallback = candidates.find(
-    (candidate) => candidate.extensionId === null && candidate.componentId === coreDefaultComponentId(candidate.contractId),
-  )
+  // 2. The declared default, so registration order and implementation provenance cannot pick it.
+  const fallback = candidates.find((candidate) => candidate.isDefault)
   if (fallback === undefined) {
     const unresolved: UnresolvedComponent = { status: 'unresolved' }
     return Object.freeze(unresolved)
@@ -113,11 +104,11 @@ export function resolveComponent<P>(
 }
 
 /**
- * The ids of the served contracts that have no core default: each contract in `contracts` that
+ * The ids of the served contracts that have no declared default: each contract in `contracts` that
  * `resolveComponent(registry, contract)` leaves `unresolved`, in catalog order. `[]` when every
  * one resolves. The slot item's gate test asserts `[]` for `CORE_COMPONENT_CONTRACTS`.
  */
-export function missingCoreDefaults(
+export function missingDefaults(
   registry: ResolverRegistry,
   contracts: readonly AnyComponentContract[],
 ): readonly ContributionId[] {

@@ -56,6 +56,8 @@ export interface ComponentRegistration {
   readonly componentId: ContributionId
   /** The extension that provided it, taken from the activation scope. `null`: core's own. */
   readonly extensionId: ExtensionId | null
+  /** Whether this registration is the declared fallback for its served contract. */
+  readonly isDefault: boolean
   /** The contract the implementation was compiled against: the id and major of the token passed
    *  to `provide`/`register`, which may differ from the major the host serves. */
   readonly contractId: ContributionId
@@ -100,7 +102,11 @@ export interface CockpitComponentRegistry {
   /** Core registration: `cezar.*` implementation ids, for a contract in `options.contracts`, and
    *  it must be compatible. Throws `ComponentError`: `invalid-id`, `namespace-violation`,
    *  `duplicate-registration`, `contract-version-mismatch`, `invalid-input`. */
-  register<P>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>>): Disposable
+  register<P>(
+    contract: ComponentContract<P>,
+    implementation: ComponentImplementation<NoInfer<P>>,
+    options?: CoreRegistrationOptions,
+  ): Disposable
   /** Every registration of this contract id, compatible or not, any major, in registration order:
    *  the brief's list, and the picker's. A new frozen array per call. Never throws; a malformed
    *  argument returns `[]`. */
@@ -121,6 +127,11 @@ export interface CockpitComponentRegistry {
   /** A number that grows with every change `subscribe` reports: the snapshot for
    *  `useSyncExternalStore`. */
   revision(): number
+}
+
+export interface CoreRegistrationOptions {
+  /** This implementation is the contract's default. Exactly one may be registered per contract. */
+  readonly default?: boolean
 }
 
 /** Recognised by `isExtensionError` (duck-typed on `code`), like `CommandError` and `EventError`. */
@@ -191,6 +202,18 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
     )
   }
 
+  const assertDefaultFree = (contractId: ContributionId, componentId: ContributionId): void => {
+    for (const registration of registrations.values()) {
+      if (registration.contractId === contractId && registration.isDefault) {
+        throw new ComponentError(
+          'invalid-input',
+          `Component contract "${contractId}" already has default "${registration.componentId}"; cannot register "${componentId}" as another default`,
+          { componentId },
+        )
+      }
+    }
+  }
+
   /** Adds `registration`; the Disposable removes exactly it, once, and never a newer one. */
   const add = (registration: ComponentRegistration): Disposable => {
     registrations.set(registration.componentId, registration)
@@ -244,10 +267,11 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
   }
 
   return {
-    register(contract, implementation) {
+    register(contract, implementation, options) {
       const input = prepare(contract, implementation, CORE_PREFIX, (id) => `Core component "${id}" must be under "${CORE_PREFIX}"`)
       const { componentId, contractId, contractVersion } = input
       assertFree(componentId)
+      if (options?.default === true) assertDefaultFree(contractId, componentId)
 
       // A core mistake is a bug for the tests to catch, not drift between versions: it throws.
       if (!served.has(contractId)) {
@@ -265,7 +289,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
         }
         throw new ComponentError('invalid-input', fit.issues.map((issue) => issue.message).join('; '), { componentId })
       }
-      return add(registrationOf(input, null, fit))
+      return add(registrationOf(input, null, fit, options?.default === true))
     },
 
     list(contractId) {
@@ -298,7 +322,7 @@ export function createComponentRegistry(options: ComponentRegistryOptions = {}):
           )
           assertFree(input.componentId)
           // Provenance comes from the scope, never from anything the implementation claims.
-          const registration = registrationOf(input, extensionId, fitOf(input))
+            const registration = registrationOf(input, extensionId, fitOf(input), false)
           // On an ended activation `track` disposes the registration and throws `disposed`.
           const handle = scope.track(add(registration))
           if (!registration.compatible) report(registration)
@@ -383,10 +407,16 @@ function prepare(
 }
 
 /** The frozen registration of a prepared implementation. */
-function registrationOf(input: PreparedImplementation, extensionId: ExtensionId | null, fit: Fit): ComponentRegistration {
+function registrationOf(
+  input: PreparedImplementation,
+  extensionId: ExtensionId | null,
+  fit: Fit,
+  isDefault: boolean,
+): ComponentRegistration {
   return Object.freeze({
     componentId: input.componentId,
     extensionId,
+    isDefault,
     contractId: input.contractId,
     contractVersion: input.contractVersion,
     component: input.component,

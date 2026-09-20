@@ -56,6 +56,11 @@ const coreCompact: ComponentImplementation<HeaderProps> = {
   component: CoreHeader,
 }
 
+const declaredDefault: ComponentImplementation<HeaderProps> = {
+  ...coreCompact,
+  id: 'cezar.fixture.task-header.declared',
+}
+
 /** A registry that serves the fixture contract at major 1. */
 const servedRegistry = (options: Parameters<typeof createComponentRegistry>[0] = {}) =>
   createComponentRegistry({ contracts: [Header], ...options })
@@ -199,6 +204,7 @@ describe('logComponentDiagnostic', () => {
   const registration = (extensionId: string | null): ComponentRegistration => ({
     componentId: 'acme.jira.task-header',
     extensionId,
+    isDefault: false,
     contractId: 'cezar.fixture.task-header',
     contractVersion: 2,
     component: () => null,
@@ -258,6 +264,7 @@ describe('core register', () => {
     expect(registry.get('cezar.fixture.task-header.default')).toEqual({
       componentId: 'cezar.fixture.task-header.default',
       extensionId: null,
+      isDefault: false,
       contractId: 'cezar.fixture.task-header',
       contractVersion: 1,
       component: CoreHeader,
@@ -277,6 +284,41 @@ describe('core register', () => {
 
     expect(registry.get(coreCompact.id)?.metadata).toEqual({ title: 'Compact header' })
     expect(Object.keys(registry.get(coreCompact.id)?.metadata ?? {})).toEqual(['title'])
+  })
+
+  it('records an explicitly declared default, while ordinary and extension registrations stay non-default', () => {
+    const registry = servedRegistry()
+
+    registry.register(Header, declaredDefault, { default: true })
+    registry.register(Header, coreCompact)
+    const extension = fakeScope('acme.jira')
+    registry.forExtension(extension.scope).provide(Header, {
+      id: 'acme.jira.task-header',
+      title: 'Jira header',
+      component: CoreHeader,
+    })
+
+    expect(registry.get(declaredDefault.id)?.isDefault).toBe(true)
+    expect(registry.get(coreCompact.id)?.isDefault).toBe(false)
+    expect(registry.get('acme.jira.task-header')?.isDefault).toBe(false)
+  })
+
+  it('rejects a second default for one contract, but allows another contract and reuse after disposal', () => {
+    const Other = defineComponentContract<HeaderProps>('cezar.fixture.other-header', { version: 1 })
+    const registry = createComponentRegistry({ contracts: [Header, Other] })
+    const first = registry.register(Header, declaredDefault, { default: true })
+
+    const error = thrown(() => registry.register(Header, { ...coreCompact, id: 'cezar.fixture.task-header.other' }, { default: true }))
+
+    expect(error.code).toBe('invalid-input')
+    expect(error.message).toContain('cezar.fixture.task-header')
+    expect(error.message).toContain('cezar.fixture.task-header.other')
+    expect(registry.get(declaredDefault.id)?.isDefault).toBe(true)
+
+    registry.register(Other, { ...coreCompact, id: 'cezar.fixture.other-header.default' }, { default: true })
+    first.dispose()
+    registry.register(Header, { ...declaredDefault, id: 'cezar.fixture.task-header.replacement' }, { default: true })
+    expect(registry.get('cezar.fixture.task-header.replacement')?.isDefault).toBe(true)
   })
 
   it('freezes the registration deeply', () => {

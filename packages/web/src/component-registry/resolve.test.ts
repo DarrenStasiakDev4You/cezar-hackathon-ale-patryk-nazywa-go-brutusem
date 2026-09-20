@@ -15,8 +15,7 @@ import {
   type UsableComponent,
 } from './registry'
 import {
-  coreDefaultComponentId,
-  missingCoreDefaults,
+  missingDefaults,
   resolveComponent,
   type ComponentResolution,
   type PreferenceRejection,
@@ -51,7 +50,8 @@ const TaskList = defineComponentContract<ListProps>('cezar.fixture.task-list', {
 const Render: ComponentType<HeaderProps> = () => null
 const RenderList: ComponentType<ListProps> = () => null
 
-const DEFAULT_ID = 'cezar.fixture.task-header.default'
+const DEFAULT_ID = 'cezar.fixture.task-header.primary'
+const OLD_DEFAULT_ID = 'cezar.fixture.task-header.default'
 const COMPACT_ID = 'cezar.fixture.task-header.compact'
 const JIRA_ID = 'acme.jira.task-header'
 const ACME_COMPACT_ID = 'acme.compact.task-header'
@@ -67,7 +67,8 @@ const header = (
 /** A registry serving both fixture contracts. A misfit is recorded quietly. */
 const servedRegistry = () => createComponentRegistry({ contracts: [Header, TaskList], onDiagnostic: () => {} })
 
-const registerDefault = (registry: CockpitComponentRegistry) => registry.register(Header, header(DEFAULT_ID, 'Task header'))
+const registerDefault = (registry: CockpitComponentRegistry) =>
+  registry.register(Header, header(DEFAULT_ID, 'Task header'), { default: true })
 const registerCompact = (registry: CockpitComponentRegistry) => registry.register(Header, header(COMPACT_ID, 'Compact header'))
 
 /** `extensionId` provides `<extensionId>.task-header` through its own scope. */
@@ -124,13 +125,6 @@ function revoked(): object {
   revoke()
   return proxy
 }
-
-describe('coreDefaultComponentId', () => {
-  it('names core’s default under the contract id', () => {
-    expect(coreDefaultComponentId('cezar.task.header')).toBe('cezar.task.header.default')
-    expect(coreDefaultComponentId(Header.id)).toBe(DEFAULT_ID)
-  })
-})
 
 describe('resolveComponent', () => {
   describe('with no preference', () => {
@@ -372,11 +366,11 @@ describe('resolveComponent', () => {
 
     it('never takes an extension’s .default as the fallback, even a built-in’s under cezar.', () => {
       const registry = servedRegistry()
-      registry.forExtension(fakeScope('cezar.fixture').scope).provide(Header, header(DEFAULT_ID, 'Built-in header'))
+      registry.forExtension(fakeScope('cezar.fixture').scope).provide(Header, header(OLD_DEFAULT_ID, 'Built-in header'))
       provide(registry, 'acme.jira')
 
       expect(registry.listUsable(Header).map((candidate) => [candidate.componentId, candidate.extensionId])).toEqual([
-        [DEFAULT_ID, 'cezar.fixture'],
+        [OLD_DEFAULT_ID, 'cezar.fixture'],
         [JIRA_ID, 'acme.jira'],
       ])
       expect(resolveComponent(registry, Header)).toEqual({ status: 'unresolved' })
@@ -499,12 +493,16 @@ describe('resolveComponent', () => {
   })
 })
 
-describe('missingCoreDefaults', () => {
+describe('missingDefaults', () => {
   /** A third served contract, which nothing implements. */
   const Status = defineComponentContract<HeaderProps>('cezar.fixture.task-status', { version: 1 })
 
   const registerListDefault = (registry: CockpitComponentRegistry) =>
-    registry.register(TaskList, { id: 'cezar.fixture.task-list.default', title: 'Task list', component: RenderList })
+    registry.register(
+      TaskList,
+      { id: 'cezar.fixture.task-list.default', title: 'Task list', component: RenderList },
+      { default: true },
+    )
 
   it('is [] when every contract of the catalog has core’s default registered', () => {
     const registry = servedRegistry()
@@ -512,7 +510,7 @@ describe('missingCoreDefaults', () => {
     registerListDefault(registry)
     provide(registry, 'acme.jira')
 
-    expect(missingCoreDefaults(registry, [Header, TaskList])).toEqual([])
+    expect(missingDefaults(registry, [Header, TaskList])).toEqual([])
   })
 
   it('names, in catalog order, each contract left unresolved: only a compact core implementation, or nothing', () => {
@@ -522,7 +520,7 @@ describe('missingCoreDefaults', () => {
     registerListDefault(registry)
     provide(registry, 'acme.jira')
 
-    const missing = missingCoreDefaults(registry, catalog)
+    const missing = missingDefaults(registry, catalog)
 
     expect(missing).toEqual(['cezar.fixture.task-status', 'cezar.fixture.task-header'])
     expect(Object.isFrozen(missing)).toBe(true)
@@ -533,12 +531,12 @@ describe('missingCoreDefaults', () => {
 
   it('names a contract whose .default an extension provides, since only core’s counts', () => {
     const registry = servedRegistry()
-    registry.forExtension(fakeScope('cezar.fixture').scope).provide(Header, header(DEFAULT_ID, 'Built-in header'))
+    registry.forExtension(fakeScope('cezar.fixture').scope).provide(Header, header(OLD_DEFAULT_ID, 'Built-in header'))
 
-    expect(missingCoreDefaults(registry, [Header])).toEqual([Header.id])
+    expect(missingDefaults(registry, [Header])).toEqual([Header.id])
   })
 
   it('is [] for an empty catalog', () => {
-    expect(missingCoreDefaults(servedRegistry(), [])).toEqual([])
+    expect(missingDefaults(servedRegistry(), [])).toEqual([])
   })
 })

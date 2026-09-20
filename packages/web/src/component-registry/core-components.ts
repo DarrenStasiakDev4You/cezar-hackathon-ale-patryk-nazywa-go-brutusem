@@ -4,7 +4,6 @@ import { CoreTaskHeaderMain } from '@/routes/task-thread/core-task-header-main'
 
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
 import { createComponentRegistry, type CockpitComponentRegistry, type ComponentRegistryOptions } from './registry'
-import { coreDefaultComponentId } from './resolve'
 
 /**
  * Core's default implementations (spec `.ai/specs/2026-09-19-component-host.md`): one per contract
@@ -19,7 +18,7 @@ import { coreDefaultComponentId } from './resolve'
 /** Core's task header main part: today's title row and meta row, rendered from the contract's props
  *  alone (spec `2026-09-19-task-header-contract`). It shows everything the contract offers. */
 const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.freeze({
-  id: coreDefaultComponentId(TaskHeaderMain.id),
+  id: 'cezar.task.header.main.default',
   title: 'Task header',
   description: 'Cezar’s own title, status and meta row',
   capabilities: Object.freeze(['shows-title', 'shows-status', 'shows-meta']),
@@ -28,7 +27,7 @@ const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.
 
 /** Registers core's default of every served contract. */
 export function registerCoreComponents(registry: Pick<CockpitComponentRegistry, 'register'>): void {
-  registry.register(TaskHeaderMain, coreTaskHeaderMain)
+  registry.register(TaskHeaderMain, coreTaskHeaderMain, { default: true })
 }
 
 /**

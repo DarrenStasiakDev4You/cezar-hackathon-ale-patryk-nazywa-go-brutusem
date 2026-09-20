@@ -14,7 +14,7 @@ import { createCoreComponentRegistry, registerCoreComponents } from './core-comp
 import { ComponentsProvider, useComponentRegistry } from './provider'
 import { CORE_COMPONENT_CONTRACTS } from './core-contracts'
 import { createComponentRegistry, type AnyComponentContract } from './registry'
-import { coreDefaultComponentId, missingCoreDefaults, resolveComponent } from './resolve'
+import { missingDefaults, resolveComponent } from './resolve'
 
 /** Core's one registration, the task header main part, captured from what `registerCoreComponents`
  *  hands to `register`: the implementation objects stay private to it. */
@@ -41,13 +41,13 @@ describe('core defaults: the gate', () => {
   })
 
   it('leaves no served contract without core’s default on the registry main.tsx builds', () => {
-    expect(missingCoreDefaults(createCoreComponentRegistry(), CORE_COMPONENT_CONTRACTS)).toEqual([])
+    expect(missingDefaults(createCoreComponentRegistry(), CORE_COMPONENT_CONTRACTS)).toEqual([])
   })
 
   it('fails without registerCoreComponents, so the check is shown to fail', () => {
     const registry = createComponentRegistry({ contracts: CORE_COMPONENT_CONTRACTS })
 
-    expect(missingCoreDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['cezar.task.header.main'])
+    expect(missingDefaults(registry, CORE_COMPONENT_CONTRACTS)).toEqual(['cezar.task.header.main'])
   })
 
   it('gives a ComponentsProvider without a registry the same catalog, with core’s default for the header', () => {
@@ -90,9 +90,10 @@ describe('core’s task header main part', () => {
   it('is core’s default, which renders and is always the fallback', () => {
     const registry = createCoreComponentRegistry()
 
-    expect(registry.get(coreDefaultComponentId(TaskHeaderMain.id))).toMatchObject({
+    expect(registry.get('cezar.task.header.main.default')).toMatchObject({
       componentId: 'cezar.task.header.main.default',
       extensionId: null,
+      isDefault: true,
       compatible: true,
       component: registered()[0]?.implementation.component,
     })

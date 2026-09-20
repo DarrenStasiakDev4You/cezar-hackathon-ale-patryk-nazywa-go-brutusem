@@ -36,9 +36,9 @@ export interface ComponentsRuntime {
   /** Records an extension's implementation as failed for `subject`, and reports its first
    *  failure. Called from `componentDidCatch` only; a repeat for the same pair is ignored. */
   readonly recordFailure: (failure: ImplementationFailure, subject: string) => void
-  /** Core's default threw: one `console.error` line, no toast. */
-  readonly reportCoreFailure: (registration: ComponentRegistration, error: unknown) => void
-  /** No core default for `contractId`: one `console.error` line per contract per provider. */
+  /** The declared default threw: one `console.error` line, no toast. */
+  readonly reportDefaultFailure: (registration: ComponentRegistration, error: unknown) => void
+  /** No declared default for `contractId`: one `console.error` line per contract per provider. */
   readonly reportUnresolved: (contractId: ContributionId) => void
 }
 
@@ -112,15 +112,15 @@ export function ComponentsProvider(props: {
     [failures, reported, onImplementationError],
   )
 
-  const reportCoreFailure = useCallback((registration: ComponentRegistration, error: unknown) => {
-    console.error(`[cezar:extensions] core's ${registration.componentId} failed while rendering`, error)
+  const reportDefaultFailure = useCallback((registration: ComponentRegistration, error: unknown) => {
+    console.error(`[cezar:extensions] default implementation ${registration.componentId} failed while rendering`, error)
   }, [])
 
   const reportUnresolved = useCallback(
     (contractId: ContributionId) => {
       if (unresolved.has(contractId)) return
       unresolved.add(contractId)
-      console.error(`[cezar:extensions] ${contractId} has no core default: nothing renders in its host`)
+       console.error(`[cezar:extensions] ${contractId} has no default implementation: nothing renders in its host`)
     },
     [unresolved],
   )
@@ -131,11 +131,11 @@ export function ComponentsProvider(props: {
       preferenceOf,
       hasFailed: (registration, subject) => failures.get(registration)?.has(subject) === true,
       recordFailure,
-      reportCoreFailure,
+      reportDefaultFailure,
       reportUnresolved,
     }),
     // `failureRevision` renews `hasFailed`, and so the context, whenever the record grows.
-    [registry, preferenceOf, failureRevision, failures, recordFailure, reportCoreFailure, reportUnresolved],
+    [registry, preferenceOf, failureRevision, failures, recordFailure, reportDefaultFailure, reportUnresolved],
   )
 
   return <ComponentsContext.Provider value={runtime}>{props.children}</ComponentsContext.Provider>

@@ -90,7 +90,7 @@ export function useHostedComponent<P extends object>(contract: ComponentContract
 }
 
 export function ComponentHost<P extends object>({ contract, subject = '', props }: ComponentHostProps<P>): ReactElement {
-  const { recordFailure, reportCoreFailure, reportUnresolved } = useComponentsRuntime()
+  const { recordFailure, reportDefaultFailure, reportUnresolved } = useComponentsRuntime()
   // 1, 2 and 4: subscribe, resolve, choose.
   const { resolution, current } = useHostedChoice(contract, subject)
   const [retry, setRetry] = useState(0)
@@ -119,7 +119,7 @@ export function ComponentHost<P extends object>({ contract, subject = '', props 
 
   const tryAgain = () => setRetry((count) => count + 1)
   const coreFailed = (error: unknown) => {
-    reportCoreFailure(registrationOf(fallback), error)
+    reportDefaultFailure(registrationOf(fallback), error)
     setBroken(identity)
   }
   const failedNotice = <FailedNotice onRetry={tryAgain} />
