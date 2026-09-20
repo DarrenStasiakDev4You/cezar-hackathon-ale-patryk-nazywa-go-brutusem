@@ -160,6 +160,24 @@ npm install
 npm run dev
 ```
 
+### Tests
+
+All test commands run in the repository's Docker test image, so local and CI
+toolchains use the same Node, system libraries and browser dependencies. The
+first run builds the image and installs dependencies into Docker volumes; later
+runs reuse both caches.
+
+```bash
+npm test
+npm run test:unit
+npm run test:package
+npm run test:e2e
+```
+
+Docker Desktop (Windows/macOS) or Docker Engine (Linux/WSL2) must be running.
+The browser e2e command starts the app, browser provider and tests in one
+container. Stop a reused local app with `sh .ai/scripts/test-env-down.sh`.
+
 ## License
 
 **MIT** © Patryk Lewczuk. Full text in [LICENSE](LICENSE).
