@@ -48,7 +48,7 @@ a settings screen or changing the zero-config default.
   refresh persistence, fallback, reset, cache sharing, and failed-write behavior.
 - [ ] 2.3 Create the service in `main.tsx`, mount it through `App`, and add the production boundary
   regression test for the provider wiring.
-- [ ] 2.4 Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract.
+- [x] 2.4 Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract. — dbb5d2dd
 
 ## Progress
 
@@ -60,7 +60,7 @@ a settings screen or changing the zero-config default.
 
 ### Phase 2: Service And Cockpit Wiring
 
-- [ ] 2.1 Implement the pure `componentPreferences` service and its hydration, validation, persistence, rollback, serialization, and subscription tests.
-- [ ] 2.2 Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving refresh persistence, fallback, reset, cache sharing, and failed-write behavior.
-- [ ] 2.3 Create the service in `main.tsx`, mount it through `App`, and add the production boundary regression test for the provider wiring.
+- [x] 2.1 Implement the pure `componentPreferences` service and its hydration, validation, persistence, rollback, serialization, and subscription tests. — 5700731f
+- [x] 2.2 Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving refresh persistence, fallback, reset, cache sharing, and failed-write behavior. — 9a666928
+- [x] 2.3 Create the service in `main.tsx`, mount it through `App`, and add the production boundary regression test for the provider wiring. — f095251f
 - [ ] 2.4 Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract.
