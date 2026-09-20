@@ -634,12 +634,28 @@ describe('useHostedComponent: what the host renders now', () => {
     expect(hostBox(container).dataset.component).toBeUndefined()
   })
 
-  it('carries the implementation’s checked capabilities', () => {
-    const { registry } = fixture()
-    const { result } = renderHook(() => useHostedComponent(Header, 'task-1'), {
-      wrapper: ({ children }) => tree(children, { registry, preferenceOf: prefer(JIRA_ID) }),
+  it('carries the implementation’s checked capabilities, never the list it declared', () => {
+    // A contract with an optional capability, and an implementation that also declares a name the
+    // contract does not know: the checked list keeps the optional one and drops the unknown one.
+    const Rich = defineComponentContract<HeaderProps>('cezar.fixture.rich-header', {
+      version: 1,
+      requiredCapabilities: ['shows-title'],
+      optionalCapabilities: ['shows-meta'],
+    })
+    const registry = createComponentRegistry({ contracts: [Rich], onDiagnostic: () => {} })
+    registry.register(Rich, { id: 'cezar.fixture.rich-header.default', title: 'Rich header', capabilities: ['shows-title'], component: CoreHeader })
+    registry.forExtension(fakeScope('acme.rich').scope).provide(Rich, {
+      id: 'acme.rich.header',
+      title: 'Acme header',
+      capabilities: ['shows-title', 'shows-meta', 'shows-weather'],
+      component: JiraHeader,
+    })
+    const { result } = renderHook(() => useHostedComponent(Rich, 'task-1'), {
+      wrapper: ({ children }) =>
+        tree(children, { registry, preferenceOf: (contractId) => (contractId === Rich.id ? 'acme.rich.header' : null) }),
     })
 
-    expect(result.current?.capabilities).toEqual(['shows-title'])
+    expect(result.current?.componentId).toBe('acme.rich.header')
+    expect(result.current?.capabilities).toEqual(['shows-title', 'shows-meta'])
   })
 })

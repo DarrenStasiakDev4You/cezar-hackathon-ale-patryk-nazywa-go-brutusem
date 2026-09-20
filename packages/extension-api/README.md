@@ -22,21 +22,26 @@ against internals that move with every refactor.
    re-exports. A file under `src/` is not public until the barrel exports it; the runtime export
    names are pinned in `test/surface.test.ts`.
 2. **Zero runtime dependencies.** A handful of pure helpers and one error class; everything else is
-   types. React is referenced through `import type` only (`@types/react` is an optional peer), so
-   an extension can bundle its own copy of the package without pulling anything in.
+   types. In `src/`, React is referenced through `import type` only (`@types/react` is an optional
+   peer), so an extension can bundle its own copy of the package without pulling anything in.
+   `examples/` may import `react` as a value, as a real extension that renders does; `react` is a
+   devDependency pinned to the cockpit's range, so the cockpit's tests load one React.
 3. **Node-free and DOM-free.** `lib: ["ES2022"]` and `types: []` make a `node:*` import or a DOM
    global a compile error, so the same source runs in the cockpit, in vitest's Node environment and
    in a future worker. Tests live in `test/`, never in `src/`.
 4. **Never imports the cockpit, the service or their contract** — `@open-mercato/cezar-web`,
    `@open-mercato/cezar`, `@open-mercato/cezar-api-client`, `@open-mercato/cezar-contract`, or a
-   `packages/web` path. `test/boundary.test.ts` enforces this for `src/` and `examples/`.
+   `packages/web` path. `test/boundary.test.ts` enforces this for `src/` and `examples/`: `src/`
+   imports only its own files and React types, and examples import only this package and `react`.
 5. **Raw `.ts` exports**, like `contract` and `api-client`: consumers must be TypeScript-aware
    (Vite, vitest, tsx). Plain `node` cannot import it until publication adds a build.
 
 ## Writing an extension
 
 The worked example is `examples/hello-extension/index.ts` — it imports only this package, and
-`test/example.test.ts` activates it. The shape:
+`test/example.test.ts` activates it. The worked example for a core contract is
+`examples/compact-task-header/index.ts`, a one-row task header that imports only this package and
+`react` (below). The shape:
 
 - `defineExtension({ manifest, activate, deactivate? })` validates at module load and throws
   `ExtensionDefinitionError` (code `invalid-manifest`, with every issue) on a broken manifest.
@@ -283,13 +288,22 @@ absent. No query client, mutation, router or command token crosses the boundary:
 Core checks the action's state again on every call, so a call does nothing unless the action is
 `available` and `enabled` (a repeat while one is `pending` included): an implementation can never
 do more than the user could with core's own buttons. Core keeps everything else around your part
-and renders it itself: Continue, Cancel and Archive in its action bar and its **Run actions** menu,
-Finish, Open in, Notes, Mark unread, Pin, Delete, the tabs, the monitoring and dispatch lines, the
-step rail and the resume hint. So a replacement restyles the header and can never take away control
-of a task. `shows-title` and `shows-status` are required, `shows-meta` (you show `meta` and
-`engine`) is optional, and the host reserves 30 px (one title row) while an implementation loads,
-fails or is swapped. Provide it like any contract, with an id under your prefix and at least the two
-required capabilities.
+and renders it itself: Finish, Open in, Notes, Mark unread, Pin, Delete, the tabs, the monitoring
+and dispatch lines, the step rail, the resume hint and the title editor. `shows-title` and
+`shows-status` are required, `shows-meta` (you show `meta` and `engine`) is optional, and the host
+reserves 30 px (one title row) while an implementation loads, fails or is swapped. Provide it like
+any contract, with an id under your prefix and at least the two required capabilities.
+
+**Taking over an action.** Continue, Cancel and Archive stay in core's action bar unless you take
+one over, each on its own, with an optional capability: `offers-continue`, `offers-stop` or
+`offers-archive`. Declare one and render that action from `actions`, calling its intent; core then
+leaves it out of its bar. While your part offers any of the three, core's **Run actions** menu stays
+visible at every width and still lists every task action, so the task stays controllable whatever
+your part renders. An action you do not declare, core renders beside your part, and you should not.
+Stop keeps core's confirmation: `onStop()` asks the user, and only **Cancel the run** stops the
+task. If your part throws, core's default comes back and so do core's buttons.
+`examples/compact-task-header/index.ts` declares all three; `test/compact-task-header.test.ts`
+checks it as a host does, and the cockpit's `external-task-header.test.tsx` uses it on the task page.
 
 **The task composer.** `TaskComposer` (`cezar.task.composer@1`) is the task thread's reply box.
 It is a controlled view: core owns the draft, delivery, continuation engine, completion lists and

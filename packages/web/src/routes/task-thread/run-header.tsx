@@ -29,7 +29,7 @@ import {
 } from '@/api/queries'
 import type { ApiRun, OpenTarget } from '@open-mercato/cezar-api-client'
 import { TaskHeaderMain, type TaskHeaderMainProps } from '@open-mercato/cezar-extension-api'
-import { ComponentHost } from '@/component-registry/component-host'
+import { ComponentHost, useHostedComponent } from '@/component-registry/component-host'
 import { TitleEditInput } from '@/components/editable-title'
 import { StatusDot } from '@/components/status-dot'
 import { TabLink } from '@/components/tab-link'
@@ -76,7 +76,9 @@ import { useFinishRun } from './use-finish-run'
  * `CoreTaskHeaderMain`. Everything that controls the task stays here, beside the part: the action
  * bar and the Run actions menu (whose Continue, Cancel and Archive draw from the same model and
  * call the same intents), the tabs, the monitoring and dispatch lines, the step rail, the resume
- * hint, the notes and the title editor.
+ * hint, the notes and the title editor. The one exception (spec Q3): an implementation that declares
+ * `offers-continue`, `offers-stop` or `offers-archive` renders that action itself, so the bar leaves
+ * it out, and the Run actions menu, which still lists every task action, stays visible at every width.
  *
  * Two deliberate omissions, both seams rather than gaps:
  *  - **VS Code** (spec: `POST /api/runs/:id/open-in-editor`) — the endpoint does not exist yet;
@@ -138,6 +140,9 @@ function RunHeaderView({
   })
   const { props } = model
   const editor = model.titleEditor
+  // Which of Continue, Stop and Archive the implementation the host renders now takes over (spec
+  // Q3). The host makes the same choice from the same failure record, so the two cannot disagree.
+  const offered = offeredActions(useHostedComponent(TaskHeaderMain, run.id)?.capabilities)
 
   return (
     <header
@@ -167,6 +172,9 @@ function RunHeaderView({
             run={run}
             actions={actions}
             header={props}
+            // While the part offers any task action, the menu is how control stays available at
+            // every width: it lists all of them, whatever the part renders.
+            alwaysVisible={offered.any}
             onToggleNotes={() => setNotesOpen((open) => !open)}
           />
         </div>
@@ -200,7 +208,7 @@ function RunHeaderView({
                 Finish
               </Button>
             ) : null}
-            {props.actions.continue.available ? (
+            {props.actions.continue.available && !offered.continue ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -254,13 +262,13 @@ function RunHeaderView({
                 {run.pinned ? 'Unpin' : 'Pin'}
               </Button>
             ) : null}
-            {props.actions.archive.available ? (
+            {props.actions.archive.available && !offered.archive ? (
               <Button variant="ghost" size="sm" disabled={!props.actions.archive.enabled} onClick={props.onArchive}>
                 {props.task.archived ? <ArchiveRestoreIcon aria-hidden="true" /> : <ArchiveIcon aria-hidden="true" />}
                 {props.task.archived ? 'Unarchive' : 'Archive'}
               </Button>
             ) : null}
-            {props.actions.stop.available ? (
+            {props.actions.stop.available && !offered.stop ? (
               <Button variant="danger-ghost" size="sm" disabled={!props.actions.stop.enabled} onClick={props.onStop}>
                 <CircleStopIcon aria-hidden="true" />
                 Cancel
@@ -288,6 +296,19 @@ function RunHeaderView({
       <ConfirmDialog run={run} actions={actions} stopTask={model.stopTask} />
     </header>
   )
+}
+
+/**
+ * Which task actions the hosted implementation renders itself (spec
+ * `2026-09-19-task-header-contract`, Q3): its CHECKED capabilities, as everywhere in the registry,
+ * never the list it declared. Core's own default offers none, so the bar is today's bar.
+ */
+function offeredActions(capabilities: readonly string[] | undefined) {
+  const offers = (capability: string) => capabilities?.includes(capability) === true
+  const continueTask = offers('offers-continue')
+  const stop = offers('offers-stop')
+  const archive = offers('offers-archive')
+  return { continue: continueTask, stop, archive, any: continueTask || stop || archive }
 }
 
 /**
@@ -591,11 +612,14 @@ function ActionsKebab({
   run,
   actions,
   header,
+  alwaysVisible,
   onToggleNotes,
 }: {
   run: ApiRun
   actions: RunActions
   header: TaskHeaderMainProps
+  /** The part offers a task action itself: the menu stays at every width, not only below `md`. */
+  alwaysVisible: boolean
   onToggleNotes: () => void
 }) {
   const flags = runActionFlags(run)
@@ -603,7 +627,7 @@ function ActionsKebab({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Run actions" className="md:hidden">
+        <Button variant="ghost" size="icon-sm" aria-label="Run actions" className={alwaysVisible ? undefined : 'md:hidden'}>
           <EllipsisVerticalIcon aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
