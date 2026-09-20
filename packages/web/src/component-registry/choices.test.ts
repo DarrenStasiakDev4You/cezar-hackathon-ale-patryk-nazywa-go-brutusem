@@ -86,7 +86,7 @@ describe('listComponentChoices', () => {
     }
   })
 
-  it('returns the same groups regardless of registration order and reflects disposal', () => {
+  it('returns the same groups regardless of registration order', () => {
     const first = registryWithAllImplementations()
     const second = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
     const registrations = [
@@ -102,19 +102,25 @@ describe('listComponentChoices', () => {
 
     expect(listComponentChoices(first, Header)).toEqual(listComponentChoices(second, Header))
 
-    const partial = first.get(PARTIAL)
-    expect(partial).toBeDefined()
-    // The registration's provider scope owns the disposable in this fixture, so a direct registry
-    // fake is not needed to prove the read model observes removal.
-    const withoutPartial: ChoicesRegistry = {
-      listUsable: (contract) => first.listUsable(contract),
-      list: (contractId) => first.list(contractId).filter((entry) => entry !== partial),
-      get: (componentId) => first.get(componentId),
-    }
-    expect(listComponentChoices(withoutPartial, Header)).toMatchObject({
-      status: 'resolved',
-      unavailable: [first.get(V2)],
-    })
+  })
+
+  it('reflects a disposed registration on the next call', () => {
+    const registry = createComponentRegistry({ contracts: [Header], onDiagnostic: () => {} })
+    registry.register(Header, implementation(DEFAULT))
+    const scope = fakeScope('acme.partial')
+    const handle = registry.forExtension(scope.scope).provide(Header, implementation(PARTIAL, []))
+
+    const before = listComponentChoices(registry, Header)
+    expect(before.status).toBe('resolved')
+    if (before.status !== 'resolved') throw new Error('expected resolved choices')
+    expect(before.unavailable.map((entry) => entry.componentId)).toEqual([PARTIAL])
+
+    handle.dispose()
+
+    const after = listComponentChoices(registry, Header)
+    expect(after.status).toBe('resolved')
+    if (after.status !== 'resolved') throw new Error('expected resolved choices')
+    expect(after.unavailable).toEqual([])
   })
 
   it('returns unresolved without a core default and reads only the registry seam', () => {
