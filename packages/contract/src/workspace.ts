@@ -254,11 +254,18 @@ export const workspaceUiStateSchema = z.looseObject({
    *  curated", so every default skill shows; a PRESENT array (even `[]`) means only those names
    *  show from that repo. */
   importedSkills: z.array(z.string()).optional(),
+  /** Settings -> Components: contract id without its major -> selected implementation id. */
+  components: z
+    .looseObject({
+      implementations: z.record(z.string(), z.string()).optional(),
+    })
+    .optional(),
 });
 export type WorkspaceUiState = z.infer<typeof workspaceUiStateSchema>;
 
 const WORKSPACE_UI_STATE_MAX_KEYS = 200;
 const TASK_TABLE_MAX_COLUMNS = 50;
+const COMPONENT_PREFERENCE_MAX_LENGTH = 128;
 
 /**
  * `PUT /api/v1/workspace/ui-state` body. The response remains an open, tolerant bag so data from
@@ -296,6 +303,19 @@ export const setWorkspaceUiStateInputSchema = z
     importedSkills: z
       .array(z.string().min(1).max(200))
       .max(WORKSPACE_UI_STATE_MAX_KEYS)
+      .optional(),
+    components: z
+      .looseObject({
+        implementations: z
+          .record(
+            z.string().min(1).max(COMPONENT_PREFERENCE_MAX_LENGTH),
+            z.string().min(1).max(COMPONENT_PREFERENCE_MAX_LENGTH),
+          )
+          .refine((map) => Object.keys(map).length <= WORKSPACE_UI_STATE_MAX_KEYS, {
+            message: `components.implementations must have at most ${WORKSPACE_UI_STATE_MAX_KEYS} entries`,
+          })
+          .optional(),
+      })
       .optional(),
     taskTable: taskTableUiStateSchema
       .extend({

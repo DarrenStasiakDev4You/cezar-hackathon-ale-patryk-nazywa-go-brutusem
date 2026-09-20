@@ -377,6 +377,40 @@ describe('the workspace settings API (step 2.7)', () => {
     expect(await (await apiRequest(app, '/api/v1/ui-state')).json()).toEqual({});
   });
 
+  it('round-trips component implementation preferences and preserves nested future keys', async () => {
+    const components = {
+      implementations: { 'cezar.task.header.main': 'acme.jira.task-header' },
+      settings: { compact: true },
+    };
+    const put = await putUiState({ components });
+
+    expect(put.status).toBe(200);
+    expect(await put.json()).toEqual({ components });
+    expect(await (await getUiState()).json()).toEqual({ components });
+    expect(rawUiState()).toEqual({ components });
+
+    const merged = await putUiState({ appearance: { accent: 'violet' } });
+    expect(await merged.json()).toEqual({ components, appearance: { accent: 'violet' } });
+    expect(rawUiState()).toEqual({ components, appearance: { accent: 'violet' } });
+  });
+
+  it.each([
+    ['more than 200 implementations', Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`cezar.c${index}`, 'acme.impl']))],
+    ['an empty contract id', { '': 'acme.impl' }],
+    ['an overlong implementation id', { 'cezar.task.header.main': 'x'.repeat(129) }],
+    ['a non-string implementation id', { 'cezar.task.header.main': 7 }],
+  ])('rejects component preferences with %s without writing state', async (_case, implementations) => {
+    const original = { appearance: { accent: 'lime' } };
+    expect((await putUiState(original)).status).toBe(200);
+    const before = rawUiState();
+
+    const res = await putUiState({ components: { implementations } });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()) as { error: string }).toHaveProperty('error');
+    expect(rawUiState()).toEqual(before);
+  });
+
   it('round-trips the sidebar project order beside the legacy collapse map', async () => {
     // #952. Both sidebar keys share one object, and the merge is TOP-LEVEL only — so the
     // cockpit sends the whole `sidebar`, and this proves the route stores exactly that.
