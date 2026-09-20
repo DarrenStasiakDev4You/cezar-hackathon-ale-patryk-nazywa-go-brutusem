@@ -67,6 +67,16 @@ export {
   type TaskStopResult,
 } from './core-commands.ts'
 export {
+  checkPackageCompatibility,
+  EXTENSION_API_VERSION,
+  validatePackageManifest,
+  type EntrypointKind,
+  type ExtensionPackageManifest,
+  type HostIdentity,
+  type PackageCompatibility,
+  type PackageCompatibilityIssue,
+} from './package-manifest.ts'
+export {
   ExtensionActivated,
   ProjectChanged,
   TaskArchived,
