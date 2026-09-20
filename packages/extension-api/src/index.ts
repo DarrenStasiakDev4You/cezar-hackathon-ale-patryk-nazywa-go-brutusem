@@ -19,6 +19,7 @@ export {
 } from './components.ts'
 export type { ExtensionContext } from './context.ts'
 export {
+  TaskMetadata,
   TaskHeaderMain,
   type TaskHeaderActions,
   type TaskHeaderActionState,
@@ -28,6 +29,14 @@ export {
   type TaskHeaderMeta,
   type TaskHeaderReference,
   type TaskHeaderTask,
+  type TaskActionState,
+  type TaskMetadataActions,
+  type TaskMetadataEngine,
+  type TaskMetadataIntents,
+  type TaskMetadataModel,
+  type TaskMetadataProps,
+  type TaskMetadataReference,
+  type TaskMetadataTaskRef,
 } from './core-components.ts'
 export {
   TaskArchive,

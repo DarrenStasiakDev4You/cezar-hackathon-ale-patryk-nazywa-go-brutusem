@@ -41,7 +41,7 @@ export interface TaskHeaderAttention {
 }
 
 /** The agent the task runs on. JSON. */
-export interface TaskHeaderEngine {
+export interface TaskMetadataEngine {
   /** `claude`, `codex`, `opencode`, …: the task's runner, or the project's default when the task named none. */
   readonly runner: string
   /** The model the task asked for, or `auto` when the runner picks. */
@@ -53,7 +53,7 @@ export interface TaskHeaderEngine {
 }
 
 /** A pull request or issue the task points at. JSON. */
-export interface TaskHeaderReference {
+export interface TaskMetadataReference {
   readonly kind: 'pr' | 'issue'
   readonly number?: number
   /** An http(s) URL, when one is known. */
@@ -76,27 +76,8 @@ export interface TaskHeaderReference {
   readonly conflicting?: boolean
 }
 
-/** The basic facts core's header shows under the title. JSON. */
-export interface TaskHeaderMeta {
-  /** The workflow's display name, e.g. `quick-task`. */
-  readonly workflow: string
-  readonly branch?: string
-  /**
-   * Lines added and removed on the task's branch, and the number of files, once known.
-   * `repointed`: measured against another branch the agent checked out into the task's worktree
-   * (#751), so the numbers count only what the task did to it.
-   */
-  readonly diff?: { readonly added: number; readonly removed: number; readonly files: number; readonly repointed?: boolean }
-  /** Every pull request, then the issue, in the order the Tasks table shows them. */
-  readonly references?: readonly TaskHeaderReference[]
-  /** The automation that launched the task. `href` (a project-scoped cockpit path) is set while the automations page is available. */
-  readonly automation?: { readonly automationId: string; readonly href?: string }
-  /** The usage this server shows. A metric the server hides (`CEZ_HIDE_TOKEN_METRICS`) is absent. */
-  readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number }
-}
-
 /** Whether an action is offered, and whether it can run now. JSON. */
-export interface TaskHeaderActionState {
+export interface TaskActionState {
   /** The task's state allows the action: render its control. */
   readonly available: boolean
   /** It can run now. `false` while `pending`, or for the `reason` given. */
@@ -105,6 +86,64 @@ export interface TaskHeaderActionState {
   readonly pending: boolean
   /** Why it cannot run, in words for the user, e.g. "Connect an agent provider to continue." */
   readonly reason?: string
+}
+
+/** The task's metadata: the facts about how it was started, where it works and what it cost. JSON. */
+export interface TaskMetadataModel {
+  /** The workflow's display name, e.g. `quick-task`. */
+  readonly workflow: string
+  readonly branch?: string
+  /**
+   * Lines added and removed on the task's branch, and the number of files, once known (#37's TSDoc).
+   */
+  readonly diff?: { readonly added: number; readonly removed: number; readonly files: number; readonly repointed?: boolean }
+  /** Every pull request, then the issue, in the order the Tasks table shows them. */
+  readonly references?: readonly TaskMetadataReference[]
+  /** The automation that launched the task. `href` is set while the automations page is available. */
+  readonly automation?: { readonly automationId: string; readonly href?: string }
+  /** The usage this server shows. A metric the server hides (`CEZ_HIDE_TOKEN_METRICS`) is absent. */
+  readonly usage?: { readonly inputTokens?: number; readonly outputTokens?: number; readonly costUsd?: number }
+  readonly engine: TaskMetadataEngine
+}
+
+// The header's names stay as aliases of the shared model. This keeps its public props unchanged.
+export type TaskHeaderMeta = Omit<TaskMetadataModel, 'engine'>
+export type TaskHeaderEngine = TaskMetadataEngine
+export type TaskHeaderReference = TaskMetadataReference
+export type TaskHeaderActionState = TaskActionState
+
+/** The task the metadata belongs to. JSON. */
+export interface TaskMetadataTaskRef {
+  readonly id: string
+  /** The registered project that owns the task. Pass it as `TaskRef.projectId`. */
+  readonly projectId: string
+  /** The title the cockpit shows for the task. Core uses it in its chips' accessible names. */
+  readonly title: string
+}
+
+/** Whether each metadata action can run now. JSON. */
+export interface TaskMetadataActions {
+  /** Ask the task's agent to resolve a pull request's merge conflicts. Offer it on a numbered, `conflicting` reference. */
+  readonly resolveConflicts: TaskActionState
+  /** Choose the runner and model the next continuation uses. */
+  readonly chooseEngine: TaskActionState
+}
+
+/** The user actions core offers for the metadata component. */
+export interface TaskMetadataIntents {
+  /** The user asked the agent to resolve conflicts in pull request `prNumber`, a `conflicting` reference. */
+  readonly resolveConflicts?: (prNumber: number) => void
+  /** The user followed an in-app link from these props (`metadata.automation.href`). Any other value does nothing. */
+  readonly navigate?: (href: string) => void
+  /** The user asked to choose the engine for the next continuation. Core moves focus to its engine picker. */
+  readonly chooseEngine?: () => void
+}
+
+export interface TaskMetadataProps {
+  readonly task: TaskMetadataTaskRef
+  readonly metadata: TaskMetadataModel
+  readonly actions: TaskMetadataActions
+  readonly intents: TaskMetadataIntents
 }
 
 export interface TaskHeaderActions {
@@ -169,4 +208,16 @@ export const TaskHeaderMain = defineComponentContract<TaskHeaderMainProps>('ceza
   requiredCapabilities: ['shows-title', 'shows-status'],
   optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
   layout: { minBlockSize: 30 },
+})
+
+/**
+ * The task's metadata: workflow, branch, references, diff summary, automation, usage and cost, and
+ * the agent it runs on. Core places the box and owns its visibility; implementations must wrap or
+ * truncate at any width rather than assuming a position on the page.
+ */
+export const TaskMetadata = defineComponentContract<TaskMetadataProps>('cezar.task.metadata', {
+  version: 1,
+  requiredCapabilities: ['shows-metadata'],
+  optionalCapabilities: ['offers-links', 'offers-copy'],
+  layout: { minBlockSize: 20 },
 })

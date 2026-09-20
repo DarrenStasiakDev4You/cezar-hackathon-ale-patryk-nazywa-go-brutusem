@@ -2,10 +2,13 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import {
   checkComponentCompatibility,
+  TaskMetadata,
   TaskHeaderMain,
   type ComponentContract,
   type ComponentImplementation,
   type IsJson,
+  type TaskMetadataProps,
+  type TaskMetadataIntents,
   type TaskHeaderActionState,
   type TaskHeaderMainProps,
   type TaskHeaderTask,
@@ -19,6 +22,30 @@ type Intent = 'onContinue' | 'onStop' | 'onArchive' | 'onRename' | 'onResolveCon
 type FunctionKeys<T> = { [K in keyof T]-?: NonNullable<T[K]> extends (...args: never[]) => unknown ? K : never }[keyof T]
 
 describe('core component contracts', () => {
+  it('declares cezar.task.metadata@1 as a frozen token', () => {
+    expect(TaskMetadata).toEqual({
+      kind: 'component',
+      id: 'cezar.task.metadata',
+      version: 1,
+      requiredCapabilities: ['shows-metadata'],
+      optionalCapabilities: ['offers-links', 'offers-copy'],
+      layout: { minBlockSize: 20 },
+    })
+    expect(Object.isFrozen(TaskMetadata)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.requiredCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.optionalCapabilities)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.layout)).toBe(true)
+  })
+
+  it('keeps metadata data JSON and makes every intent optional', () => {
+    expectTypeOf<IsJson<Omit<TaskMetadataProps, 'intents'>>>().toEqualTypeOf<true>()
+    expectTypeOf<IsJson<TaskMetadataProps>>().toEqualTypeOf<false>()
+    expectTypeOf<keyof TaskMetadataIntents>().toEqualTypeOf<'resolveConflicts' | 'navigate' | 'chooseEngine'>()
+    expectTypeOf<NonNullable<TaskMetadataIntents['resolveConflicts']>>().returns.toEqualTypeOf<void>()
+    expectTypeOf<NonNullable<TaskMetadataIntents['navigate']>>().returns.toEqualTypeOf<void>()
+    expectTypeOf<NonNullable<TaskMetadataIntents['chooseEngine']>>().returns.toEqualTypeOf<void>()
+  })
+
   it('declares cezar.task.header.main@1 as a frozen token', () => {
     expect(TaskHeaderMain).toEqual({
       kind: 'component',

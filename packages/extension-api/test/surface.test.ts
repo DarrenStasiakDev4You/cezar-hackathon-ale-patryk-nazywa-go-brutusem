@@ -24,6 +24,7 @@ describe('@open-mercato/cezar-extension-api surface', () => {
       'TaskContinue',
       'TaskFailed',
       'TaskHeaderMain',
+      'TaskMetadata',
       'TaskStarted',
       'TaskStatusChanged',
       'TaskStop',
