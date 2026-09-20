@@ -40,7 +40,7 @@ The preference service must not overwrite unrelated workspace UI state, and a mi
 ### Phase 3: Verification and handoff
 
 - [ ] 3.1 Update protected-surface documentation and run the configured validation gate.
-- [ ] 3.2 Complete review and browser QA evidence for the settings flow.
+- [x] 3.2 Complete review and browser QA evidence for the settings flow. — review complete; QA report `.ai/qa/artifacts_component-overrides/report.md` (extension selection not exercised because the production fixture ships no active extension)
 
 ## Progress
 
