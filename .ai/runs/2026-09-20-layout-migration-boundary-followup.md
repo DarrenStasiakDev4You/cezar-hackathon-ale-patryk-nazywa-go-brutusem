@@ -27,10 +27,10 @@ Risks:
 
 ### Phase 1: Production boundary and semantic validation
 
-- [ ] 1.1 Connect Task Page layout loading to the live task layout boundary.
-- [ ] 1.2 Reject current and migrated v3 layouts that omit required Task Page placements.
+- [x] 1.1 Connect Task Page layout loading to the live task layout boundary. — 738109b4
+- [x] 1.2 Reject current and migrated v3 layouts that omit required Task Page placements. — 738109b4
 
 ### Phase 2: Regression coverage and verification
 
-- [ ] 2.1 Add production-boundary and missing-required-placement regression tests.
+- [x] 2.1 Add production-boundary and missing-required-placement regression tests. — 738109b4
 - [ ] 2.2 Run the full validation gate, review the diff, and publish the follow-up PR.
