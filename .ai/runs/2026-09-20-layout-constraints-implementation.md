@@ -57,4 +57,4 @@ Source doc: .ai/specs/2026-09-20-layout-constraints.md
 ### Phase 4: Core declarations and handoff
 
 - [x] 4.1 Add explicit policy to the first core component consumer and test allowed zones, replacement, and required-zone deletion. — 148aac7b
-- [ ] 4.2 Update project guidance/spec references, run the full validation gate, and document browser verification limits.
+- [x] 4.2 Update project guidance/spec references, run the full validation gate, and document browser verification limits. — 6e01c87b
