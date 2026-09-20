@@ -95,7 +95,11 @@ export async function scanLocalExtensions(options: LocalExtensionScanOptions): P
   const diagnostics: ExtensionDiagnostic[] = [];
   const candidates: ExtensionInventoryEntry[] = [];
   const loaded = await readExtensionGrants(options.grantsPath ?? extensionGrantsPath());
-  if (loaded.warning) options.log?.(`[cez:extensions] ${loaded.warning}`);
+  if (loaded.warning) {
+    const issue = diagnostic('(grant store)', null, 'grant-store-unavailable', loaded.warning);
+    diagnostics.push(issue);
+    options.log?.(`[cez:extensions] ${loaded.warning}`);
+  }
 
   let entries;
   try {

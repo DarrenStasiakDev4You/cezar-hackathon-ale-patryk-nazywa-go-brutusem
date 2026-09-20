@@ -73,6 +73,16 @@ describe('scanLocalExtensions', () => {
     expect(result.extensions.find((entry) => entry.id === 'acme.permissioned')).toMatchObject({ status: 'permission-required', diagnostic: { code: 'permission-required' } });
   });
 
+  it('exposes a corrupt grant store as a bounded scan diagnostic while failing closed', async () => {
+    const root = await fixture();
+    await packageAt(root, 'permissioned', manifest({ id: 'acme.permissioned', permissions: ['events'] }));
+    const grantsPath = join(root, 'extension-grants.json');
+    await writeFile(grantsPath, '{not json');
+    const result = await scanLocalExtensions({ root, version: '0.11.1', grantsPath });
+    expect(result.diagnostics).toContainEqual(expect.objectContaining({ code: 'grant-store-unavailable', candidate: '(grant store)' }));
+    expect(result.extensions.find((entry) => entry.id === 'acme.permissioned')).toMatchObject({ status: 'permission-required', grantedPermissions: [] });
+  });
+
   it('marks every duplicate id and refuses backend-only packages', async () => {
     const root = await fixture();
     await packageAt(root, 'one', manifest());
