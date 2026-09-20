@@ -25,6 +25,11 @@ Risks:
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
+> 2026-09-20 validation note: Step 2.2 remains pending because `npm test` fails at
+> `packages/web/src/page-layout/registry.test.ts:42`; the same failure reproduces on clean
+> `origin/main`, and PR #76 does not touch the registry. The authoritative review requested
+> changes and the page-registry invariant needs maintainer resolution before this step can close.
+
 ### Phase 1: Production boundary and semantic validation
 
 - [x] 1.1 Connect Task Page layout loading to the live task layout boundary. — 738109b4
