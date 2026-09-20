@@ -984,7 +984,7 @@ describe('change notification', () => {
       ([, specifier]) => specifier,
     )
 
-    expect(runtime).toEqual(['@open-mercato/cezar-extension-api'])
+    expect(runtime).toEqual(['@open-mercato/cezar-extension-api', './settings'])
     // A dynamic import names its module in quotes; a comment's "import (" does not.
     expect(source).not.toMatch(/\bimport[ \t]*\([ \t]*['"`]/)
   })

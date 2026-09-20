@@ -307,7 +307,7 @@ describe('types', () => {
           return `Hello, ${name}`
         },
       })
-      expectTypeOf(disposable).toEqualTypeOf<Disposable>()
+      expectTypeOf(disposable).toExtend<Disposable>()
       // An implementation may ignore props it does not need.
       components.provide(Greeting, { id: 'acme.hello.static', title: 'Static', component: () => 'Hi' })
       // It may declare the capabilities it honours, or none.

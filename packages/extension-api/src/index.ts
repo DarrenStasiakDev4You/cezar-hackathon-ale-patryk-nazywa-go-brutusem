@@ -8,14 +8,25 @@ export {
   type ComponentCompatibilityIssue,
 } from './compatibility.ts'
 export {
+  booleanSetting,
   defineComponentContract,
+  defineSettings,
   type ComponentCapability,
   type ComponentContract,
   type ComponentContractOptions,
+  type ComponentRenderProps,
+  type ComponentRegistrationHandle,
+  type ComponentSettingsDefinition,
+  type ComponentSettingsSchema,
+  type ComponentSettingsScope,
+  type ComponentSettingDefinition,
+  type BooleanSettingDefinition,
   type ComponentImplementation,
   type ComponentLayout,
   type ComponentProps,
   type ComponentRegistry,
+  type InferSettings,
+  type SettingsOf,
 } from './components.ts'
 export type { ExtensionContext } from './context.ts'
 export {

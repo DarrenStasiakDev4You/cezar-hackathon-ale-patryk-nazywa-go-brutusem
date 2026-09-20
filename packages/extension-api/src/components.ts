@@ -3,6 +3,7 @@ import type { ComponentType } from 'react'
 import type { ContributionId } from './ids.ts'
 import type { Disposable } from './lifecycle.ts'
 import type { ManifestIssue } from './manifest.ts'
+import { ExtensionDefinitionError } from './errors.ts'
 import { createToken } from './tokens.ts'
 
 /**
@@ -218,11 +219,74 @@ function layoutOf(value: unknown, issue: (path: string, message: string) => void
 /** The props of a contract: `ComponentProps<typeof TaskList>`. */
 export type ComponentProps<C> = C extends ComponentContract<infer P> ? P : never
 
+export type ComponentSettingsScope = 'global' | 'project'
+export interface BooleanSettingDefinition { readonly type: 'boolean'; readonly default: boolean }
+export type ComponentSettingDefinition = BooleanSettingDefinition
+export type ComponentSettingsSchema = Readonly<Record<string, ComponentSettingDefinition>>
+export type InferSettings<Schema extends ComponentSettingsSchema> = {
+  -readonly [Key in keyof Schema]: Schema[Key] extends BooleanSettingDefinition ? boolean : never
+}
+export interface ComponentSettingsDefinition<Settings> {
+  readonly scope: ComponentSettingsScope
+  readonly schema: ComponentSettingsSchema
+  readonly defaults: Settings
+  readonly parse: (input: unknown) => Settings
+}
+export type SettingsOf<Definition> = Definition extends ComponentSettingsDefinition<infer Settings> ? Settings : never
+export type ComponentRenderProps<Props, Settings = never> = [Settings] extends [never]
+  ? Props
+  : Props & { readonly useComponentSettings: () => Settings }
+
+export function booleanSetting(options: { readonly default: boolean }): BooleanSettingDefinition {
+  if (typeof options?.default !== 'boolean') throw settingsError('Invalid component settings default')
+  return Object.freeze({ type: 'boolean' as const, default: options.default })
+}
+
+export function defineSettings<const Schema extends ComponentSettingsSchema>(options: {
+  readonly scope: ComponentSettingsScope
+  readonly schema: Schema
+}): ComponentSettingsDefinition<InferSettings<Schema>> {
+  if (options?.scope !== 'global' && options?.scope !== 'project') throw settingsError('Invalid component settings scope')
+  if (typeof options?.schema !== 'object' || options.schema === null || Array.isArray(options.schema)) {
+    throw settingsError('Invalid component settings schema')
+  }
+  const fields: Record<string, BooleanSettingDefinition> = {}
+  for (const key of Object.keys(options.schema)) {
+    const descriptor = (options.schema as Record<string, unknown>)[key]
+    if (key.length === 0 || key.length > 64 || typeof descriptor !== 'object' || descriptor === null ||
+      (descriptor as { type?: unknown }).type !== 'boolean' || typeof (descriptor as { default?: unknown }).default !== 'boolean') {
+      throw settingsError(`Invalid component setting "${key}"`)
+    }
+    fields[key] = Object.freeze({ type: 'boolean', default: (descriptor as BooleanSettingDefinition).default })
+  }
+  if (Object.keys(fields).length > 64) throw settingsError('Component settings have too many fields')
+  const schema = Object.freeze({ ...fields }) as Schema
+  const defaults = Object.freeze(Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.default]))) as InferSettings<Schema>
+  const parse = (input: unknown): InferSettings<Schema> => {
+    if (typeof input !== 'object' || input === null || Array.isArray(input)) throw new TypeError('component settings must be an object')
+    const source = input as Record<string, unknown>
+    for (const key of Object.keys(source)) if (!Object.prototype.hasOwnProperty.call(fields, key)) throw new TypeError(`unknown component setting "${key}"`)
+    const result: Record<string, boolean> = {}
+    for (const [key, descriptor] of Object.entries(fields)) {
+      const value = source[key]
+      if (value === undefined) result[key] = descriptor.default
+      else if (typeof value !== 'boolean') throw new TypeError(`component setting "${key}" must be a boolean`)
+      else result[key] = value
+    }
+    return Object.freeze(result) as InferSettings<Schema>
+  }
+  return Object.freeze({ scope: options.scope, schema, defaults, parse })
+}
+
+function settingsError(message: string): ExtensionDefinitionError {
+  return new ExtensionDefinitionError('invalid-id', message, [{ path: 'settings', message }])
+}
+
 /**
  * One implementation of a contract. Core's default and an extension's replacement have the same
  * shape; only the id prefix differs.
  */
-export interface ComponentImplementation<Props> {
+export interface ComponentImplementation<Props, Settings = never> {
   /** Core: `cezar.…` (e.g. `cezar.task.header.default`); an extension: under its own id, e.g.
    *  `acme.compact-tasks.dense`. */
   readonly id: ContributionId
@@ -236,7 +300,8 @@ export interface ComponentImplementation<Props> {
    * `checkComponentCompatibility` compares it with the contract, and the host relies on it.
    */
   readonly capabilities?: readonly ComponentCapability[]
-  readonly component: ComponentType<Props>
+  readonly settings?: ComponentSettingsDefinition<Settings>
+  readonly component: ComponentType<ComponentRenderProps<Props, Settings>>
 }
 
 /**
@@ -258,5 +323,11 @@ export interface ComponentImplementation<Props> {
  */
 export interface ComponentRegistry {
   /** `NoInfer`: P comes from the contract only, so an implementation with other props is rejected. */
-  provide<P>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>>): Disposable
+  provide<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<NoInfer<P>, Settings>): ComponentRegistrationHandle<Settings>
+}
+
+export interface ComponentRegistrationHandle<Settings> extends Disposable {
+  readonly componentId: ContributionId
+  getSettings(): Promise<Settings | undefined>
+  onSettingsChange(listener: (settings: Settings | undefined) => void): Disposable
 }

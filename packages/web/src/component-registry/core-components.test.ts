@@ -27,7 +27,7 @@ interface Registered {
 function registered(): Registered[] {
   const seen: Registered[] = []
   registerCoreComponents({
-    register<P>(contract: ComponentContract<P>, implementation: ComponentImplementation<P>) {
+    register<P, Settings>(contract: ComponentContract<P>, implementation: ComponentImplementation<P, Settings>) {
       // Only `TaskHeaderMain` is served; the first test pins that.
       seen.push({ contract, implementation: implementation as unknown as ComponentImplementation<TaskHeaderMainProps> })
       return { dispose() {} }

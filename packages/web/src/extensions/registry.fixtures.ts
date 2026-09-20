@@ -78,7 +78,7 @@ export function recordingServices(log: string[] = []): RecordingServices {
         emit: () => scope.assertLive(),
       },
       storage: { get: live, set: live, delete: live, keys: live },
-      components: { provide: (_contract, implementation) => register(`component ${implementation.id}`) },
+      components: { provide: (_contract, implementation) => ({ componentId: implementation.id, dispose: register(`component ${implementation.id}`).dispose, async getSettings() { return undefined }, onSettingsChange: () => ({ dispose() {} }) }) },
       notifications: {
         info: () => scope.assertLive(),
         warning: () => scope.assertLive(),
