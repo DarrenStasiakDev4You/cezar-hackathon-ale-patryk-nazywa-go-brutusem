@@ -145,9 +145,10 @@ describe('the entry chunk check', () => {
   it('fails when a release asset contains the fixture id', () => {
     const guard = fixtureBundleGuard()
     const error = vi.fn()
-    guard.generateBundle?.call({ error } as never, {}, {
+    const generateBundle = typeof guard.generateBundle === 'function' ? guard.generateBundle : guard.generateBundle?.handler
+    generateBundle?.call({ error } as never, {} as never, {
       'assets/leaked.js': { type: 'asset', source: 'fixture.configurable-header' },
-    } as never)
+    } as never, false)
     expect(error).toHaveBeenCalledWith('test fixture leaked into release assets: assets/leaked.js')
   })
 })

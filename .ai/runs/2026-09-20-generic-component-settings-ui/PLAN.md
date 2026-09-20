@@ -49,3 +49,4 @@ Source doc: `.ai/specs/2026-09-20-generic-component-settings-ui.md`
 | 4 | 4.2 | Prove the Definition of Done end to end | inline | done | e8a58908 |
 | 4 | 4.3 | Document the durable contract | inline | done | 2d087919 |
 | 4 | 4.4 | Run the full validation gate | inline | todo | - |
+| 4 | 4.4-fix | Fix bundle guard test hook typing | inline | done | 85350a3c |
