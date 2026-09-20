@@ -9,6 +9,7 @@ import { createCoreComponentRegistry } from './component-registry/core-component
 import { CORE_COMPONENT_CONTRACTS } from './component-registry/core-contracts'
 import { createComponentPreferences } from './component-registry/preferences'
 import { uiStateComponentStorage } from './component-registry/stored-components-provider'
+import { createPersistentComponentSettingsStore, resolveComponentProjectId } from './component-registry/settings'
 import { createEventBus } from './events/bus'
 import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost } from './extensions/host'
@@ -45,7 +46,10 @@ const events = createEventBus()
 // component contract with its provenance. Core's defaults are registered here, before the host
 // starts, as the core commands are, so core always keeps its own ids and every served contract
 // has a default to render and to fall back to (spec `2026-09-19-component-host`).
-const components = createCoreComponentRegistry()
+const components = createCoreComponentRegistry({
+  settings: createPersistentComponentSettingsStore({ resolveProjectId: resolveComponentProjectId }),
+  resolveProjectId: resolveComponentProjectId,
+})
 const componentPreferences = createComponentPreferences({
   registry: components,
   contracts: CORE_COMPONENT_CONTRACTS,

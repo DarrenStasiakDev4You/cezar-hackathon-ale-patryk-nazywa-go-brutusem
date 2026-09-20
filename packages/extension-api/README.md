@@ -4,9 +4,10 @@
 > (`packages/web/src/extensions/registry.ts`, spec `2026-09-18-extension-registry`) runs the
 > extensions compiled into the cockpit. Of the services behind `ExtensionContext`, `commands`
 > (spec `2026-09-19-command-api`), `events` (spec `2026-09-19-extension-event-api`),
-> `components` (spec `2026-09-19-component-registry`) and notifications are honoured; storage
-> remains a placeholder behind its permission until its host item lands;
-> item, and every host item may still revise these types in the PR that implements them.
+> `components` (spec `2026-09-19-component-registry`) including implementation-owned settings
+> (spec `2026-09-19-component-settings-api`) and notifications are honoured; storage remains a
+> placeholder behind its permission until its host item lands. Each host item may still revise
+> these types in the PR that implements it.
 > `context.components` records implementations, while rendering and selection arrive with the slot
 > and picker items. Component contracts are checkable anywhere — `checkComponentCompatibility`
 > runs in your own tests too (spec `2026-09-19-component-contract-api`). The package is versioned
@@ -296,11 +297,15 @@ what you read (the example does). Like all Cezar state it may be deleted; work f
 
 ### Replacing a component
 
-`context.components.provide(contract, { id, title, capabilities?, component })` offers an
+`context.components.provide(contract, { id, title, capabilities?, settings?, component })` offers an
 implementation of a core contract. Providing never selects: the user picks an implementation per
 contract, core's default always stays available, and a replacement that throws while rendering
 falls back to it. Core's default is the same shape as yours, `cezar.…` instead of your prefix, and
-goes through the same check.
+goes through the same check. A settings definition is declared with `defineSettings({ scope, schema })`
+and the first supported field is `booleanSetting({ default })`. The host stores sparse overrides under
+the exact implementation id in global or active-project UI state, fills defaults before rendering,
+and exposes them only through the implementation-only `useComponentSettings()` reader. The returned
+registration handle can read or observe its own settings, but has no setter or cross-implementation access.
 
 **Status.** The cockpit serves one core contract, the task header's main part (below). It keeps
 every implementation per contract with the id of the extension that provided it, and renders a
@@ -362,6 +367,27 @@ Stop keeps core's confirmation: `onStop()` asks the user, and only **Cancel the 
 task. If your part throws, core's default comes back and so do core's buttons.
 `examples/compact-task-header/index.ts` declares all three; `test/compact-task-header.test.ts`
 checks it as a host does, and the cockpit's `external-task-header.test.tsx` uses it on the task page.
+
+**The task composer.** `TaskComposer` (`cezar.task.composer@1`) is the task thread's reply box.
+It is a controlled view: core owns the draft, delivery, continuation engine, completion lists and
+quick replies, while an implementation receives `TaskComposerProps` and reports the user's actions
+through nine `void` intents. Every data prop is JSON; `onAttachFiles` accepts a structural file
+(`name`, `type`, `size`, `arrayBuffer()`), so an extension does not import a DOM type.
+
+The model includes `draft`, `status`, `availability`, `actions`, `completions`, attachment
+`limits`, and an optional `engine` with runner and model choices. Its intents are
+`onTextChange`, `onSubmit`, attachment and engine selection, completion loading and usage, and
+navigation. The required capabilities are `edits-draft`, `sends` and `shows-availability`.
+`attaches-files` and `chooses-engine` are optional: when an implementation does not declare one,
+core renders the corresponding attachment row or engine picker beside it. Core reserves 88 px while
+the box loads or swaps.
+
+See `examples/plain-task-composer/` for a minimal implementation that imports only this package
+and React; the cockpit test exercises it through the real extension registry.
+
+The contract intentionally does not expose a query client, draft store, router, command token or
+React node. A minimal implementation can render `draft.text` and call `onSubmit()` without
+knowing how a task is delivered or persisted.
 
 **What `provide` throws, and what it keeps.** Your own mistakes throw: `disposed` after
 deactivation, `invalid-id` for a token that is not `{ kind: 'component', id, version }` or a

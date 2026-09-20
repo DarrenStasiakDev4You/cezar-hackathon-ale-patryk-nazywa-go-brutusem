@@ -4,7 +4,7 @@ import { hasAccountChoice, useAgentAccounts } from '@/api/agent-accounts'
 import { useConfig, useRunnerModels } from '@/api/queries'
 import { DEFAULT_AGENT_ACCOUNT_ID } from '@open-mercato/cezar-api-client'
 import type { ApiRun, AttachmentInput, Runner } from '@open-mercato/cezar-api-client'
-import { TaskContinue, type TaskContinueResult } from '@open-mercato/cezar-extension-api'
+import { TaskContinue, type TaskComposerEngine, type TaskContinueResult } from '@open-mercato/cezar-extension-api'
 import { useCommand, useTaskRefetch } from '@/commands/provider'
 import { PickerPill, RunnerPill } from '@/components/picker-pill'
 import {
@@ -26,6 +26,16 @@ export interface ContinueAction {
   reason?: string
   /** True while provider status is still loading. */
   providerPending: boolean
+  /** The serializable engine model for a hosted composer. */
+  engine: TaskComposerEngine
+  /** Whether runner/account selection has more than one concrete row. */
+  hasRunnerChoice: boolean
+  /** Whether native settings lock the model picker. */
+  modelsLocked: boolean
+  /** Change the continuation runner and optional account. */
+  selectRunner: (runner: string, account?: string) => void
+  /** Change the continuation model. */
+  selectModel: (model: string) => void
   /** The runner + model pills — which backend and model the reopened session runs on. */
   pills: ReactNode
   /**
@@ -65,6 +75,13 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const [pickedRunner, setPickedRunner] = useState<Runner | null>(null)
   const [pickedModel, setPickedModel] = useState<string | null>(null)
   const [pickedAccount, setPickedAccount] = useState<string | null>(null)
+  const [pickedRunId, setPickedRunId] = useState(run.id)
+  if (pickedRunId !== run.id) {
+    setPickedRunId(run.id)
+    setPickedRunner(null)
+    setPickedModel(null)
+    setPickedAccount(null)
+  }
 
   const continuation = useContinuationProvider(run, pickedRunner)
   const { runners, canContinue, currentRunner, runner } = continuation
@@ -107,6 +124,26 @@ export function useContinueAction(run: ApiRun): ContinueAction {
   const account = accounts.some((choice) => choice.provider === runner && choice.id === pickedAccount)
     ? pickedAccount
     : null
+  const hasRunnerChoice = runners.length > 1 || runners.some((id) => hasAccountChoice(accounts, id))
+  const runnerChoices: TaskComposerEngine['runnerChoices'][number][] = []
+  for (const choice of runners) {
+    const rows = accounts.filter((entry) => entry.provider === choice)
+    if (rows.length < 2) runnerChoices.push({ runner: choice, label: choice })
+    else {
+      for (const row of rows) {
+        runnerChoices.push({ runner: choice, account: row.id, label: `${choice} · ${row.label}`, description: row.configDir })
+      }
+    }
+  }
+  const engine: TaskComposerEngine = {
+    runner,
+    ...(account ? { account } : {}),
+    model,
+    modelLabel: models.find((entry) => entry.id === model)?.label ?? 'auto',
+    runnerChoices,
+    modelChoices: models.map((entry) => ({ id: entry.id, label: entry.label, ...(entry.desc ? { description: entry.desc } : {}) })),
+    ...(modelCatalogStatus(runner, catalog.data, catalog.isError) ? { modelNote: modelCatalogStatus(runner, catalog.data, catalog.isError) } : {}),
+  }
 
   // Resolves on fresh caches, as the composer always did: without the wait it would show the
   // closed state (empty draft, enabled Continue) for a moment before the record turns live.
@@ -160,11 +197,23 @@ export function useContinueAction(run: ApiRun): ContinueAction {
     canContinue,
     reason: continuation.reason,
     providerPending: continuation.providerPending,
+    engine,
+    hasRunnerChoice,
+    modelsLocked,
+    selectRunner: (nextRunner, nextAccount) => {
+      const next = nextRunner as Runner
+      setPickedAccount(nextAccount ?? null)
+      if (next !== runner) {
+        setPickedRunner(next)
+        setPickedModel(null)
+      }
+    },
+    selectModel: (nextModel) => setPickedModel(nextModel),
     pills: (
       <div ref={pickerRef} data-slot="follow-up-engine" className="flex flex-wrap items-center gap-1.5">
         {/* Shown when there is a choice to make: more than one runner, or more than one login for
             one of them. A host with neither sees no pill, exactly as before. */}
-        {runners.length > 1 || runners.some((id) => hasAccountChoice(accounts, id)) ? (
+        {hasRunnerChoice ? (
           <RunnerPill
             runners={runners}
             value={runner}

@@ -70,7 +70,14 @@ describe('guardServices', () => {
         delete: vi.fn(async () => undefined),
         keys: vi.fn(async () => []),
       },
-      components: { provide: vi.fn(() => ({ dispose() {} })) },
+      components: {
+        provide: vi.fn((_contract, implementation) => ({
+          componentId: implementation.id,
+          dispose() {},
+          async getSettings() { return undefined },
+          onSettingsChange() { return { dispose() {} } },
+        })),
+      },
       notifications: { info: vi.fn(), warning: vi.fn(), error: vi.fn() },
     }
   }
