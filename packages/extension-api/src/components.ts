@@ -34,7 +34,7 @@ export interface ComponentLayout {
 /** What a contract declares beside its id: {@link defineComponentContract}'s second argument. */
 export interface ComponentContractOptions {
   /**
-   * Major version of the functional contract, written `id@version` (`cezar.task.header@1`). It is
+    * Major version of the functional contract, written `id@version` (`task.header@1`). It is
    * part of the public API. Bump it when a change can break an existing implementation: remove,
    * rename or narrow a prop; make an optional prop required or add a required one; change when a
    * callback is called or what it promises; add a required capability or promote an optional one;

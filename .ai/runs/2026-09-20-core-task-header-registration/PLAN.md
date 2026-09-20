@@ -13,6 +13,7 @@ PR: #54
 | 2.1 | 2 | Rename the public contract, exports, implementation/model files, ids, and consumers/tests. | inline | done |
 | 2.2 | 2 | Document provider-neutral contracts and `core.*` implementations; update boundary assertions. | inline | done |
 | 2.3 | 2 | Run the validation gate, review the complete diff, and resolve findings. | inline | blocked |
+| 2.3-review-fix | 2 | Update the generic component-contract documentation to use the provider-neutral contract example. | inline | done |
 
 ## Scope
 
