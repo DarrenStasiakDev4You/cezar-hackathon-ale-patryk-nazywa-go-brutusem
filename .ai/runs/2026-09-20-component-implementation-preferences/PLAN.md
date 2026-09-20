@@ -13,7 +13,7 @@
 | 2 | 2.2 | Implement the workspace UI-state storage adapter and `StoredComponentsProvider`, proving refresh persistence, fallback, reset, cache sharing, and failed-write behavior. | inline | done | 9a666928 |
 | 2 | 2.3 | Create the service in `main.tsx`, mount it through `App`, and add the production boundary regression test for the provider wiring. | inline | done | f095251f |
 | 2 | 2.4 | Update `AGENTS.md` and `BACKWARD_COMPATIBILITY.md` with the persisted preference contract. | inline | done | dbb5d2dd
-| 3 | 3.1 | Resolve the duplicate implementation and current-base conflict before completion, retaining only work that is still needed after PR #58. | inline | done | pending |
+| 3 | 3.1 | Resolve the duplicate implementation and current-base conflict before completion, retaining only work that is still needed after PR #58. | inline | done | 38baa471 |
 
 Source doc: `.ai/specs/2026-09-19-component-implementation-preferences.md`
 
