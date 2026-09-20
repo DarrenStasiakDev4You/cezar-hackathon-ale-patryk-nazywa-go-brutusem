@@ -38,7 +38,7 @@ async function packageAt(root: string, name: string, contents: string, frontend 
 describe('scanLocalExtensions', () => {
   it('returns an empty available inventory when the directory is missing', async () => {
     const root = join(await fixture(), 'missing');
-    const result = await scanLocalExtensions({ root, release: '0.11.1' });
+    const result = await scanLocalExtensions({ root, version: '0.11.1' });
     expect(result.extensions).toEqual([]);
     expect(result.diagnostics).toEqual([]);
   });
@@ -47,7 +47,7 @@ describe('scanLocalExtensions', () => {
     const root = await fixture();
     await packageAt(root, 'valid', manifest());
     await packageAt(root, 'broken', '{not json');
-    const result = await scanLocalExtensions({ root, release: '0.11.1' });
+    const result = await scanLocalExtensions({ root, version: '0.11.1' });
     expect(result.extensions.find((entry) => entry.candidate === 'valid')).toMatchObject({ status: 'ready', id: 'acme.demo' });
     expect(result.extensions.find((entry) => entry.candidate === 'broken')).toMatchObject({ status: 'rejected' });
   });
@@ -56,7 +56,7 @@ describe('scanLocalExtensions', () => {
     const root = await fixture();
     await packageAt(root, 'plain', manifest({ id: 'acme.plain' }));
     await packageAt(root, 'permissioned', manifest({ id: 'acme.permissioned', permissions: ['events'] }));
-    const result = await scanLocalExtensions({ root, release: '0.11.1', grantsPath: join(root, 'grants.json') });
+    const result = await scanLocalExtensions({ root, version: '0.11.1', grantsPath: join(root, 'grants.json') });
     expect(result.extensions.find((entry) => entry.id === 'acme.plain')?.status).toBe('ready');
     expect(result.extensions.find((entry) => entry.id === 'acme.permissioned')).toMatchObject({ status: 'permission-required', diagnostic: { code: 'permission-required' } });
   });
@@ -66,7 +66,7 @@ describe('scanLocalExtensions', () => {
     await packageAt(root, 'one', manifest());
     await packageAt(root, 'two', manifest());
     await packageAt(root, 'backend', manifest({ id: 'acme.backend', entrypoints: { frontend: './dist/frontend.js', backend: './dist/backend.js' } }));
-    const result = await scanLocalExtensions({ root, release: '0.11.1' });
+    const result = await scanLocalExtensions({ root, version: '0.11.1' });
     expect(result.extensions.filter((entry) => entry.status === 'duplicate')).toHaveLength(2);
     expect(result.extensions.find((entry) => entry.id === 'acme.backend')).toMatchObject({ status: 'rejected', diagnostic: { code: 'unsupported-entrypoint' } });
   });
@@ -80,7 +80,7 @@ describe('scanLocalExtensions', () => {
     await packageAt(root, 'escape', manifest({ id: 'acme.escape' }));
     await rm(join(root, 'escape', 'dist', 'frontend.js'));
     await symlink(outside, join(root, 'escape', 'dist', 'frontend.js'));
-    const result = await scanLocalExtensions({ root, release: '0.11.1' });
+    const result = await scanLocalExtensions({ root, version: '0.11.1' });
     expect(result.extensions.find((entry) => entry.id === 'acme.missing')).toMatchObject({ status: 'rejected', diagnostic: { code: 'entrypoint-missing' } });
     expect(result.extensions.find((entry) => entry.id === 'acme.escape')).toMatchObject({ status: 'rejected', diagnostic: { code: 'unsafe-path' } });
   });

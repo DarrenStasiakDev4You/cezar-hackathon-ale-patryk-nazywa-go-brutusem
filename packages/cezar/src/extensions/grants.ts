@@ -1,117 +1,92 @@
-import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
-import type { ExtensionPermission } from '@open-mercato/cezar-extension-api';
 import { assertCezarHomeWriteIsSandboxed, extensionGrantsPath } from '../paths.ts';
 
-export const EXTENSION_PERMISSIONS = [
+const permissionName = z.enum([
   'ui.components',
   'commands.execute',
   'storage',
   'events',
   'network',
   'notifications',
-] as const satisfies readonly ExtensionPermission[];
+]);
+const grantEntry = z.object({ grantedPermissions: z.array(permissionName).max(32) }).passthrough();
+const grantStore = z.record(z.string().min(1).max(128), grantEntry);
 
-const permissionSchema = z.enum(EXTENSION_PERMISSIONS);
-const grantEntrySchema = z.object({
-  grantedPermissions: z.array(permissionSchema).max(32),
-}).strict();
-const grantFileSchema = z.record(z.string().min(1).max(128), grantEntrySchema).default({});
+export type ExtensionGrant = z.infer<typeof grantEntry>;
+export type ExtensionGrantStore = z.infer<typeof grantStore>;
 
-export type ExtensionGrant = z.infer<typeof grantEntrySchema>;
+export interface LoadedExtensionGrants {
+  readonly grants: ExtensionGrantStore;
+  readonly warning?: string;
+}
 
-export type ExtensionGrantStore = {
-  readonly available: boolean;
-  readonly grants: ReadonlyMap<string, readonly ExtensionPermission[]>;
-};
-
-const emptyStore = (available: boolean): ExtensionGrantStore => ({
-  available,
-  grants: new Map(),
-});
-
-/** Read grants fail closed. A missing optional file is the same as an empty policy. */
-export async function loadExtensionGrants(path = extensionGrantsPath()): Promise<ExtensionGrantStore> {
-  let raw: string;
+/** Read grants without allowing one corrupt row to discard every valid approval. */
+export async function readExtensionGrants(path = extensionGrantsPath()): Promise<LoadedExtensionGrants> {
+  let text: string;
   try {
-    raw = await readFile(path, 'utf8');
+    text = await readFile(path, 'utf8');
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return emptyStore(true);
-    return emptyStore(false);
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { grants: {} };
+    return { grants: {}, warning: 'the extension grant store could not be read' };
   }
-
-  let parsed: unknown;
+  let value: unknown;
   try {
-    parsed = JSON.parse(raw);
+    value = JSON.parse(text);
   } catch {
-    return emptyStore(false);
+    return { grants: {}, warning: 'the extension grant store contains invalid JSON' };
   }
-  const result = grantFileSchema.safeParse(parsed);
-  if (!result.success) return emptyStore(false);
-
-  const grants = new Map<string, readonly ExtensionPermission[]>();
-  for (const [id, entry] of Object.entries(result.data)) {
-    grants.set(id, Object.freeze([...entry.grantedPermissions]));
+  const parsed = grantStore.safeParse(value);
+  if (parsed.success) return { grants: parsed.data };
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { grants: {}, warning: 'the extension grant store has an invalid shape' };
   }
-  return { available: true, grants };
+  const salvaged: ExtensionGrantStore = {};
+  for (const [id, entry] of Object.entries(value)) {
+    const row = grantEntry.safeParse(entry);
+    if (row.success) salvaged[id] = row.data;
+  }
+  return { grants: salvaged, warning: 'some extension grants were invalid and were ignored' };
 }
 
-/** Return only the permissions requested by the current manifest and covered by policy. */
-export function effectiveGrantedPermissions(
-  store: ExtensionGrantStore,
+export function grantedPermissionsFor(
+  grants: ExtensionGrantStore,
   id: string,
-  requested: readonly ExtensionPermission[],
-): readonly ExtensionPermission[] {
-  const granted = new Set(store.grants.get(id) ?? []);
-  return Object.freeze(requested.filter((permission) => granted.has(permission)));
+  requested: readonly string[],
+): readonly string[] {
+  const stored = new Set<string>(grants[id]?.grantedPermissions ?? []);
+  return Object.freeze(requested.filter((permission) => stored.has(permission)));
 }
 
-export type WriteGrantResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly error: string };
+export function permissionsCovered(requested: readonly string[], granted: readonly string[]): boolean {
+  return requested.every((permission) => granted.includes(permission));
+}
 
-/**
- * Approve exactly the current request or remove the policy. The caller cannot write an arbitrary
- * permission set, which keeps the grant file a user policy rather than a second manifest.
- */
+/** Atomic read-modify-write. The temp file is in the same directory so rename is atomic. */
 export async function writeExtensionGrant(
   id: string,
-  requested: readonly ExtensionPermission[],
+  requestedPermissions: readonly string[],
   approved: boolean,
   path = extensionGrantsPath(),
-): Promise<WriteGrantResult> {
-  const current = await loadExtensionGrants(path);
-  if (!current.available && current.grants.size === 0) {
-    // A missing file is available; this branch is corrupt, unreadable or otherwise unavailable.
-    try {
-      await readFile(path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        // Continue: the first approval creates the optional file.
-      } else {
-        return { ok: false, error: 'the extension permission file cannot be read' };
-      }
-    }
+): Promise<void> {
+  const loaded = await readExtensionGrants(path);
+  const next: ExtensionGrantStore = { ...loaded.grants };
+  if (!approved) delete next[id];
+  else {
+    const requested = permissionName.array().safeParse(requestedPermissions);
+    if (!requested.success) throw new Error('the extension requested an unsupported permission');
+    next[id] = { grantedPermissions: [...new Set(requested.data)] };
   }
-
-  const next: Record<string, ExtensionGrant> = {};
-  for (const [key, permissions] of current.grants) {
-    next[key] = { grantedPermissions: [...permissions] as ExtensionPermission[] };
-  }
-  if (approved) next[id] = { grantedPermissions: [...requested] as ExtensionPermission[] };
-  else delete next[id];
-
-  const temporary = `${path}.${process.pid}.${Date.now().toString(36)}.tmp`;
+  await mkdir(dirname(path), { recursive: true });
+  assertCezarHomeWriteIsSandboxed(path);
+  const temporary = `${path}.tmp-${process.pid}-${Date.now().toString(36)}`;
   try {
-    assertCezarHomeWriteIsSandboxed(path);
-    await mkdir(dirname(path), { recursive: true });
     await writeFile(temporary, `${JSON.stringify(next, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
     await chmod(temporary, 0o600);
     await rename(temporary, path);
-    return { ok: true };
   } catch (error) {
-    await unlink(temporary).catch(() => undefined);
-    return { ok: false, error: error instanceof Error ? error.message : 'the extension permission file cannot be written' };
+    await import('node:fs/promises').then(({ unlink }) => unlink(temporary).catch(() => {}));
+    throw new Error('the extension grant could not be saved', { cause: error });
   }
 }

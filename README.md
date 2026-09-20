@@ -141,6 +141,7 @@ The built-in `quick-task` workflow runs with no setup.
 ## Documentation
 
 The [reference](docs/reference.md) covers everything else:
+ [local extensions](docs/extensions.md),
 [configuration](docs/reference.md#configuration-optional),
 [environment variables](docs/reference.md#how-it-runs-agents),
 [agent backends](docs/reference.md#coding-agent-backends),

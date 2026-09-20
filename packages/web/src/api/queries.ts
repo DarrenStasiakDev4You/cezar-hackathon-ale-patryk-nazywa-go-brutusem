@@ -23,6 +23,7 @@ import {
   getGithubRefStatus,
   getGroup,
   getHealth,
+  getExtensions,
   getLaunchKey,
   getOpenTargets,
   getProviderStatus,
@@ -73,6 +74,7 @@ import {
   sendMessage,
   sendProjectRunMessage,
   putAgentConfigFile,
+  setExtensionApproval,
   retryProviderAuth,
 } from './client'
 import { queryScope, REFERENCE_STATUS_MAX, runnerDiscoversModels } from '@open-mercato/cezar-api-client'
@@ -94,6 +96,7 @@ import type {
   ProjectsResponse,
   GithubRefStatusData,
   ProviderStatusResponse,
+  ExtensionInventoryResponse,
   ReferenceStatus,
   RunRecord,
   SelectAgentProfileInput,
@@ -254,6 +257,7 @@ export const workspaceQueryKeys = {
   fsBrowseRoot: ['workspace', 'fs-browse'] as const,
   fsBrowse: (path: string | null, showHidden = false) =>
     [...workspaceQueryKeys.fsBrowseRoot, path, showHidden] as const,
+  extensions: ['workspace', 'extensions'] as const,
 }
 
 /**
@@ -1176,6 +1180,21 @@ export function useWorkspaceConfig() {
   return useQuery({
     queryKey: workspaceQueryKeys.config,
     queryFn: ({ signal }) => getWorkspaceConfig({ signal }),
+  })
+}
+
+export function useExtensions() {
+  return useQuery({
+    queryKey: workspaceQueryKeys.extensions,
+    queryFn: ({ signal }) => getExtensions({ signal }),
+  })
+}
+
+export function useSetExtensionApproval() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, approved }: { id: string; approved: boolean }) => setExtensionApproval(id, approved),
+    onSuccess: (result: ExtensionInventoryResponse) => queryClient.setQueryData(workspaceQueryKeys.extensions, result),
   })
 }
 

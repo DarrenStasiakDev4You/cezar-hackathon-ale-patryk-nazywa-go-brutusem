@@ -123,12 +123,12 @@ export function agentAccountsPath(): string {
   return join(cezarHomeDir(), 'agent-accounts.json');
 }
 
-/** User-managed unpacked extension packages. */
+/** User-managed unpacked extension packages. The browser loader is deliberately local-only. */
 export function extensionsDir(env: NodeJS.ProcessEnv = process.env): string {
   return join(cezarHomeDir(env), 'extensions');
 }
 
-/** Cezar-owned permission policy for local extension packages. */
+/** Cezar-owned permission policy for local extensions. Optional and safe to delete. */
 export function extensionGrantsPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(cezarHomeDir(env), 'extension-grants.json');
 }
