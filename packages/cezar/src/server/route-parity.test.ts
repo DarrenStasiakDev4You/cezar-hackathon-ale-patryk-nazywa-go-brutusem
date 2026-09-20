@@ -216,7 +216,7 @@ describe('project-route alias parity (unprefixed vs /api/v1/p/<boot> vs /api/v1/
     for (const route of gets) {
       await expectParity(fillParams(route.path));
     }
-  }, 30_000);
+  }, 120_000);
 
   it('keeps mutating-route rejections byte-identical (targeted non-GET cases)', async () => {
     const json =

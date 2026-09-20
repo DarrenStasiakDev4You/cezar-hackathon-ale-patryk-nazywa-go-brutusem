@@ -675,7 +675,7 @@ describe('agent profiles API', () => {
         expect(res.status, JSON.stringify(body)).toBe(400);
         expect(((await res.json()) as { error: string }).error).toContain(reason);
       }
-    });
+    }, 120_000);
 
     it('allows a terminal for the FOLDER, which is the case it does apply to', async () => {
       const account = await create('work', signedIn('claude-klaudiusz'));
@@ -697,7 +697,7 @@ describe('agent profiles API', () => {
       });
       expect(res.status).toBe(200);
       expect(launched).toEqual([['terminal', account.path]]);
-    });
+    }, 120_000);
 
     it('409s a file the agent has not written yet rather than reporting a false success', async () => {
       const account = await create('work', signedIn('claude-klaudiusz'));

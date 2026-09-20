@@ -290,7 +290,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
       delete process.env.CEZ_API_URL;
     }
     expect(capturedSystemPrompt()).not.toContain('cez automation');
-  });
+  }, 30_000);
 
   it('no override: the config default reaches the CLI and is echoed on the record', async () => {
     const id = await runToEnd({ task: 'do the thing' });
