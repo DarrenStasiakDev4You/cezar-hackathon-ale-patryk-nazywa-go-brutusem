@@ -13,6 +13,8 @@ import { createPersistentComponentSettingsStore, resolveComponentProjectId } fro
 import { createEventBus } from './events/bus'
 import { BUILTIN_EXTENSIONS } from './extensions/builtin-extensions'
 import { cockpitServices, extensionLifecycleEvents, startExtensionHost } from './extensions/host'
+import { loadExternalExtensionsFromServer } from './extensions/loader'
+import { toast } from './components/ui/toaster'
 import './styles/index.css'
 
 /**
@@ -60,7 +62,7 @@ const componentPreferences = createComponentPreferences({
 // React tree and never awaited: the host never throws and its `ready` never rejects, so no
 // extension can delay or break the boot. The list ships empty. Each activation emits
 // `cezar.extension.activated` on the bus.
-startExtensionHost({
+const extensionHost = startExtensionHost({
   extensions: BUILTIN_EXTENSIONS,
   services: cockpitServices({ commands, events, components }),
   onStatusChange: extensionLifecycleEvents(events),
@@ -80,3 +82,13 @@ createRoot(container).render(
     />
   </StrictMode>,
 )
+
+// Local packages are discovered after the built-in host and first paint. The loader never rejects
+// boot, and the existing registry remains the single owner of lifecycle, grants and cleanup.
+void loadExternalExtensionsFromServer({
+  registry: extensionHost.registry,
+  onDiagnostic: (diagnostic) => {
+    console.error(`[cezar:extensions] ${diagnostic.id ?? diagnostic.candidate}: ${diagnostic.message}`)
+    toast(`${diagnostic.candidate}: ${diagnostic.message}`, { tone: 'danger' })
+  },
+})

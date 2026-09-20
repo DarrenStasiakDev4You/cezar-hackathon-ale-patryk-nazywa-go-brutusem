@@ -564,6 +564,23 @@ resolves to the latest stable release.
 
 ---
 
+## Local extensions
+
+Local frontend extensions are unpacked under `~/.cezar/extensions/<candidate>/` and must contain a
+`cezar.extension.json` plus the declared `.js`/`.mjs` frontend entrypoint. Cezar validates the
+manifest, Cezar release range, API generation, frontend-only scope and structural path containment
+before the browser can load code. Packages requesting permissions remain inactive until approved in
+Settings → Global settings → Extensions; approvals are stored separately in
+`~/.cezar/extension-grants.json` and take effect after a cockpit reload.
+
+This is a local-code trust boundary, not a sandbox. An approved frontend extension runs in the
+cockpit origin and can use the browser APIs available to that origin. Cezar does not download,
+install or execute backend entrypoints, and no source change or cockpit rebuild is needed after a
+package has been built and placed in the directory. Hosted mode does not scan or serve local
+packages.
+
+---
+
 ## Local development
 
 End-to-end, from a fresh clone to a global `cezar` command you can run in **any**

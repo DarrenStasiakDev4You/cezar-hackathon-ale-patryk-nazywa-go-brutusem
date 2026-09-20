@@ -246,6 +246,18 @@ minimal external example lives in `packages/extension-api/examples/plain-task-co
 - `BACKWARD_COMPATIBILITY.md` — the public surfaces you must not break silently.
 - `.ai/agentic.config.json` — machine-readable pipeline config every om-* skill reads (base branch, validation commands, labels).
 
+## Local Extension Loader
+
+For local package loading, read `.ai/specs/2026-09-20-local-extension-loader.md` first, then
+`packages/cezar/src/extensions/local-loader.ts` and `packages/cezar/src/extensions/grants.ts` for
+backend discovery/admission, `packages/cezar/src/server/server.ts` for the chained workspace API,
+and `packages/web/src/extensions/loader.ts` plus `routes/settings/extensions-section.tsx` for the
+browser bridge and diagnostics UI. Discovery is metadata-only and local-only: never import package
+code during scanning, never expose inventory/assets in hosted mode, and only serve approved
+JavaScript entrypoints contained by the package root. Permission requests are not grants; approval
+is explicit and persisted in `~/.cezar/extension-grants.json`. Approved code runs in the cockpit
+origin and is not sandboxed. Use the focused extension tests before the full validation gate.
+
 ## Extension Permission Model
 
 The extension API's `manifest.permissions` is the requested set; a grant is a separate, immutable

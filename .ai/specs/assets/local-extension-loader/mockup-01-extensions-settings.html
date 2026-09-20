@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Extensions | cezar mockup</title>
+  <style>
+    :root { color-scheme: dark; --bg: #111315; --panel: #1a1d20; --muted: #969da6; --text: #f0f2f4; --line: #30353b; --blue: #7db3ff; --green: #65d39b; --amber: #f1c56a; --red: #ff8e8e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+    .shell { display: grid; grid-template-columns: 250px minmax(0, 760px); gap: 38px; max-width: 1180px; margin: 0 auto; padding: 42px 34px; }
+    aside { border-right: 1px solid var(--line); padding-right: 28px; }
+    .brand { font-size: 22px; font-weight: 700; letter-spacing: -.03em; margin-bottom: 36px; }
+    .eyebrow { color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 12px; }
+    nav { display: grid; gap: 6px; }
+    nav a { color: var(--muted); padding: 9px 11px; border-radius: 7px; text-decoration: none; }
+    nav a.active { background: #252a30; color: var(--text); }
+    main { min-width: 0; }
+    h1 { font-size: 28px; letter-spacing: -.035em; margin: 0 0 7px; }
+    .intro { color: var(--muted); max-width: 620px; margin: 0 0 26px; }
+    .notice { border: 1px solid #46516a; background: #1b2433; border-radius: 10px; padding: 14px 16px; color: #cbdcff; margin-bottom: 18px; }
+    .notice strong { display: block; color: var(--text); margin-bottom: 3px; }
+    .card { border: 1px solid var(--line); background: var(--panel); border-radius: 11px; padding: 18px; margin: 12px 0; }
+    .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+    .name { font-size: 16px; font-weight: 650; }
+    .meta { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .status { display: inline-flex; align-items: center; gap: 7px; color: var(--green); font-size: 12px; white-space: nowrap; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .pending { color: var(--amber); }
+    .rejected { color: var(--red); }
+    .permissions { color: var(--muted); margin: 15px 0 0; font-size: 13px; }
+    .actions { display: flex; gap: 9px; margin-top: 16px; }
+    button { border: 1px solid #4d5661; border-radius: 7px; background: #272d34; color: var(--text); padding: 8px 12px; font: inherit; }
+    button.primary { border-color: #6b9fe8; background: #315889; }
+    .footer { color: var(--muted); font-size: 12px; margin-top: 23px; }
+    @media (max-width: 760px) { .shell { grid-template-columns: 1fr; padding: 24px 18px; } aside { border-right: 0; border-bottom: 1px solid var(--line); padding: 0 0 18px; } nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <div class="brand">cezar</div>
+      <div class="eyebrow">Global settings</div>
+      <nav aria-label="Settings sections">
+        <a href="#">General</a><a href="#">Appearance</a><a href="#">Notifications</a>
+        <a href="#">Resources</a><a href="#" class="active">Extensions</a><a href="#">Projects</a>
+      </nav>
+    </aside>
+    <main>
+      <h1>Extensions</h1>
+      <p class="intro">Local extensions are loaded from <code>~/.cezar/extensions</code>. Cezar checks them before loading code.</p>
+      <div class="notice"><strong>Reload after approval</strong>Newly approved extensions activate after you reload the cockpit. Local extensions run in the cockpit origin and are not sandboxed.</div>
+      <section class="card">
+        <div class="row"><div><div class="name">Jira Task Header</div><div class="meta">acme.jira-header · v1.3.0</div></div><div class="status"><span class="dot"></span>Available</div></div>
+        <div class="permissions">Permissions: components.register, events.subscribe</div>
+        <div class="actions"><button class="primary">Reload cockpit</button><button>Check again</button></div>
+      </section>
+      <section class="card">
+        <div class="row"><div><div class="name">Review Assistant</div><div class="meta">acme.review · v0.4.1</div></div><div class="status pending"><span class="dot"></span>Permission required</div></div>
+        <div class="permissions">Requests: commands.execute, events.subscribe</div>
+        <div class="actions"><button class="primary">Approve permissions</button><button>Check again</button></div>
+      </section>
+      <section class="card">
+        <div class="row"><div><div class="name">Broken package</div><div class="meta">broken-package</div></div><div class="status rejected"><span class="dot"></span>Rejected</div></div>
+        <div class="permissions">Manifest entrypoint is outside the package root.</div>
+        <div class="actions"><button>Check again</button></div>
+      </section>
+      <div class="footer">3 packages found · Last checked just now</div>
+    </main>
+  </div>
+</body>
+</html>

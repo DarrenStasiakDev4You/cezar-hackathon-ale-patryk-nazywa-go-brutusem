@@ -13,8 +13,8 @@
     "src"
   ],
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node ../../scripts/test-in-docker.mjs extension-api",
+    "test:watch": "node ../../scripts/test-in-docker.mjs extension-api-watch",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json"
   },
   "peerDependencies": {
