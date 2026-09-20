@@ -20,3 +20,8 @@
 - The full Vitest gate reported 8 failures and 3 unhandled teardown errors in unrelated or environment-sensitive suites.
 - The mandatory browser integration suite started successfully but exceeded its 600-second budget with broad fixture/navigation failures; no preference-specific browser path exists because this PR adds no picker.
 - PR remains `in-progress`; maintainer waiver or upstream/environment fixes are required before completion.
+
+## 2026-09-20T02:30:20Z — authoritative review blocker
+- Review at head `b5a2705d` found no additional implementation finding and no `BACKWARD_COMPATIBILITY.md` violation.
+- PR #58 is now merged into `origin/main` with the same component-preference implementation, and PR #56 conflicts with that newer base in the contract and provider wiring.
+- Added blocked Step 3.1 for maintainer disposition; no autofix commit was made because resolving a duplicate implementation would create unnecessary history.

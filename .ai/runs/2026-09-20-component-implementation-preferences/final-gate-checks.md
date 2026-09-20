@@ -28,3 +28,12 @@ No separate style-compliance command is configured. The repository's design-guar
 ## Gate disposition
 
 The changed implementation is green in focused coverage, but the configured full gate and mandatory integration suite are not green. Do not mark the PR `complete` or promote it based on this run. A maintainer waiver or upstream/environment fix is required, followed by a fresh full gate and review.
+
+## Review disposition
+
+The authoritative review at `b5a2705d` requested changes because PR #58 is merged into the current
+`origin/main` with the same component-preference implementation, and this branch conflicts with that
+new base in the workspace contract, app bootstrap, preference service, and stored provider. No
+autofix commit was made; resolving a duplicate implementation requires maintainer direction rather
+than an automatic merge or history rewrite. `BACKWARD_COMPATIBILITY.md` found no protected-surface
+violation in the existing implementation.
