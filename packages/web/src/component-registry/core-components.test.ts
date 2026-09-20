@@ -75,7 +75,7 @@ describe('core defaults: the gate', () => {
 })
 
 describe('core’s task header main part', () => {
-  it('is registered once, for TaskHeaderMain, and fits it with all three capabilities', () => {
+  it('is registered once, for TaskHeaderMain, and fits it with its two capabilities', () => {
     const [only, ...others] = registered()
 
     expect(others).toEqual([])
@@ -83,7 +83,7 @@ describe('core’s task header main part', () => {
     expect(checkComponentCompatibility(TaskHeaderMain, only!.implementation)).toEqual({
       compatible: true,
       issues: [],
-      capabilities: ['shows-title', 'shows-status', 'shows-meta'],
+      capabilities: ['shows-title', 'shows-status'],
     })
   })
 

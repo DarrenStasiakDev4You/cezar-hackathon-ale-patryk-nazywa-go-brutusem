@@ -190,7 +190,8 @@ export interface TaskHeaderMainProps {
  * around it, so an implementation neither provides nor can remove them.
  * - `shows-title` (required): shows `task.title`.
  * - `shows-status` (required): shows the status, from `attention`.
- * - `shows-meta` (optional): shows `meta` and `engine`. The picker says which implementations do.
+ * - Core renders task metadata in its own `cezar.task.metadata` slot, so a header shows at most a
+ *   summary of `meta` and `engine`.
  * - `offers-continue`, `offers-stop`, `offers-archive` (optional): renders that action from
  *   `actions` and calls its intent (`onContinue`, `onStop`, `onArchive`). Core then leaves that
  *   action out of its action bar, and while any of the three is offered it keeps its Run actions
@@ -206,7 +207,7 @@ export interface TaskHeaderMainProps {
 export const TaskHeaderMain = defineComponentContract<TaskHeaderMainProps>('cezar.task.header.main', {
   version: 1,
   requiredCapabilities: ['shows-title', 'shows-status'],
-  optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
+  optionalCapabilities: ['offers-continue', 'offers-stop', 'offers-archive'],
   layout: { minBlockSize: 30 },
 })
 

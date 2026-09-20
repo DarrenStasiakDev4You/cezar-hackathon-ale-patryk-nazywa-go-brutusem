@@ -16,13 +16,12 @@ import { coreDefaultComponentId } from './resolve'
  * other import of one.
  */
 
-/** Core's task header main part: today's title row and meta row, rendered from the contract's props
- *  alone (spec `2026-09-19-task-header-contract`). It shows everything the contract offers. */
+/** Core's task header main part: today's title row, rendered from the contract's props alone. */
 const coreTaskHeaderMain: ComponentImplementation<TaskHeaderMainProps> = Object.freeze({
   id: coreDefaultComponentId(TaskHeaderMain.id),
   title: 'Task header',
-  description: 'Cezar’s own title, status and meta row',
-  capabilities: Object.freeze(['shows-title', 'shows-status', 'shows-meta']),
+  description: 'Cezar’s own title and status row',
+  capabilities: Object.freeze(['shows-title', 'shows-status']),
   component: CoreTaskHeaderMain,
 })
 

@@ -52,7 +52,7 @@ describe('core component contracts', () => {
       id: 'cezar.task.header.main',
       version: 1,
       requiredCapabilities: ['shows-title', 'shows-status'],
-      optionalCapabilities: ['shows-meta', 'offers-continue', 'offers-stop', 'offers-archive'],
+      optionalCapabilities: ['offers-continue', 'offers-stop', 'offers-archive'],
       layout: { minBlockSize: 30 },
     })
     expect(Object.isFrozen(TaskHeaderMain)).toBe(true)
@@ -104,7 +104,7 @@ describe('core component contracts', () => {
     ).toEqual(['shows-title', 'shows-status'])
   })
 
-  it('needs shows-title and shows-status, and takes shows-meta as optional', () => {
+  it('needs shows-title and shows-status, and ignores the retired shows-meta capability', () => {
     const Header = () => null
     const implementation = (capabilities: readonly string[]): ComponentImplementation<TaskHeaderMainProps> => ({
       id: 'acme.jira.task-header',
@@ -118,9 +118,10 @@ describe('core component contracts', () => {
       issues: [],
       capabilities: ['shows-title', 'shows-status'],
     })
-    expect(
-      checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities,
-    ).toEqual(['shows-title', 'shows-status', 'shows-meta'])
+    expect(checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title', 'shows-status', 'shows-meta'])).capabilities).toEqual([
+      'shows-title',
+      'shows-status',
+    ])
     expect(checkComponentCompatibility(TaskHeaderMain, implementation(['shows-title'])).issues).toEqual([
       expect.objectContaining({ code: 'missing-capability', capability: 'shows-status' }),
     ])
