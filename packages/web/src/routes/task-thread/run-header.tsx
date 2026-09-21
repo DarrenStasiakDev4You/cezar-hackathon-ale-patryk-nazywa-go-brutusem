@@ -63,6 +63,8 @@ import { cliTargetResumes, cliTargetRunner, finishTitle, resumeHint, runActionFl
 import { WorkflowSteps } from './step-rail'
 import { useTaskHeaderModel } from './task-header-main'
 import { useTaskMetadataController } from './task-metadata'
+import { createTaskHeaderBinding, TaskLayoutRenderer, taskLayoutSubject } from './task-layout'
+import type { TaskLayoutSnapshot } from '@/page-layout'
 import { useFinishRun } from './use-finish-run'
 
 /**
@@ -106,6 +108,8 @@ interface RunHeaderProps {
    *  dock's first engine pill (spec 2026-09-19-task-header-contract, Q7). Kept out of the three Git
    *  tabs: they share this header but have no dock. A stable identity, like `onMarkedUnread`. */
   onChooseEngine?: () => void
+  /** The schema-backed layout snapshot supplied by the Task Page route. */
+  layout?: TaskLayoutSnapshot
 }
 
 // Every prop must participate: adding one without a comparator is a compile error.
@@ -114,6 +118,7 @@ const headerPropComparators = {
   tab: (before, after) => before.tab === after.tab,
   onMarkedUnread: (before, after) => before.onMarkedUnread === after.onMarkedUnread,
   onChooseEngine: (before, after) => before.onChooseEngine === after.onChooseEngine,
+  layout: (before, after) => before.layout === after.layout,
   planTally: (before, after) => before.planTally?.done === after.planTally?.done &&
     before.planTally?.total === after.planTally?.total,
 } satisfies Record<keyof RunHeaderProps, (before: RunHeaderProps, after: RunHeaderProps) => boolean>
@@ -131,6 +136,7 @@ function RunHeaderView({
   tab = 'session',
   onMarkedUnread,
   onChooseEngine,
+  layout,
 }: RunHeaderProps) {
   const flags = runActionFlags(run)
   const hint = resumeHint(run)
@@ -154,7 +160,10 @@ function RunHeaderView({
   const editor = model.titleEditor
   // Which of Continue, Stop and Archive the implementation the host renders now takes over (spec
   // Q3). The host makes the same choice from the same failure record, so the two cannot disagree.
-  const offered = offeredActions(useHostedComponent(TaskHeaderMain, run.id)?.capabilities)
+  const offered = offeredActions(useHostedComponent(
+    TaskHeaderMain,
+    layout === undefined ? run.id : taskLayoutSubject(layout, 'header', TaskHeaderMain.id),
+  )?.capabilities)
 
   return (
     <header
@@ -177,7 +186,16 @@ function RunHeaderView({
               </div>
             ) : null}
             <div data-slot="task-header-main" inert={editor.editing} className={editor.editing ? 'invisible' : undefined}>
-              <ComponentHost contract={TaskHeaderMain} subject={run.id} props={props} />
+              {layout === undefined ? (
+                <ComponentHost contract={TaskHeaderMain} subject={run.id} props={props} />
+              ) : (
+                <TaskLayoutRenderer
+                  snapshot={layout}
+                  context={{ header: props }}
+                  bindings={[createTaskHeaderBinding()]}
+                  zones={['header']}
+                />
+              )}
             </div>
             <div
               id={detailsId}
