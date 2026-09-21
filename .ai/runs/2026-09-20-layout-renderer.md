@@ -74,3 +74,4 @@ must never replace the last valid snapshot.
 ## Resume log
 
 - 2026-09-22 — `om-auto-continue-pr`: merged `origin/main` (#71 layout constraints, #74 marketplace catalog) — 8eebe335. `admitPagePlacement` now delegates the zone rule to `zoneAdmissionIssue` in `constraints.ts`, so `validateContent` and `LayoutRenderer` both honour a contract's `allowedZones`; TaskPage keeps main's zone allowlists (`TaskMetadata` in `task.main`, not `task.header`).
+- 2026-09-22 — `om-auto-review-pr` post-review fix: `validateTaskLayout` routes placements through `admitPagePlacement`, so replacement validation and rendering apply the same zone rule — 0093d3cf.
