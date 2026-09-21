@@ -70,3 +70,7 @@ must never replace the last valid snapshot.
 ### Phase 4: Handoff documentation
 
 - [x] 4.1 Update repository layout-renderer ownership guidance — b93fc889
+
+## Resume log
+
+- 2026-09-22 — `om-auto-continue-pr`: merged `origin/main` (#71 layout constraints, #74 marketplace catalog) — 8eebe335. `admitPagePlacement` now delegates the zone rule to `zoneAdmissionIssue` in `constraints.ts`, so `validateContent` and `LayoutRenderer` both honour a contract's `allowedZones`; TaskPage keeps main's zone allowlists (`TaskMetadata` in `task.main`, not `task.header`).
