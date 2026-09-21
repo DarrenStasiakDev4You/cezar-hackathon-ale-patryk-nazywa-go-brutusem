@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { TaskComposer, TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, TaskHeaderMain, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 import {
   createTaskLayoutSnapshot,
@@ -55,5 +55,16 @@ describe('Task Page layout lifecycle', () => {
 
     expect(result.applied).toBe(false)
     expect(result.snapshot.diagnostics[0]?.code).toBe('unsupported-version')
+  })
+
+  it('admits placements through the shared page admission, including contract zone policy', () => {
+    const header = [{ id: 'header', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version }]
+    const composer = { id: 'composer', contract: TaskComposer.id, contractVersion: TaskComposer.version }
+    const metadata = { id: 'metadata', contract: TaskMetadata.id, contractVersion: TaskMetadata.version }
+
+    expect(validateTaskLayout({ page: 'task', schemaVersion: 1, zones: { header, main: [composer, metadata], sidebar: [] } })).toEqual([])
+    expect(validateTaskLayout({ page: 'task', schemaVersion: 1, zones: { header: [metadata], main: [composer], sidebar: [] } })).toEqual([
+      { code: 'contract-not-served', schemaZone: 'header', pageZone: 'task.header', placementId: 'metadata', contractId: TaskMetadata.id, contractVersion: TaskMetadata.version },
+    ])
   })
 })

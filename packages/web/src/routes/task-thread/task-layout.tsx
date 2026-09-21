@@ -12,7 +12,7 @@ import {
 import type { ReactElement } from 'react'
 
 import { ComponentHost } from '@/component-registry/component-host'
-import { LayoutRenderer, PageLayoutProvider, type PageLayoutRegistry, createPageLayoutRegistry, TaskPage } from '@/page-layout'
+import { admitPagePlacement, LayoutRenderer, PageLayoutProvider, type PageLayoutRegistry, createPageLayoutRegistry, TaskPage } from '@/page-layout'
 import type { BindingRenderInput, LayoutRenderIssue, TaskLayoutSnapshot, ValidatedLayoutBinding } from '@/page-layout/layout-types'
 
 import { defaultTaskPageLayout } from './task-layout-schema'
@@ -102,8 +102,18 @@ export function validateTaskLayout(schema: LayoutSchema): readonly LayoutRenderI
         continue
       }
       seen.add(placement.id)
-      if (zone.accepts !== undefined && !zone.accepts.some((contract) => contract.id === placement.contract && contract.version === placement.contractVersion)) {
-        issues.push({ code: 'contract-not-served', schemaZone, pageZone: pageZoneId, placementId: placement.id, contractId: placement.contract, contractVersion: placement.contractVersion })
+      // One placement at a time: duplicates and cardinality are reported above and below, schema-wide.
+      const admission = admitPagePlacement(zone, {
+        key: placement.id,
+        placement: zone.placement,
+        contractId: placement.contract,
+        contractVersion: placement.contractVersion,
+      }, { seenKeys: new Set<string>(), acceptedCount: 0 })
+      if (!admission.accepted) {
+        const code = admission.issue.code === 'contract-not-accepted' ? 'contract-not-served'
+          : admission.issue.code === 'zone-not-allowed' ? 'placement-not-accepted'
+            : 'invalid-placement'
+        issues.push({ code, schemaZone, pageZone: pageZoneId, placementId: placement.id, contractId: placement.contract, contractVersion: placement.contractVersion })
       }
     }
     if (zone.cardinality === 'single' && placements.length > 1) {
