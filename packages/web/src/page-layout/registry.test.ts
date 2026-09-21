@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { defineComponentContract } from '@open-mercato/cezar-extension-api'
+import { defineComponentContract, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 import { CORE_COMPONENT_CONTRACTS } from '@/component-registry/core-contracts'
 import { createCoreComponentRegistry } from '@/component-registry/core-components'
@@ -8,10 +8,14 @@ import { missingCoreDefaults } from '@/component-registry/resolve'
 
 import { definePage, PageLayoutDefinitionError } from './definitions'
 import { TaskPage } from './core-pages'
-import { createPageLayoutRegistry } from './registry'
+import { admitPagePlacement, createPageLayoutRegistry, type PagePlacementCandidate } from './registry'
 
 const Card = defineComponentContract<{ readonly label: string }>('cezar.fixture.card', { version: 1 })
 const OtherCard = defineComponentContract<{ readonly label: string }>('cezar.fixture.other-card', { version: 1 })
+const Restricted = defineComponentContract<{ readonly label: string }>('cezar.fixture.restricted', {
+  version: 1,
+  allowedZones: ['fixture.elsewhere'],
+})
 
 const page = () =>
   definePage({
@@ -34,12 +38,18 @@ describe('page layout definitions', () => {
     expect(TaskPage.zones[0]?.accepts?.[0]).toMatchObject({ id: 'cezar.task.header.main', version: 1 })
     expect(TaskPage.zones[1]?.accepts?.[0]).toMatchObject({ id: 'cezar.task.composer', version: 1 })
     expect(TaskPage.zones[2]?.required).toBe(false)
+    expect(TaskMetadata).toMatchObject({
+      movable: true,
+      removable: true,
+      allowedZones: ['task.main', 'task.sidebar'],
+      category: 'task.metadata',
+    })
   })
 
   it('keeps every narrow Task Page contract backed by a core default', () => {
     const narrowContracts = TaskPage.zones.flatMap((zone) => zone.accepts ?? [])
 
-    expect(narrowContracts.map((contract) => contract.id)).toEqual(CORE_COMPONENT_CONTRACTS.map((contract) => contract.id))
+    expect(narrowContracts.map((contract) => contract.id).sort()).toEqual(CORE_COMPONENT_CONTRACTS.map((contract) => contract.id).sort())
     expect(missingCoreDefaults(createCoreComponentRegistry(), narrowContracts)).toEqual([])
   })
 
@@ -177,5 +187,51 @@ describe('PageLayoutRegistry', () => {
     expect(registry.validateContent({ pageId: 'fixture.page', zones: {} })).toEqual([
       { code: 'required-zone-empty', zoneId: 'fixture.required' },
     ])
+  })
+
+  it('honours a contract’s allowed zones through the shared admission seam', () => {
+    const registry = createPageLayoutRegistry()
+    registry.registerPage(
+      definePage({
+        id: 'fixture.policy-page',
+        version: 1,
+        zones: [{ id: 'fixture.policy', placement: 'fixture.content', accepts: [Restricted], cardinality: 'many', required: true }],
+      }),
+    )
+
+    expect(
+      registry.validateContent({
+        pageId: 'fixture.policy-page',
+        zones: { 'fixture.policy': [{ key: 'restricted', placement: 'fixture.content', contract: Restricted, props: { label: 'x' } }] },
+      }),
+    ).toEqual([
+      { code: 'zone-not-allowed', zoneId: 'fixture.policy', contractId: Restricted.id, version: 1 },
+      { code: 'required-zone-empty', zoneId: 'fixture.policy' },
+    ])
+  })
+})
+
+describe('admitPagePlacement', () => {
+  const zone = definePage({
+    id: 'fixture.admission-page',
+    version: 1,
+    zones: [{ id: 'fixture.policy', placement: 'fixture.content', accepts: [Card, Restricted], cardinality: 'many', required: false }],
+  }).zones[0]!
+  const admit = (candidate: PagePlacementCandidate) =>
+    admitPagePlacement(zone, candidate, { seenKeys: new Set<string>(), acceptedCount: 0 })
+
+  it('applies the zone’s own accepted token when the caller holds only an id and version', () => {
+    expect(admit({ key: 'card', placement: 'fixture.content', contractId: Card.id, contractVersion: 1 })).toEqual({ accepted: true })
+    expect(admit({ key: 'restricted', placement: 'fixture.content', contractId: Restricted.id, contractVersion: 1 })).toEqual({
+      accepted: false,
+      issue: { code: 'zone-not-allowed', contractId: Restricted.id, version: 1 },
+    })
+  })
+
+  it('rejects a contract token that does not match the candidate’s id and version', () => {
+    expect(admit({ key: 'mismatch', placement: 'fixture.content', contractId: Card.id, contractVersion: 1, contract: Restricted })).toEqual({
+      accepted: false,
+      issue: { code: 'invalid-content' },
+    })
   })
 })

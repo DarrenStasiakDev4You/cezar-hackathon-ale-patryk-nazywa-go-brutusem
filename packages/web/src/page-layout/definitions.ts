@@ -53,6 +53,12 @@ export type PageContentIssue =
       readonly contractId: string
       readonly version: number
     }
+  | {
+      readonly code: 'zone-not-allowed'
+      readonly zoneId: ZoneId
+      readonly contractId: string
+      readonly version: number
+    }
   | { readonly code: 'cardinality-exceeded'; readonly zoneId: ZoneId }
   | { readonly code: 'required-zone-empty'; readonly zoneId: ZoneId }
   | { readonly code: 'invalid-content'; readonly zoneId: ZoneId }

@@ -5,12 +5,16 @@ import { defineComponentContract } from '@open-mercato/cezar-extension-api'
 
 import { createPageLayoutRegistry, definePage, PageLayoutProvider } from './index'
 import { LayoutRenderer } from './layout-renderer'
-import type { TaskLayoutSnapshot, ValidatedLayoutBinding } from './layout-types'
+import type { LayoutRendererProps, LayoutRenderIssue, TaskLayoutSnapshot, ValidatedLayoutBinding } from './layout-types'
 
 afterEach(cleanup)
 
 const Header = defineComponentContract<{ readonly label: string }>('cezar.fixture.layout-header', { version: 1 })
 const Card = defineComponentContract<{ readonly label: string }>('cezar.fixture.layout-card', { version: 1 })
+const CardsOnly = defineComponentContract<{ readonly label: string }>('cezar.fixture.layout-cards-only', {
+  version: 1,
+  allowedZones: ['fixture.cards'],
+})
 
 const snapshot = (zones: Record<string, readonly { id: string; contract: string; contractVersion: number }[]>): TaskLayoutSnapshot => ({
   identity: 'run-1',
@@ -19,19 +23,23 @@ const snapshot = (zones: Record<string, readonly { id: string; contract: string;
   schema: { page: 'fixture.page', schemaVersion: 1, zones },
 })
 
-function renderLayout(layout: TaskLayoutSnapshot, bindings: readonly ValidatedLayoutBinding<null>[]) {
+function renderLayout(
+  layout: TaskLayoutSnapshot,
+  bindings: readonly ValidatedLayoutBinding<null>[],
+  fallback?: LayoutRendererProps<null>['fallback'],
+) {
   const registry = createPageLayoutRegistry()
   registry.registerPage(definePage({
     id: 'fixture.page',
     version: 1,
     zones: [
-      { id: 'fixture.header', placement: 'fixture.header', accepts: [Header], cardinality: 'single', required: true },
+      { id: 'fixture.header', placement: 'fixture.header', accepts: [Header, CardsOnly], cardinality: 'single', required: true },
       { id: 'fixture.cards', placement: 'fixture.cards', accepts: [Card], cardinality: 'many', required: false },
     ],
   }))
   return render(
     <PageLayoutProvider registry={registry}>
-      <LayoutRenderer snapshot={layout} context={null} bindings={bindings} />
+      <LayoutRenderer snapshot={layout} context={null} bindings={bindings} fallback={fallback} />
     </PageLayoutProvider>,
   )
 }
@@ -73,5 +81,19 @@ describe('LayoutRenderer', () => {
 
     expect(screen.getByRole('alert')).toBeTruthy()
     expect(document.querySelector('[data-placement-id]')).toBeNull()
+  })
+
+  it('does not render a placement whose contract forbids the zone', () => {
+    const issues: LayoutRenderIssue[] = []
+    const bindings: readonly ValidatedLayoutBinding<null>[] = [
+      { kind: 'cards-only', schemaZone: 'fixture.header', pageZone: 'fixture.header', placement: 'fixture.header', contractId: CardsOnly.id, contractVersion: 1, render: ({ placement }) => <span>{placement.id}</span> },
+    ]
+    renderLayout(snapshot({ 'fixture.header': [{ id: 'restricted', contract: CardsOnly.id, contractVersion: 1 }], 'fixture.cards': [] }), bindings, (issue) => {
+      issues.push(issue)
+      return null
+    })
+
+    expect(document.querySelector('[data-placement-id]')).toBeNull()
+    expect(issues).toContainEqual(expect.objectContaining({ code: 'placement-not-accepted', placementId: 'restricted', contractId: CardsOnly.id }))
   })
 })

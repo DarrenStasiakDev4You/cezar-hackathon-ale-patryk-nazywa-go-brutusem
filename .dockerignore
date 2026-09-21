@@ -1,0 +1,12 @@
+.git
+.ai/qa
+.ai/tmp
+.ai/cezar
+.agents
+.claude
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+*.log

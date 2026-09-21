@@ -152,7 +152,7 @@ function issueFromAdmission(
   if (issue.code === 'duplicate-content') return { ...base, code: 'duplicate-placement' }
   if (issue.code === 'cardinality-exceeded') return { ...base, code: 'cardinality-exceeded' }
   if (issue.code === 'contract-not-accepted') return { ...base, code: 'contract-not-served' }
-  if (issue.code === 'placement-not-accepted') return { ...base, code: 'placement-not-accepted' }
+  if (issue.code === 'placement-not-accepted' || issue.code === 'zone-not-allowed') return { ...base, code: 'placement-not-accepted' }
   return { ...base, code: 'invalid-placement' }
 }
 

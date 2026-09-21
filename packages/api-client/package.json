@@ -16,8 +16,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "node ../../scripts/test-in-docker.mjs api-client",
+    "test:watch": "node ../../scripts/test-in-docker.mjs api-client-watch",
     "typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 
-import type { ContributionId } from './ids.ts'
+import { isValidContributionId, type ContributionId } from './ids.ts'
 import type { Disposable } from './lifecycle.ts'
 import type { ManifestIssue } from './manifest.ts'
 import { ExtensionDefinitionError } from './errors.ts'
@@ -52,6 +52,16 @@ export interface ComponentContractOptions {
   readonly optionalCapabilities?: readonly ComponentCapability[]
   /** The box the host gives every implementation. Omitted: the host decides alone. */
   readonly layout?: ComponentLayout
+  /** Whether edit mode may change this component's zone or sibling position. Default: false. */
+  readonly movable?: boolean
+  /** Whether edit mode may remove this component's placement. Default: false. */
+  readonly removable?: boolean
+  /** Whether a layout placement may choose another compatible contract. Default: true. */
+  readonly replaceable?: boolean
+  /** Exact page-zone ids in which this component may be placed or moved. */
+  readonly allowedZones?: readonly ContributionId[]
+  /** Stable semantic component category used by catalogues and diagnostics. */
+  readonly category?: ContributionId
 }
 
 /**
@@ -76,6 +86,16 @@ export interface ComponentContract<Props> {
   readonly optionalCapabilities?: readonly ComponentCapability[]
   /** The box the host gives every implementation; absent when the contract declares none. */
   readonly layout?: ComponentLayout
+  /** Whether edit mode may move this placement. Missing means false. */
+  readonly movable?: boolean
+  /** Whether edit mode may remove this placement. Missing means false. */
+  readonly removable?: boolean
+  /** Whether this placement may be replaced by another layout contract. Missing means true. */
+  readonly replaceable?: boolean
+  /** Exact page-zone ids in which this component may be placed or moved. */
+  readonly allowedZones?: readonly ContributionId[]
+  /** Stable semantic component category used by catalogues and diagnostics. */
+  readonly category?: ContributionId
   /** Type-only phantom, as on `CommandToken`. */
   readonly __props?: (props: Props) => Props
 }
@@ -89,6 +109,8 @@ const SIZING: readonly unknown[] = ['content', 'fill']
 const STICKY: readonly unknown[] = ['top', 'bottom']
 const MAX_MIN_BLOCK_SIZE = 2048
 const LAYOUT_KEYS: readonly string[] = ['sizing', 'sticky', 'minBlockSize']
+const MAX_ALLOWED_ZONES = 32
+const CONTRIBUTION_ID_RULE = 'must be a valid contribution id'
 
 /**
  * Declares a component contract:
@@ -99,7 +121,7 @@ const LAYOUT_KEYS: readonly string[] = ['sizing', 'sticky', 'minBlockSize']
  * unique well-formed {@link ComponentCapability} names, an optional capability is also required,
  * the two lists hold more than 32 names together, or `layout` has an unknown key or a value outside
  * its type. Returns a deeply frozen `{ kind, id, version, requiredCapabilities, optionalCapabilities,
- * layout? }`; both lists are `[]` when not given.
+ * layout?, movable?, removable?, replaceable?, allowedZones?, category? }`; both lists are `[]` when not given.
  */
 export function defineComponentContract<Props>(
   id: ContributionId,
@@ -131,6 +153,12 @@ export function defineComponentContract<Props>(
     )
   }
   const layout = given.layout === undefined ? undefined : layoutOf(given.layout, issue)
+  const movable = booleanOption(given.movable, 'movable', false, issue)
+  const removable = booleanOption(given.removable, 'removable', false, issue)
+  const replaceable = booleanOption(given.replaceable, 'replaceable', true, issue)
+  const allowedZones = contributionIdList(given.allowedZones, 'allowedZones', issue)
+  const category = contributionIdOption(given.category, 'category', issue)
+  if (movable && allowedZones.length === 0) issue('allowedZones', 'must contain at least one zone when movable is true')
 
   return createToken<ComponentContract<Props>>(
     {
@@ -139,10 +167,74 @@ export function defineComponentContract<Props>(
       version: version as number,
       requiredCapabilities: Object.freeze([...required.keys()]),
       optionalCapabilities: Object.freeze([...optional.keys()]),
+      movable,
+      removable,
+      replaceable,
       ...(layout === undefined ? {} : { layout: Object.freeze(layout) }),
+      ...(given.movable === undefined ? {} : { movable }),
+      ...(given.removable === undefined ? {} : { removable }),
+      ...(given.replaceable === undefined ? {} : { replaceable }),
+      ...(given.allowedZones === undefined ? {} : { allowedZones: Object.freeze(allowedZones) }),
+      ...(given.category === undefined ? {} : { category }),
     },
     issues,
   )
+}
+
+function booleanOption(
+  value: unknown,
+  path: string,
+  defaultValue: boolean,
+  issue: (path: string, message: string) => void,
+): boolean {
+  if (value === undefined) return defaultValue
+  if (typeof value !== 'boolean') issue(path, 'must be a boolean')
+  return typeof value === 'boolean' ? value : defaultValue
+}
+
+function contributionIdList(
+  value: unknown,
+  path: string,
+  issue: (path: string, message: string) => void,
+): ContributionId[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) {
+    issue(path, 'must be an array of contribution ids')
+    return []
+  }
+  if (value.length > MAX_ALLOWED_ZONES) {
+    issue(path, `must hold at most ${MAX_ALLOWED_ZONES} zone ids`)
+    return []
+  }
+  const ids: ContributionId[] = []
+  const seen = new Map<string, number>()
+  value.forEach((entry, index) => {
+    if (typeof entry !== 'string' || !isValidContributionId(entry)) {
+      issue(`${path}[${index}]`, CONTRIBUTION_ID_RULE)
+      return
+    }
+    const first = seen.get(entry)
+    if (first !== undefined) {
+      issue(`${path}[${index}]`, `must be unique — it repeats ${path}[${first}]`)
+      return
+    }
+    seen.set(entry, index)
+    ids.push(entry)
+  })
+  return ids
+}
+
+function contributionIdOption(
+  value: unknown,
+  path: string,
+  issue: (path: string, message: string) => void,
+): ContributionId | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || !isValidContributionId(value)) {
+    issue(path, CONTRIBUTION_ID_RULE)
+    return undefined
+  }
+  return value
 }
 
 /**

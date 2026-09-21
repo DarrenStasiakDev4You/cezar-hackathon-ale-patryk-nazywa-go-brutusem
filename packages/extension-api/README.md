@@ -486,6 +486,11 @@ A contract made with `defineComponentContract<Props>(id, options)` has three par
   `sizing: 'content' | 'fill'` (`fill` means stretch into the remaining space), `sticky: 'top' |
   'bottom'`, and `minBlockSize`, the pixels (0–2048) the host reserves so the page does not shift.
   The host keeps the breakpoints. Unknown keys are rejected.
+- **Layout policy**, optional and owned by the reusable contract: `movable` and `removable` both
+  default to `false`, while `replaceable` defaults to `true`; `allowedZones` is an exact, bounded
+  list of page-zone ids and is required when `movable` is `true`; `category` is catalogue metadata.
+  These fields govern page-placement replacement and edit-mode mutations, not the Settings choice
+  of an implementation for this contract. Requiredness remains a page/layout rule.
 
 `defineComponentContract` validates all of it at module load and throws `invalid-id` with every
 issue. Capabilities are **declared, not verified**: the check below compares declarations, and a

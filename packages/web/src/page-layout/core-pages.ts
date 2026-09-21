@@ -14,7 +14,7 @@ export const TaskPage: PageDefinition = definePage({
     {
       id: 'task.header',
       placement: 'task.header.main',
-      accepts: [TaskHeaderMain, TaskMetadata],
+      accepts: [TaskHeaderMain],
       cardinality: 'single',
       required: true,
       layout: { minBlockSize: 30 },
@@ -22,7 +22,7 @@ export const TaskPage: PageDefinition = definePage({
     {
       id: 'task.main',
       placement: 'task.main.content',
-      accepts: [TaskComposer],
+       accepts: [TaskComposer, TaskMetadata],
       cardinality: 'many',
       required: true,
       layout: { sizing: 'fill' },

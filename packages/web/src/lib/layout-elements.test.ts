@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
+import { defineComponentContract } from '@open-mercato/cezar-extension-api'
+
 import { LayoutRegistry, type LayoutElementDescriptor } from './layout-elements'
+
+const Movable = defineComponentContract('cezar.fixture.layout-movable', {
+  version: 1,
+  movable: true,
+  removable: true,
+  allowedZones: ['task.main', 'task.sidebar'],
+})
+const Fixed = defineComponentContract('cezar.fixture.layout-fixed', { version: 1 })
 
 describe('LayoutRegistry', () => {
   it('indexes roots, children, nested groups, and deterministic subtrees', () => {
@@ -232,5 +242,54 @@ describe('LayoutRegistry', () => {
     expect(registry.get('root')).toBeUndefined()
     expect(registry.get('new-child')).toBeUndefined()
     expect(registry.get('sibling')).toBeDefined()
+  })
+
+  it('rejects constrained moves atomically and allows a valid cross-zone move', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'main', kind: 'group', zoneId: 'task.main' })
+    registry.register({ id: 'sidebar', kind: 'group', zoneId: 'task.sidebar' })
+    registry.register({ id: 'card', kind: 'widget', parentId: 'main', zoneId: 'task.main', contract: Movable })
+    let notifications = 0
+    registry.subscribe(() => notifications++)
+    const before = registry.getSnapshot()
+
+    expect(registry.tryMoveNode('card', 'sidebar', 0)).toMatchObject({ applied: true })
+    expect(registry.get('card')).toMatchObject({ parentId: 'sidebar', zoneId: 'task.main' })
+    expect(notifications).toBe(1)
+
+    const rejected = registry.tryMoveNode('card', 'main', 0, 'task.header')
+    expect(rejected).toEqual({
+      applied: false,
+      issues: [{ code: 'zone-not-allowed', key: 'card', zone: 'task.header' }],
+    })
+    expect(registry.getSnapshot()).toEqual(expect.arrayContaining(before.map((item) => expect.objectContaining({ id: item.id }))))
+    expect(registry.get('card')?.parentId).toBe('sidebar')
+    expect(notifications).toBe(1)
+  })
+
+  it('validates every constrained descendant and protects required removal atomically', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'root', kind: 'group' })
+    registry.register({ id: 'child', kind: 'widget', parentId: 'root', zoneId: 'task.main', contract: Fixed, requiredZone: true })
+    registry.register({ id: 'other', kind: 'group', zoneId: 'task.sidebar' })
+
+    expect(registry.tryMoveNode('root', 'other', 0)).toEqual({
+      applied: false,
+      issues: [{ code: 'not-movable', key: 'child', zone: 'task.main' }],
+    })
+    expect(registry.tryRemoveNode('child')).toEqual({
+      applied: false,
+      issues: [{ code: 'not-removable', key: 'child', zone: 'task.main' }, { code: 'required-component', key: 'child', zone: 'task.main' }],
+    })
+    expect(registry.get('child')).toBeDefined()
+  })
+
+  it('clones normalized policy metadata in snapshots', () => {
+    const registry = new LayoutRegistry()
+    registry.register({ id: 'card', kind: 'widget', zoneId: 'task.main', contract: Movable })
+    const snapshot = registry.getSnapshot()
+    expect(snapshot[0]?.policy).toEqual(expect.objectContaining({ movable: true, allowedZones: ['task.main', 'task.sidebar'] }))
+    expect(Object.isFrozen(snapshot[0]?.policy)).toBe(true)
+    expect(Object.isFrozen(snapshot[0]?.policy?.allowedZones)).toBe(true)
   })
 })

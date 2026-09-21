@@ -141,6 +141,7 @@ The built-in `quick-task` workflow runs with no setup.
 ## Documentation
 
 The [reference](docs/reference.md) covers everything else:
+ [local extensions](docs/extensions.md),
 [configuration](docs/reference.md#configuration-optional),
 [environment variables](docs/reference.md#how-it-runs-agents),
 [agent backends](docs/reference.md#coding-agent-backends),
@@ -158,6 +159,24 @@ git clone https://github.com/open-mercato/cezar.git && cd cezar
 npm install
 npm run dev
 ```
+
+### Tests
+
+All test commands run in the repository's Docker test image, so local and CI
+toolchains use the same Node, system libraries and browser dependencies. The
+first run builds the image and installs dependencies into Docker volumes; later
+runs reuse both caches.
+
+```bash
+npm test
+npm run test:unit
+npm run test:package
+npm run test:e2e
+```
+
+Docker Desktop (Windows/macOS) or Docker Engine (Linux/WSL2) must be running.
+The browser e2e command starts the app, browser provider and tests in one
+container. Stop a reused local app with `sh .ai/scripts/test-env-down.sh`.
 
 ## License
 

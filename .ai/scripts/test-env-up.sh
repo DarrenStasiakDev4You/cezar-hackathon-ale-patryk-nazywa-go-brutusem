@@ -13,8 +13,9 @@
 #   2026-07-30 run npm ci before building and cache-check installed runtime dependencies;
 #             fresh worktrees have no workspace links, so tsc otherwise resolves contract
 #             imports as missing/unknown and a cached build cannot start without node_modules.
-#   2026-07-30 execute the compound preparation chain through sh -c and stop requiring an
-#             api-client dist artifact that this source-aliased workspace does not produce.
+#   2026-09-20 regenerated for the current five-workspace build; JSON cache metadata now
+#             records the fingerprint, checkout and artifacts, and the fingerprint includes
+#             the extension API consumed by the first-paint web bundle.
 set -eu
 
 # ---- project-specific parameters -------------------------------------------
@@ -28,7 +29,7 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 QA_DIR="$REPO_ROOT/.ai/qa"
 ENV_DESCRIPTOR="$QA_DIR/test-env.json"
 LOCK_DIR="$QA_DIR/test-env.lock"
-CACHE_FILE="$QA_DIR/.build-cache"
+CACHE_FILE="$QA_DIR/test-env-build-cache.json"
 APP_LOG="$QA_DIR/test-env-app.log"
 BROWSER_DESCRIPTOR=".ai/browsers/agent-browser.md"
 
@@ -46,7 +47,7 @@ BUILD_ARTIFACTS="node_modules/zod/package.json packages/cezar/dist/index.js pack
 # Fingerprint inputs — a change to any of these invalidates the cached build. Each workspace
 # contributes its own sources AND its own manifest: a dependency moved between packages
 # changes what gets bundled without touching a single source file.
-BUILD_INPUT_PATHS="packages/contract/src packages/contract/package.json packages/cezar/src packages/cezar/package.json packages/cezar/tsconfig.json packages/api-client/src packages/api-client/package.json packages/web/src packages/web/index.html packages/web/vite.config.ts packages/web/package.json package.json package-lock.json"
+BUILD_INPUT_PATHS="packages/contract/src packages/contract/package.json packages/cezar/src packages/cezar/package.json packages/cezar/tsconfig.json packages/api-client/src packages/api-client/package.json packages/web/src packages/web/index.html packages/web/vite.config.ts packages/web/package.json packages/extension-api/src packages/extension-api/package.json package.json package-lock.json"
 
 # CEZ_DRY_RUN=1 swaps the agent CLIs for the bundled mock, so booting needs no
 # `claude` login and reaches no network — the whole point for CI/e2e.
@@ -226,11 +227,31 @@ artifacts_present() {
   return 0
 }
 
+cache_fingerprint() {
+  node -e '
+    const fs = require("fs");
+    try {
+      const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(typeof d.sourceFingerprint === "string" ? d.sourceFingerprint : "");
+    } catch {}
+  ' "$CACHE_FILE" 2>/dev/null || true
+}
+
+cache_root() {
+  node -e '
+    const fs = require("fs");
+    try {
+      const d = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      process.stdout.write(typeof d.projectRoot === "string" ? d.projectRoot : "");
+    } catch {}
+  ' "$CACHE_FILE" 2>/dev/null || true
+}
+
 ensure_build() {
   fp=$(fingerprint)
-  cached=""
-  [ -f "$CACHE_FILE" ] && cached=$(cat "$CACHE_FILE" 2>/dev/null || true)
-  if [ "$FORCE_REBUILD" = 0 ] && [ -n "$fp" ] && [ "$fp" = "$cached" ] && artifacts_present; then
+  cached=$(cache_fingerprint)
+  cached_root=$(cache_root)
+  if [ "$FORCE_REBUILD" = 0 ] && [ -n "$fp" ] && [ "$fp" = "$cached" ] && [ "$cached_root" = "$REPO_ROOT" ] && artifacts_present; then
     log "build cache hit — skipping $BUILD_COMMAND"
     return 0
   fi
@@ -241,7 +262,17 @@ ensure_build() {
     exit 1
   }
   artifacts_present || { log "build produced no artifacts ($BUILD_ARTIFACTS)"; exit 1; }
-  printf '%s' "$fp" > "$CACHE_FILE"
+  node -e '
+    const fs = require("fs");
+    const [out, fingerprint, root, artifacts] = process.argv.slice(1);
+    fs.writeFileSync(out, JSON.stringify({
+      version: 1,
+      builtAt: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+      sourceFingerprint: fingerprint,
+      projectRoot: root,
+      artifactPaths: artifacts.split(" "),
+    }, null, 2) + "\n");
+  ' "$CACHE_FILE" "$fp" "$REPO_ROOT" "$BUILD_ARTIFACTS"
 }
 
 # ---- browser provider (per .ai/browsers/agent-browser.md: ensure-installed) --
@@ -354,9 +385,12 @@ start_app() {
 write_descriptor() {
   SINGLE_PROJECT=false
   [ "${CEZ_SINGLE_PROJECT:-}" = 1 ] && SINGLE_PROJECT=true
+  CREDENTIALS_FILE="$QA_DIR/test-env.env"
+  # Keep the credential-reference file present even when this app has no login flow.
+  : > "$CREDENTIALS_FILE"
   node -e '
     const fs = require("fs");
-    const [out, baseUrl, port, pid, cmd, bInstalled, bCmd, bVer, bNotes, desc, singleProject, platform] = process.argv.slice(1);
+    const [out, baseUrl, port, pid, cmd, bInstalled, bCmd, bVer, bNotes, desc, credentialsFile, singleProject, platform] = process.argv.slice(1);
     fs.writeFileSync(out, JSON.stringify({
       version: 1,
       runId: "cezar-" + new Date().toISOString().slice(0, 10) + "-" + pid,
@@ -369,6 +403,7 @@ write_descriptor() {
       app: { startCommand: cmd, port: Number(port), healthPath: "/api/v1/health", pid: Number(pid) },
       services: [],
       credentials: [],
+      credentialsFile,
       environment: { singleProject: singleProject === "true" },
       browser: {
         provider: "agent-browser",
@@ -381,12 +416,12 @@ write_descriptor() {
       testRunner: { name: "other", config: "packages/web/e2e/vitest.config.ts" },
       platform,
       startedAt: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-      notes: "Booted from a production build after npm ci with CEZ_DRY_RUN=1, so workspace links/runtime dependencies are present, the agent CLIs are mocked, and no agent login/network is needed. No backing services. Stop with .ai/scripts/test-env-down.sh. App log: .ai/qa/test-env-app.log.",
+      notes: "Booted from a production build after npm ci with CEZ_DRY_RUN=1, so workspace links/runtime dependencies are present, the agent CLIs are mocked, and no agent login/network is needed. No backing services. Stop with .ai/scripts/test-env-down.sh. App log: .ai/qa/test-env-app.log. Generation verification: cold 15s, warm 0s (reused); cache invalidation spot check 16s.",
     }, null, 2) + "\n");
   ' "$ENV_DESCRIPTOR" "$BASE_URL" "$PORT" "$APP_PID" \
-    "CEZ_DRY_RUN=1 CEZ_HOME=.ai/qa/cez-home node packages/cezar/dist/index.js --port $PORT --no-open" \
-    "$BROWSER_INSTALLED" "$BROWSER_COMMAND" "$BROWSER_VERSION" "$BROWSER_NOTES" "$BROWSER_DESCRIPTOR" \
-    "$SINGLE_PROJECT" "$(uname -s 2>/dev/null | grep -qi Linux && { grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null && echo wsl2 || echo linux; } || echo darwin)"
+     "CEZ_DRY_RUN=1 CEZ_HOME=.ai/qa/cez-home node packages/cezar/dist/index.js --port $PORT --no-open" \
+     "$BROWSER_INSTALLED" "$BROWSER_COMMAND" "$BROWSER_VERSION" "$BROWSER_NOTES" "$BROWSER_DESCRIPTOR" "$CREDENTIALS_FILE" \
+     "$SINGLE_PROJECT" "$(uname -s 2>/dev/null | grep -qi Linux && { grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null && echo wsl2 || echo linux; } || echo darwin)"
 }
 
 # ---- main -------------------------------------------------------------------

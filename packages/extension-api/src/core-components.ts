@@ -221,6 +221,10 @@ export const TaskMetadata = defineComponentContract<TaskMetadataProps>('cezar.ta
   requiredCapabilities: ['shows-metadata'],
   optionalCapabilities: ['offers-links', 'offers-copy'],
   layout: { minBlockSize: 20 },
+  movable: true,
+  removable: true,
+  allowedZones: ['task.main', 'task.sidebar'],
+  category: 'task.metadata',
 })
 
 /** A file the user picked, pasted or dropped. A browser `File` fits structurally. */

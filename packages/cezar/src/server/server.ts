@@ -19,9 +19,9 @@ import {
 } from '../automations/types.ts';
 import { automationScheduleSchema, localTimeZone, nextOccurrence } from '@open-mercato/cezar-contract';
 import type { IncomingMessage } from 'node:http';
-import { access, constants as fsConstants, mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
+import { access, constants as fsConstants, lstat, mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, dirname, join, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context } from 'hono';
 import type { Next } from 'hono';
@@ -40,6 +40,11 @@ import {
   type RunIndexEntry,
   type RunsIndexResponse,
   type TaskTransitionEvent,
+  extensionDiagnosticsResponseSchema,
+  extensionEndpointsResponseSchema,
+  extensionInventoryResponseSchema,
+  setExtensionApprovalInputSchema,
+  type ExtensionInventoryResponse,
 } from '@open-mercato/cezar-contract';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
@@ -183,13 +188,16 @@ import { checkoutRepo, type CloneRunner } from './checkout.ts';
 import { ProjectContextError, ProjectContexts, type ProjectContext } from './project-context.ts';
 import { reviewGateEnabled } from '../runs/review-gate.ts';
 import { readUiState, uiStatePath } from '../ui-state.ts';
-import { agentHomePaths, expandTilde } from '../paths.ts';
+import { agentHomePaths, expandTilde, extensionGrantsPath, extensionsDir } from '../paths.ts';
+import { writeExtensionGrant } from '../extensions/grants.ts';
+import { MAX_EXTENSION_ASSET_BYTES, scanLocalExtensions } from '../extensions/local-loader.ts';
 import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.ts';
 import { createSocketHub, type SocketHub, type WsUpgradeVerdict } from './ws.ts';
 import { browseDirectory, isInsideBrowseRoot, isLexicallyInsideBrowseRoot, resolveBrowseRoot } from './fs-browse.ts';
 import { parseRemote, resolveForge, type ForgeAvailability } from './forge/index.ts';
 import { fetchGithub, fetchGithubChecks, fetchGithubComments, fetchGithubPrDiff, fetchGithubRefStatus, forgetRefStatus, readCachedRefStatuses, refNumberFromUrl, searchGithubItems, GithubPrNotFoundError, GH_CHECKS_MAX, GH_SEARCH_MAX, GH_REF_STATUS_MAX } from './github.ts';
 import { ensureLaunchKey } from './launch-key.ts';
+import { createMarketplaceRegistry, type MarketplaceRegistry } from '../marketplace.ts';
 import { openInTerminal } from './open-in-terminal.ts';
 import { agentCliRunner, detectOpenTargets, openFileInDefaultApp, openInApp } from './open-in-app.ts';
 import { createDraftPr } from './pr.ts';
@@ -269,6 +277,8 @@ export interface ServerDeps {
   providerRuntimeAuth?: ProviderRuntimeAuthObserver;
   /** Local terminal handoff for provider-owned login. */
   openTerminal?: typeof openInTerminal;
+  /** On-demand read-only extension catalog; injected so route tests never use the network. */
+  marketplace?: MarketplaceRegistry;
   /** Hand a local FILE (or folder) to the OS default app. Injected so the account-file open route
    *  is testable without actually launching an editor. */
   openFile?: typeof openFileInDefaultApp;
@@ -1160,6 +1170,7 @@ export function createApp(deps: ServerDeps) {
   const openFile = deps.openFile ?? openFileInDefaultApp;
   const openApp = deps.openApp ?? openInApp;
   const skillsUpdate = deps.skillsUpdate ?? new SkillsUpdateService();
+  const marketplace = deps.marketplace ?? createMarketplaceRegistry();
 
   // ---- workspace boot-project identity (multi-project spec) ----------------
   // The boot flow (`initWorkspace` in src/index.ts) registers the boot repo
@@ -1731,6 +1742,11 @@ export function createApp(deps: ServerDeps) {
       const query = { data: c.req.valid('query') };
       return c.json(await modelCatalog.get(query.data.runner));
     });
+
+  // Marketplace discovery is workspace-wide and strictly read-only. It is explicit user/API
+  // demand only; the service never fetches the catalog during boot and never downloads an artifact.
+  const marketplaceRoutes = new Hono()
+    .get('/extensions/marketplace', async (c) => c.json(await marketplace.read()));
 
   /**
    * Resolve `profileId` (absent = the discovered default) into a concrete account for `provider`.
@@ -5927,11 +5943,154 @@ export function createApp(deps: ServerDeps) {
       return c.json(body);
     });
 
+  // ---- chained family: local extensions (workspace-only) --------------------
+  // This family is intentionally local-only. The scanner reads metadata and structural asset
+  // facts; the browser is the only extension runtime. Hosted mode returns a successful, empty
+  // capability answer rather than disclosing the server operator's filesystem.
+  const extensionAvailability = (): 'hosted-mode' | 'local-handoff-unavailable' =>
+    process.env.CEZ_REMOTE === '1' ? 'hosted-mode' : 'local-handoff-unavailable';
+  const scanExtensions = async () => scanLocalExtensions({
+    version,
+  });
+  const publicExtension = (entry: Awaited<ReturnType<typeof scanExtensions>>['extensions'][number]) => {
+    const frontendUrl = entry.status === 'ready' && entry.id !== null && entry.entrypoints.frontend !== null
+      ? `/api/v1/extensions/${encodeURIComponent(entry.id)}/assets/${entry.entrypoints.frontend.slice(2).split('/').map(encodeURIComponent).join('/')}`
+      : null;
+    return {
+      candidate: entry.candidate,
+      id: entry.id,
+      name: entry.name,
+      version: entry.version,
+      description: entry.description,
+      entrypoints: entry.entrypoints,
+      status: entry.status,
+      requestedPermissions: entry.requestedPermissions,
+      grantedPermissions: entry.grantedPermissions,
+      frontendUrl,
+      diagnostic: entry.diagnostic,
+    };
+  };
+  const inventoryResponse = async (): Promise<ExtensionInventoryResponse> => {
+    if (!capabilities().localHandoff) {
+      return { available: false, reason: extensionAvailability(), extensions: [], diagnostics: [], canApprove: false };
+    }
+    const result = await scanExtensions();
+    const logged = new Set<string>();
+    for (const issue of result.diagnostics) {
+      const key = `${issue.candidate}:${issue.code}`;
+      if (logged.has(key)) continue;
+      logged.add(key);
+      console.warn(`[cez:extensions] ${issue.candidate}: ${issue.message}`);
+    }
+    return {
+      available: true,
+      directory: result.directory,
+      scannedAt: result.scannedAt,
+      extensions: result.extensions.map(publicExtension),
+      diagnostics: [...result.diagnostics],
+      canApprove: true,
+    };
+  };
+  const extensionRoutes = new Hono()
+    .get('/extensions', async (c) => c.json(await inventoryResponse()))
+    .get('/extensions/endpoints', (c) => {
+      const available = capabilities().localHandoff;
+      return c.json(available
+        ? {
+            available: true as const,
+            apiVersion: '1' as const,
+            endpoints: {
+              inventory: '/api/v1/extensions' as const,
+              diagnostics: '/api/v1/extensions/diagnostics' as const,
+              approval: '/api/v1/extensions/:id/approval' as const,
+              assets: '/api/v1/extensions/:id/assets/*path' as const,
+            },
+          }
+        : { available: false as const, apiVersion: '1' as const, reason: extensionAvailability(), endpoints: [] });
+    })
+    .get('/extensions/diagnostics', async (c) => {
+      if (!capabilities().localHandoff) {
+        return c.json({ available: false as const, reason: extensionAvailability(), diagnostics: [] });
+      }
+      const result = await scanExtensions();
+      return c.json({ available: true as const, scannedAt: result.scannedAt, diagnostics: [...result.diagnostics] });
+    })
+    .put(
+      '/extensions/:id/approval',
+      paramZodValidator(z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/) })),
+      jsonZodValidator(setExtensionApprovalInputSchema),
+      async (c) => {
+        if (!capabilities().localHandoff) {
+          return c.json({ error: 'local extensions are managed from the machine that owns the checkout (this cockpit runs in hosted mode)' }, 409);
+        }
+        const id = c.req.param('id');
+        const body = c.req.valid('json');
+        const current = await scanExtensions();
+        const entry = current.extensions.find((candidate) => candidate.id === id);
+        if (!entry) return c.json({ error: `unknown extension: ${id}` }, 404);
+        if (entry.status === 'rejected' || entry.status === 'duplicate' || entry.id === null) {
+          return c.json({ error: 'this extension cannot be approved until its package is fixed' }, 409);
+        }
+        try {
+          await writeExtensionGrant(
+            id,
+            entry.requestedPermissions as Parameters<typeof writeExtensionGrant>[1],
+            body.approved,
+            extensionGrantsPath(),
+          );
+        } catch (error) {
+          return c.json({ error: error instanceof Error ? error.message : 'the extension grant could not be saved' }, 409);
+        }
+        return c.json(await inventoryResponse());
+      },
+    )
+    .get('/extensions/:id/assets/*', async (c) => {
+      if (!capabilities().localHandoff) return c.json({ error: 'not found' }, 404);
+      const id = c.req.param('id');
+      const assetMarker = '/assets/';
+      const assetIndex = c.req.path.indexOf(assetMarker);
+      const assetPath = (assetIndex === -1 ? '' : c.req.path.slice(assetIndex + assetMarker.length)).replace(/^\/+/, '');
+      if (!/^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9-]*$/.test(id) || assetPath.length === 0 || assetPath.includes('\\') || assetPath.includes('\0')) {
+        return c.json({ error: 'not found' }, 404);
+      }
+      const segments = assetPath.split('/');
+      if (segments.some((segment) => segment === '' || segment === '.' || segment === '..') || !/\.(?:js|mjs)$/.test(assetPath)) {
+        return c.json({ error: 'not found' }, 404);
+      }
+      const current = await scanExtensions();
+      const entry = current.extensions.find((candidate) => candidate.id === id && candidate.status === 'ready');
+      if (!entry) return c.json({ error: 'not found' }, 404);
+      const packageRoot = join(extensionsDir(), entry.candidate);
+      try {
+        const rootInfo = await lstat(packageRoot);
+        if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) return c.json({ error: 'not found' }, 404);
+        const realRoot = await realpath(packageRoot);
+        const target = resolve(packageRoot, assetPath);
+        const lexical = relative(realRoot, target);
+        if (lexical.startsWith('..') || isAbsolute(lexical)) return c.json({ error: 'not found' }, 404);
+        const realTarget = await realpath(target);
+        const contained = relative(realRoot, realTarget);
+        if (contained.startsWith('..') || isAbsolute(contained)) return c.json({ error: 'not found' }, 404);
+        const info = await stat(realTarget);
+        if (!info.isFile() || info.size > MAX_EXTENSION_ASSET_BYTES) return c.json({ error: 'not found' }, 404);
+        return new Response(await readFile(realTarget), {
+          headers: {
+            'content-type': 'application/javascript; charset=utf-8',
+            'x-content-type-options': 'nosniff',
+            'cache-control': 'no-cache, no-store, must-revalidate',
+          },
+        });
+      } catch {
+        return c.json({ error: 'not found' }, 404);
+      }
+    });
+
   // Workspace-level families answer for the whole workspace, so they are single-mount: never a
   // project-scoped spelling, which would be a second surface to protect with no consumer.
   const workspaceV1 = new Hono()
     .route('/', healthRoutes)
     .route('/', modelsRoutes)
+    .route('/', marketplaceRoutes)
     .route('/', providersRoutes)
     .route('/', projectsRoutes)
     .route('/', agentProfilesRoutes)
@@ -5940,7 +6099,8 @@ export function createApp(deps: ServerDeps) {
     .route('/', fsBrowseRoutes)
     .route('/', automationChecksRoutes)
     .route('/', runsIndexRoutes)
-    .route('/', workspaceEventsRoutes);
+    .route('/', workspaceEventsRoutes)
+    .route('/', extensionRoutes);
 
   // ---- mount ---------------------------------------------------------------
   // Scoped first, then the unscoped alias bound to the boot project. The paths are disjoint (no

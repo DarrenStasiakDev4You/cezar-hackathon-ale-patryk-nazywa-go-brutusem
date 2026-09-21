@@ -18,6 +18,14 @@ existing consumers. This registry is separate from the DOM edit-mode `LayoutRegi
 elements and edit-mode state. Layout schema data is ephemeral in the route instance and is not
 persisted or migrated by the renderer.
 
+Layout policy is immutable metadata on the component contract (`movable`, `removable`,
+`replaceable`, `allowedZones` and `category`). `packages/web/src/page-layout/constraints.ts` is the
+single pure admission seam: page-content validation, rendering and edit-mode mutation callers must
+use it rather than reimplementing zone checks. `allowedZones` controls placement, `category` is
+diagnostic metadata only, and requiredness belongs to the page zone. Legacy DOM descriptors without
+contract metadata retain their existing behavior; serialized `LayoutSchema` data does not copy the
+policy.
+
 ## Zero config
 
 cezar ships no config file the user must create and no setting they must set before it works. Every capability is discovered from what is already there — the repo, the environment, `gh`, the running processes — or it degrades quietly to a smaller cezar. `.ai/cezar/config.json` is optional and every key has a working default; `.env` is never auto-loaded.
@@ -241,6 +249,18 @@ minimal external example lives in `packages/extension-api/examples/plain-task-co
 - `CODE_REVIEW.md` — what reviewers check and how severities are assigned.
 - `BACKWARD_COMPATIBILITY.md` — the public surfaces you must not break silently.
 - `.ai/agentic.config.json` — machine-readable pipeline config every om-* skill reads (base branch, validation commands, labels).
+
+## Local Extension Loader
+
+For local package loading, read `.ai/specs/2026-09-20-local-extension-loader.md` first, then
+`packages/cezar/src/extensions/local-loader.ts` and `packages/cezar/src/extensions/grants.ts` for
+backend discovery/admission, `packages/cezar/src/server/server.ts` for the chained workspace API,
+and `packages/web/src/extensions/loader.ts` plus `routes/settings/extensions-section.tsx` for the
+browser bridge and diagnostics UI. Discovery is metadata-only and local-only: never import package
+code during scanning, never expose inventory/assets in hosted mode, and only serve approved
+JavaScript entrypoints contained by the package root. Permission requests are not grants; approval
+is explicit and persisted in `~/.cezar/extension-grants.json`. Approved code runs in the cockpit
+origin and is not sandboxed. Use the focused extension tests before the full validation gate.
 
 ## Extension Permission Model
 
