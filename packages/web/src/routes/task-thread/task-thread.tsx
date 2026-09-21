@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router'
 
 import { Link } from '@/lib/project-router'
 import { useHostedComponent } from '@/component-registry/component-host'
-import { TaskComposer, type LayoutSchema, type TaskComposerProps } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, type TaskComposerProps } from '@open-mercato/cezar-extension-api'
 
 import { ApiError } from '@/api/client'
 import {
@@ -40,7 +40,7 @@ import { queuePosition } from './run-actions'
 import { RunHeader } from './run-header'
 import {
   createTaskComposerBinding,
-  createTaskLayoutSnapshot,
+  loadTaskLayoutSnapshot,
   taskLayoutSubject,
   TaskLayoutRenderer,
   TaskPageLayoutProvider,
@@ -50,6 +50,7 @@ import { useRunRecordReconcile } from './run-reconcile'
 import { ThreadLoading } from './thread-loading'
 import { threadRenderMode } from './thread-scroll'
 import { JumpToLatestPill, useThreadScroll } from './thread-scroller'
+import { LAYOUT_MIGRATION_FALLBACK_MESSAGE } from './task-layout-schema'
 import {
   SessionTranscript,
   buildTranscriptRows,
@@ -172,20 +173,25 @@ export function ThreadView({
   thread,
   currentThread = thread,
   history,
+  layoutInput,
   onMarkedUnread,
-  layoutSchema,
 }: {
   run: ApiRun
   thread: ThreadState
   currentThread?: ThreadState
   history?: RunHistoryState
+  /** A stored Task Page layout document of any supported schema version. It is migrated and checked
+   *  before the renderer sees it (`loadTaskLayoutSnapshot`); one that cannot be used renders the
+   *  default layout with the fallback notice. The route stores none yet, so it passes nothing
+   *  until the persistence adapter lands; previews and tests supply one here. */
+  layoutInput?: unknown
   /** Passed straight through to the header's "Mark unread" (#775) so the route can suppress its
    *  auto-mark-read effect. Optional: every test that drives this view with a fixture, and the
    *  header's other three tabs, have no such effect to suppress. */
   onMarkedUnread?: (runId: string) => void
-  /** Optional normalized schema used by previews and route-level regression tests. */
-  layoutSchema?: LayoutSchema
 }) {
+  const taskLayout = useMemo(() => loadTaskLayoutSnapshot(run.id, layoutInput), [layoutInput, run.id])
+  const layoutSnapshot = taskLayout.snapshot
   const footer = threadFooter(run.status, run.error)
   const markedUnread = useCallback(() => onMarkedUnread?.(run.id), [onMarkedUnread, run.id])
   // The dock's data: the latest plan snapshot across turns (full replacement — an emptied
@@ -210,10 +216,6 @@ export function ThreadView({
   // submitting an empty one is still the plain one-click Continue.
   const continueAction = useContinueAction(run)
   const continuable = !sessionOpen && !queued && continueAction.available && continueAction.canContinue
-  const layoutSnapshot = useMemo(
-    () => createTaskLayoutSnapshot({ identity: run.id, supplied: layoutSchema }),
-    [layoutSchema, run.id],
-  )
   const hostedComposer = useHostedComponent(TaskComposer, taskLayoutSubject(layoutSnapshot, 'main', TaskComposer.id))
   const hostedAttachesFiles = hostedComposer?.capabilities.includes('attaches-files') ?? true
   const hostedChoosesEngine = hostedComposer?.capabilities.includes('chooses-engine') ?? true
@@ -324,7 +326,18 @@ export function ThreadView({
 
   return (
     <TaskPageLayoutProvider>
-      <div data-route="task-thread" data-run-id={run.id} className="flex min-h-full flex-col">
+      <div
+        data-route="task-thread"
+        data-run-id={run.id}
+        data-task-layout-status={taskLayout.fellBack ? 'fallback' : taskLayout.load.status}
+        data-task-layout-version={taskLayout.load.status === 'fallback' ? taskLayout.load.fallback.schemaVersion : taskLayout.load.schema.schemaVersion}
+        className="flex min-h-full flex-col"
+      >
+      {taskLayout.fellBack ? (
+        <p data-slot="task-layout-fallback" role="status" className="sr-only">
+          {LAYOUT_MIGRATION_FALLBACK_MESSAGE}
+        </p>
+      ) : null}
       <RunHeader
         run={run}
         planTally={planTally}
