@@ -47,3 +47,18 @@ Risks:
 
 - [x] 2.1 Add production-boundary and missing-required-placement regression tests. — 738109b4
 - [x] 2.2 Run the full validation gate, review the diff, and publish the follow-up PR. — d92a882a
+
+### Phase 3: Integrate with the Task Page layout renderer (#77)
+
+> 2026-09-22: #77 landed mid-review and renders the Task Page from a v1 `LayoutSchema` passed as
+> `layoutSchema`, while this PR's loader ran on a separate `layoutInput` that never reached the
+> renderer. The owner chose full integration. Decision (reversible, documented here): the renderer
+> keeps its v1 render schema, per spec 2026-09-20-layout-renderer ("any loader/migration must
+> produce a normalized current `LayoutSchema` before this code runs"); the migrator's v3 output is
+> projected onto it, dropping only `required` (page-zone policy). The required-role check moves
+> from placement ids to contracts, because the renderer's ids are free-form and `task.main` also
+> admits `TaskMetadata` (#71).
+
+- [x] 3.1 Merge `origin/main` (#77) with a compiling side-by-side conflict resolution. — bacc9f91
+- [x] 3.2 Route the stored document through one boundary (`loadTaskLayoutSnapshot`: loader, projection, renderer) and match required roles by contract. — 1f7cbc4b
+- [ ] 3.3 Run the full validation gate and the authoritative review on the integrated branch.
