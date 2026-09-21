@@ -69,8 +69,15 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
   const [target, setTarget] = React.useState<LayoutContextMenuTarget | null>(null)
   const [position, setPosition] = React.useState<MenuPosition | null>(null)
   const [menuStyle, setMenuStyle] = React.useState<React.CSSProperties>({})
+  const [announcement, setAnnouncement] = React.useState('')
   const menuRef = React.useRef<HTMLDivElement>(null)
   const deletingRef = React.useRef(false)
+  const removalIssues = target && !target.domNode ? registry.getRemovalIssues(target.id) : []
+  const deleteDisabledReason = removalIssues[0]?.code === 'required-component'
+    ? 'This is the last item in a required zone.'
+    : removalIssues.length > 0
+      ? 'This layout element cannot be removed.'
+      : undefined
 
   const close = React.useCallback(() => {
     setTarget(null)
@@ -129,6 +136,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
     event.preventDefault()
     event.stopPropagation()
     setTarget(nextTarget)
+    setAnnouncement('')
     setPosition({ x: event.clientX, y: event.clientY })
   }, [allowAnyElement, enabled, registry])
 
@@ -159,7 +167,14 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
       return
     }
     if (current) {
-      registry.removeNode(target.id)
+      const result = registry.tryRemoveNode(target.id)
+      if (!result.applied) {
+        setAnnouncement(result.issues[0]?.code === 'required-component'
+          ? 'The required layout element cannot be removed.'
+          : 'This layout element cannot be removed.')
+        close()
+        return
+      }
     } else {
       target.domNode?.remove()
     }
@@ -193,6 +208,8 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
         data-layout-menu-delete="true"
         aria-label="Delete layout element"
         aria-describedby="layout-context-menu-delete-description"
+        disabled={deleteDisabledReason !== undefined}
+        title={deleteDisabledReason}
         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive outline-hidden focus:bg-destructive/10"
         onClick={() => void handleDelete()}
       >
@@ -200,8 +217,9 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
         <span>Delete</span>
       </button>
       <span id="layout-context-menu-delete-description" className="sr-only">
-        Deletes this layout element and all registered descendants.
+        {deleteDisabledReason ?? 'Deletes this layout element and all registered descendants.'}
       </span>
+      {deleteDisabledReason ? <span role="status" className="sr-only">{deleteDisabledReason}</span> : null}
     </div>
   ) : null
 
@@ -213,6 +231,7 @@ export function LayoutElementContextMenu({ enabled, onDelete, confirmDelete, all
         {children}
       </div>
       {content && typeof document !== 'undefined' ? createPortal(content, document.body) : null}
+      <div aria-live="polite" className="sr-only" data-slot="layout-context-menu-live-region">{announcement}</div>
     </>
   )
 }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Layout Renderer - schema order</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b0d12; --panel:#131720; --panel2:#181d28; --line:#293142; --text:#eef2f8; --muted:#8e99aa; --accent:#8ea8ff; --green:#79d5b0; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 72% -10%, #222c4a 0, transparent 42%), var(--bg); color:var(--text); font:14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    .shell { min-height:100vh; display:grid; grid-template-columns:230px minmax(0,1fr); }
+    aside { border-right:1px solid var(--line); padding:22px 16px; background:#0e1118; }
+    .brand { font-weight:750; letter-spacing:.02em; margin-bottom:34px; }
+    .brand span { color:var(--accent); }
+    nav div { padding:10px 12px; border-radius:9px; color:var(--muted); margin:4px 0; }
+    nav .active { color:var(--text); background:#20283a; }
+    main { padding:28px clamp(22px, 5vw, 70px) 48px; max-width:1180px; width:100%; margin:auto; }
+    .eyebrow { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }
+    h1 { font-size:28px; margin:8px 0 4px; letter-spacing:-.03em; }
+    .sub { color:var(--muted); margin:0 0 24px; }
+    .schema-note { display:flex; gap:10px; align-items:center; color:#cbd4e4; background:#111827; border:1px solid #34415e; border-radius:10px; padding:10px 13px; margin-bottom:18px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 0 4px #18382f; }
+    .zone { border:1px dashed #3c4963; border-radius:13px; padding:12px; margin:12px 0; }
+    .zone-head { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; letter-spacing:.1em; text-transform:uppercase; margin-bottom:9px; }
+    .placement { display:flex; align-items:center; gap:13px; background:linear-gradient(100deg, var(--panel), var(--panel2)); border:1px solid var(--line); border-radius:11px; padding:15px 16px; }
+    .number { width:27px; height:27px; display:grid; place-items:center; border-radius:8px; color:#d9e1ff; background:#293458; font-weight:700; }
+    .placement strong { display:block; font-size:15px; }
+    .placement small { color:var(--muted); }
+    .host { margin-left:auto; color:var(--green); border:1px solid #2b6856; background:#11271f; padding:4px 8px; border-radius:99px; font-size:11px; }
+    .empty { color:#667286; padding:12px 8px 3px; font-size:12px; }
+    @media (max-width:700px) { .shell { grid-template-columns:1fr; } aside { display:none; } main { padding:22px 15px 34px; } h1 { font-size:23px; } .host { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside><div class="brand"><span>c</span>ezar</div><nav><div class="active">Tasks</div><div>Git</div><div>GitHub</div><div>Automations</div><div>Settings</div></nav></aside>
+    <main>
+      <div class="eyebrow">Task Page / schema-backed composition</div>
+      <h1>Review the release checklist</h1>
+      <p class="sub">A stable task shell stays in place while the layout document controls its hosted boundaries.</p>
+      <div class="schema-note"><span class="dot"></span><span>Layout Schema v1 active. Zone and placement order comes from the current snapshot.</span></div>
+      <section class="zone"><div class="zone-head"><span>header</span><span>task.header / single</span></div><div class="placement"><span class="number">1</span><div><strong>Task Header</strong><small>cezar.task.header.main@1</small></div><span class="host">ComponentHost</span></div></section>
+      <section class="zone"><div class="zone-head"><span>main</span><span>task.main / many</span></div><div class="placement"><span class="number">2</span><div><strong>Reply composer</strong><small>cezar.task.composer@1</small></div><span class="host">ComponentHost</span></div><div class="empty">Transcript, actions and review remain owned by the task shell.</div></section>
+      <section class="zone"><div class="zone-head"><span>sidebar</span><span>optional</span></div><div class="empty">No placements in this schema snapshot.</div></section>
+    </main>
+  </div>
+</body>
+</html>

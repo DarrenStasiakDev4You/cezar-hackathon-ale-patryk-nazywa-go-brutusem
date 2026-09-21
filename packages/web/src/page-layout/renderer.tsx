@@ -14,6 +14,7 @@ import type {
   ZoneDefinition,
 } from './definitions'
 import { createPageLayoutRegistry, type PageLayoutRegistry } from './registry'
+import { zoneAdmissionIssue } from './constraints'
 
 const PageLayoutContext = createContext<PageLayoutRegistry | null>(null)
 
@@ -117,19 +118,11 @@ function LayoutError(props: { readonly message: string; readonly pageId: string;
   )
 }
 
-function accepts(zone: ZoneDefinition, content: ZoneContent): boolean {
-  return (
-    content.placement === zone.placement &&
-    (zone.accepts === undefined ||
-      zone.accepts.some((contract) => contract.id === content.contract.id && contract.version === content.contract.version))
-  )
-}
-
 function acceptedContent(zone: ZoneDefinition, content: readonly ZoneContent[]): readonly ZoneContent[] {
   const seen = new Set<string>()
   const accepted: ZoneContent[] = []
   for (const item of content) {
-    if (!isRenderableContent(item) || !accepts(zone, item) || seen.has(item.key)) continue
+    if (!isRenderableContent(item) || zoneAdmissionIssue(zone, item) !== null || seen.has(item.key)) continue
     seen.add(item.key)
     accepted.push(item)
     if (zone.cardinality === 'single') break

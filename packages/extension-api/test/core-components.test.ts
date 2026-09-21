@@ -43,11 +43,17 @@ describe('core component contracts', () => {
       requiredCapabilities: ['shows-metadata'],
       optionalCapabilities: ['offers-links', 'offers-copy'],
       layout: { minBlockSize: 20 },
+      movable: true,
+      removable: true,
+      replaceable: true,
+      allowedZones: ['task.main', 'task.sidebar'],
+      category: 'task.metadata',
     })
     expect(Object.isFrozen(TaskMetadata)).toBe(true)
     expect(Object.isFrozen(TaskMetadata.requiredCapabilities)).toBe(true)
     expect(Object.isFrozen(TaskMetadata.optionalCapabilities)).toBe(true)
     expect(Object.isFrozen(TaskMetadata.layout)).toBe(true)
+    expect(Object.isFrozen(TaskMetadata.allowedZones)).toBe(true)
   })
 
   it('keeps metadata data JSON and makes every intent optional', () => {
@@ -67,6 +73,9 @@ describe('core component contracts', () => {
       requiredCapabilities: ['edits-draft', 'sends', 'shows-availability'],
       optionalCapabilities: ['attaches-files', 'chooses-engine'],
       layout: { minBlockSize: 88 },
+      movable: false,
+      removable: false,
+      replaceable: true,
     })
     expect(Object.isFrozen(TaskComposer)).toBe(true)
     expect(Object.isFrozen(TaskComposer.requiredCapabilities)).toBe(true)
@@ -99,6 +108,9 @@ describe('core component contracts', () => {
       requiredCapabilities: ['shows-title', 'shows-status'],
       optionalCapabilities: ['offers-continue', 'offers-stop', 'offers-archive'],
       layout: { minBlockSize: 30 },
+      movable: false,
+      removable: false,
+      replaceable: true,
     })
     expect(Object.isFrozen(TaskHeaderMain)).toBe(true)
     expect(Object.isFrozen(TaskHeaderMain.requiredCapabilities)).toBe(true)

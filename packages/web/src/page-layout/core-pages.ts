@@ -1,4 +1,4 @@
-import { TaskComposer, TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, TaskHeaderMain, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 import { definePage, type PageDefinition } from './definitions'
 
@@ -23,7 +23,7 @@ export const TaskPage: PageDefinition = definePage({
     {
       id: 'task.main',
       placement: 'task.main.content',
-      accepts: [TaskComposer],
+       accepts: [TaskComposer, TaskMetadata],
       cardinality: 'many',
       required: true,
       layout: { sizing: 'fill' },

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it } from 'vitest';
 import { createCezarClient } from '@open-mercato/cezar-api-client';
+import type { MarketplaceCatalogResponse } from '@open-mercato/cezar-contract';
 import { RunStore } from '../runs/store.ts';
 import type { RunManager } from '../workflows/run.ts';
 import { clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.ts';
@@ -53,6 +54,12 @@ describe('createCezarClient<AppType>', () => {
       manager: { isActive: () => false } as unknown as RunManager,
       version: '0.0.0-test',
       contexts,
+      marketplace: {
+        read: async (): Promise<MarketplaceCatalogResponse> => ({
+          available: false,
+          reason: 'marketplace registry is unavailable',
+        }),
+      },
     });
     client = createCezarClient<AppType>({
       // Any absolute origin will do — the custom fetch below never leaves the process. The
@@ -145,5 +152,14 @@ describe('createCezarClient<AppType>', () => {
     const body = await projects.json();
     expectTypeOf(body).not.toBeAny();
     expect(body).toHaveProperty('projects');
+  });
+
+  it('reaches the typed workspace marketplace route', async () => {
+    const response = await client.api.v1.extensions.marketplace.$get();
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      available: false,
+      reason: 'marketplace registry is unavailable',
+    });
   });
 });

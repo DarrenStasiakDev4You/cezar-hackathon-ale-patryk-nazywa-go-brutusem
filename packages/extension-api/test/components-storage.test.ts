@@ -41,6 +41,9 @@ describe('defineComponentContract', () => {
       version: 2,
       requiredCapabilities: [],
       optionalCapabilities: [],
+      movable: false,
+      removable: false,
+      replaceable: true,
     })
     expect('__props' in contract).toBe(false)
     expect('layout' in contract).toBe(false)
@@ -66,6 +69,9 @@ describe('defineComponentContract', () => {
       requiredCapabilities: ['greets-by-name', 'task.continue'],
       optionalCapabilities: ['waves'],
       layout: { sizing: 'fill', sticky: 'bottom', minBlockSize: 96 },
+      movable: false,
+      removable: false,
+      replaceable: true,
     })
     expect(contract.requiredCapabilities).not.toBe(required)
     expect(contract.layout).not.toBe(layout)
@@ -74,6 +80,25 @@ describe('defineComponentContract', () => {
     expect(Object.isFrozen(contract.layout)).toBe(true)
     required.push('late')
     expect(contract.requiredCapabilities).toEqual(['greets-by-name', 'task.continue'])
+  })
+
+  it('normalizes and freezes layout policy metadata', () => {
+    const zones = ['task.main', 'task.sidebar']
+    const contract = defineComponentContract('acme.hello.movable', {
+      version: 1,
+      movable: true,
+      removable: true,
+      replaceable: false,
+      allowedZones: zones,
+      category: 'task.metadata',
+    })
+
+    expect(contract).toMatchObject({ movable: true, removable: true, replaceable: false, category: 'task.metadata' })
+    expect(contract.allowedZones).toEqual(zones)
+    expect(contract.allowedZones).not.toBe(zones)
+    expect(Object.isFrozen(contract.allowedZones)).toBe(true)
+    zones.push('task.extra')
+    expect(contract.allowedZones).toEqual(['task.main', 'task.sidebar'])
   })
 
   it('accepts the layout bounds and a partial layout', () => {
@@ -172,6 +197,12 @@ describe('defineComponentContract', () => {
     ['minBlockSize is over 2048', { layout: { minBlockSize: 2049 } }, ['layout.minBlockSize']],
     ['minBlockSize is not an integer', { layout: { minBlockSize: 56.5 } }, ['layout.minBlockSize']],
     ['minBlockSize is a string', { layout: { minBlockSize: '56' } }, ['layout.minBlockSize']],
+    ['movable is not a boolean', { movable: 'yes' }, ['movable']],
+    ['allowedZones is not an array', { allowedZones: 'task.main' }, ['allowedZones']],
+    ['an allowed zone is malformed', { allowedZones: ['task main'] }, ['allowedZones[0]']],
+    ['an allowed zone repeats', { allowedZones: ['task.main', 'task.main'] }, ['allowedZones[1]']],
+    ['the category is malformed', { category: 'task metadata' }, ['category']],
+    ['movable has no allowed zones', { movable: true }, ['allowedZones']],
   ])('throws invalid-id when %s', (_, options, paths) => {
     const error = thrown(() =>
       defineComponentContract('acme.hello.greeting', { version: 1, ...options } as unknown as { version: number }),
@@ -261,11 +292,20 @@ describe('types', () => {
       requiredCapabilities: ['greets-by-name'],
       optionalCapabilities: ['waves'],
       layout: { sizing: 'content', sticky: 'top', minBlockSize: 56 },
+      movable: true,
+      removable: true,
+      replaceable: false,
+      allowedZones: ['task.main'],
+      category: 'task.card',
     })
     expectTypeOf<ComponentProps<typeof Rich>>().toEqualTypeOf<GreetingProps>()
     expectTypeOf(Rich).toEqualTypeOf<ComponentContract<GreetingProps>>()
     expectTypeOf(Rich.requiredCapabilities).toEqualTypeOf<readonly ComponentCapability[] | undefined>()
     expectTypeOf(Rich.layout).toEqualTypeOf<ComponentLayout | undefined>()
+    expectTypeOf(Rich.movable).toEqualTypeOf<boolean | undefined>()
+    expectTypeOf(Rich.removable).toEqualTypeOf<boolean | undefined>()
+    expectTypeOf(Rich.replaceable).toEqualTypeOf<boolean | undefined>()
+    expectTypeOf(Rich.allowedZones).toEqualTypeOf<readonly string[] | undefined>()
   })
 
   it('rejects a layout value outside its type at compile time', () => {

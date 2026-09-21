@@ -21,6 +21,7 @@ import type {
   updateProjectResponseSchema,
 } from '@open-mercato/cezar-contract';
 import type { runsIndexResponseSchema } from '@open-mercato/cezar-contract';
+import type { marketplaceCatalogResponseSchema } from '@open-mercato/cezar-contract';
 import type {
   configResponseSchema,
   openProjectInResponseSchema,
@@ -33,6 +34,9 @@ import type {
   uiStateSchema,
   workspaceConfigResponseSchema,
   workspaceUiStateSchema,
+  extensionDiagnosticsResponseSchema,
+  extensionEndpointsResponseSchema,
+  extensionInventoryResponseSchema,
 } from '@open-mercato/cezar-contract';
 import type { AppType } from './app-type.ts';
 
@@ -161,12 +165,21 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     (typeof client.api.v1.workspace)['runs-index']['$get'],
     200
   >;
+  type Marketplace200 = InferResponseType<typeof client.api.v1.extensions.marketplace.$get, 200>;
+  type ExtensionInventory200 = InferResponseType<typeof client.api.v1.extensions.$get, 200>;
+  type ExtensionDiagnostics200 = InferResponseType<typeof client.api.v1.extensions.diagnostics.$get, 200>;
+  type ExtensionEndpoints200 = InferResponseType<typeof client.api.v1.extensions.endpoints.$get, 200>;
+  type ExtensionApproval200 = InferResponseType<
+    (typeof client.api.v1.extensions)[':id']['approval']['$put'],
+    200
+  >;
 
   type _Checks = [
     // the registry
     Assert<Exact<z.infer<typeof projectsResponseSchema>, Projects200>>,
     // the cross-project task index behind ⌘K
     Assert<Exact<z.infer<typeof runsIndexResponseSchema>, RunsIndex200>>,
+    Assert<Exact<z.infer<typeof marketplaceCatalogResponseSchema>, Marketplace200>>,
     Assert<Exact<z.infer<typeof registerProjectResponseSchema>, RegisterProject200>>,
     Assert<Exact<z.infer<typeof registerProjectResponseSchema>, Checkout200>>,
     Assert<Exact<z.infer<typeof updateProjectResponseSchema>, UpdateProject200>>,
@@ -204,6 +217,10 @@ describe('src/contract projects/workspace schemas match the routes exactly', () 
     Assert<Exact<z.infer<typeof agentAccountDetailsResponseSchema>, AgentAccountDetails200>>,
     Assert<Exact<z.infer<typeof agentAccountStatusResponseSchema>, AgentAccountStatus200>>,
     Assert<Exact<z.infer<typeof openAgentAccountFileResponseSchema>, OpenAgentAccountFile200>>,
+    Assert<Exact<z.infer<typeof extensionInventoryResponseSchema>, ExtensionInventory200>>,
+    Assert<Exact<z.infer<typeof extensionDiagnosticsResponseSchema>, ExtensionDiagnostics200>>,
+    Assert<Exact<z.infer<typeof extensionEndpointsResponseSchema>, ExtensionEndpoints200>>,
+    Assert<Exact<z.infer<typeof extensionInventoryResponseSchema>, ExtensionApproval200>>,
   ];
 
   it('is enforced by tsc, not at runtime', () => {
