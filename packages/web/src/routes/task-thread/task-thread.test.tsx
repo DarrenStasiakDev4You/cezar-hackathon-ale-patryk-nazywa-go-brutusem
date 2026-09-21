@@ -18,7 +18,7 @@ import type {
   RunEvent,
   RunStatus,
 } from '@open-mercato/cezar-api-client'
-import { TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, TaskHeaderMain } from '@open-mercato/cezar-extension-api'
 
 import { TaskThreadRoute, ThreadView } from './task-thread'
 import { buildTranscriptRows, mainTranscriptSections } from './session-transcript'
@@ -116,6 +116,29 @@ const transcriptRows = (fixture: ApiRun, thread = reduceThread(EVENTS)) =>
   buildTranscriptRows(mainTranscriptSections(fixture, thread), fixture.id)
 
 describe('ThreadView', () => {
+  it('mounts the schema-backed header and composer once through the Task Page adapter', () => {
+    renderView(
+      <ThreadView
+        run={run('waiting')}
+        thread={reduceThread(EVENTS)}
+        layoutSchema={{
+          page: 'task',
+          schemaVersion: 1,
+          zones: {
+            main: [{ id: 'composer-custom', contract: TaskComposer.id, contractVersion: 1 }],
+            header: [{ id: 'header-custom', contract: TaskHeaderMain.id, contractVersion: 1 }],
+            sidebar: [],
+          },
+        }}
+      />,
+    )
+
+    expect(document.querySelectorAll('[data-page-layout="schema"]')).toHaveLength(2)
+    expect(document.querySelectorAll('[data-placement-id]')).toHaveLength(2)
+    expect(document.querySelector('[data-placement-id="header-custom"]')).not.toBeNull()
+    expect(document.querySelector('[data-placement-id="composer-custom"]')).not.toBeNull()
+  })
+
   it('keeps provider authorization recovery visible after the run reaches done', () => {
     const authRequired = [
       line(1, 'provider-auth-required', { provider: 'codex', authFailureId: 'incident-1' }),

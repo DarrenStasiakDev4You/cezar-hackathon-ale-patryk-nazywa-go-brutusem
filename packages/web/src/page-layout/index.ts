@@ -12,7 +12,14 @@ export {
   type ZoneId,
   type ZoneLayout,
 } from './definitions'
-export { createPageLayoutRegistry, type PageLayoutRegistry } from './registry'
+export {
+  admitPagePlacement,
+  createPageLayoutRegistry,
+  type PageLayoutRegistry,
+  type PagePlacementAdmissionIssue,
+  type PagePlacementAdmissionState,
+  type PagePlacementCandidate,
+} from './registry'
 export {
   contractAdmissionIssue,
   isZoneAdmissionAllowed,
@@ -32,4 +39,13 @@ export {
   type PageRendererProps,
   type ZoneRendererProps,
 } from './renderer'
+export { LayoutRenderer } from './layout-renderer'
+export type {
+  BindingRenderInput,
+  LayoutRenderIssue,
+  LayoutRenderIssueCode,
+  LayoutRendererProps,
+  TaskLayoutSnapshot,
+  ValidatedLayoutBinding,
+} from './layout-types'
 export { TaskPage } from './core-pages'

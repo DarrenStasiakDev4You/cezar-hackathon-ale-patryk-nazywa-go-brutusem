@@ -3,9 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router'
 
 import { Link } from '@/lib/project-router'
-import { ComponentHost } from '@/component-registry/component-host'
 import { useHostedComponent } from '@/component-registry/component-host'
-import { TaskComposer, type TaskComposerProps } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, type LayoutSchema, type TaskComposerProps } from '@open-mercato/cezar-extension-api'
 
 import { ApiError } from '@/api/client'
 import {
@@ -39,6 +38,13 @@ import { SubagentSheet } from './subagent-sheet'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
 import { queuePosition } from './run-actions'
 import { RunHeader } from './run-header'
+import {
+  createTaskComposerBinding,
+  createTaskLayoutSnapshot,
+  taskLayoutSubject,
+  TaskLayoutRenderer,
+  TaskPageLayoutProvider,
+} from './task-layout'
 import { AskCard } from './ask-card'
 import { useRunRecordReconcile } from './run-reconcile'
 import { ThreadLoading } from './thread-loading'
@@ -170,6 +176,7 @@ export function ThreadView({
   history,
   layoutInput,
   onMarkedUnread,
+  layoutSchema,
 }: {
   run: ApiRun
   thread: ThreadState
@@ -182,6 +189,8 @@ export function ThreadView({
    *  auto-mark-read effect. Optional: every test that drives this view with a fixture, and the
    *  header's other three tabs, have no such effect to suppress. */
   onMarkedUnread?: (runId: string) => void
+  /** Optional normalized schema used by previews and route-level regression tests. */
+  layoutSchema?: LayoutSchema
 }) {
   const taskLayout = useMemo(
     () => loadTaskPageLayout(layoutInput === undefined ? defaultTaskPageLayout : layoutInput),
@@ -211,7 +220,11 @@ export function ThreadView({
   // submitting an empty one is still the plain one-click Continue.
   const continueAction = useContinueAction(run)
   const continuable = !sessionOpen && !queued && continueAction.available && continueAction.canContinue
-  const hostedComposer = useHostedComponent(TaskComposer, run.id)
+  const layoutSnapshot = useMemo(
+    () => createTaskLayoutSnapshot({ identity: run.id, supplied: layoutSchema }),
+    [layoutSchema, run.id],
+  )
+  const hostedComposer = useHostedComponent(TaskComposer, taskLayoutSubject(layoutSnapshot, 'main', TaskComposer.id))
   const hostedAttachesFiles = hostedComposer?.capabilities.includes('attaches-files') ?? true
   const hostedChoosesEngine = hostedComposer?.capabilities.includes('chooses-engine') ?? true
   // A closed session can never settle its in-flight items — nothing in the reducer rewrites a
@@ -320,13 +333,14 @@ export function ThreadView({
   useKeyboardInsetVar(scroll.restickIfStuck)
 
   return (
-    <div
-      data-route="task-thread"
-      data-run-id={run.id}
-      data-task-layout-status={taskLayout.status}
-      data-task-layout-version={taskLayout.status === 'fallback' ? taskLayout.fallback.schemaVersion : taskLayout.schema.schemaVersion}
-      className="flex min-h-full flex-col"
-    >
+    <TaskPageLayoutProvider>
+      <div
+        data-route="task-thread"
+        data-run-id={run.id}
+        data-task-layout-status={taskLayout.status}
+        data-task-layout-version={taskLayout.status === 'fallback' ? taskLayout.fallback.schemaVersion : taskLayout.schema.schemaVersion}
+        className="flex min-h-full flex-col"
+      >
       {taskLayout.status === 'fallback' ? (
         <p data-slot="task-layout-fallback" role="status" className="sr-only">
           {LAYOUT_MIGRATION_FALLBACK_MESSAGE}
@@ -336,6 +350,7 @@ export function ThreadView({
         run={run}
         planTally={planTally}
         onMarkedUnread={markedUnread}
+        layout={layoutSnapshot}
         // The badge the user already opens to inspect runner/account/model offers a way to the
         // dock's picker for the next continuation (spec 2026-09-19-task-header-contract, Q7). The
         // picker itself lives in the dock only, so a header pick and the next composer submission
@@ -498,11 +513,17 @@ export function ThreadView({
                 showEngine={!hostedChoosesEngine}
               />
             ) : null}
-            <ComponentHost contract={TaskComposer} subject={run.id} props={composerModel.props} />
+            <TaskLayoutRenderer
+              snapshot={layoutSnapshot}
+              context={{ composer: composerModel.props }}
+              bindings={[createTaskComposerBinding()]}
+              zones={['main']}
+            />
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </TaskPageLayoutProvider>
   )
 }
 
