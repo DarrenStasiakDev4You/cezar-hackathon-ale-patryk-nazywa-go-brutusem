@@ -18,7 +18,7 @@ import type {
   RunEvent,
   RunStatus,
 } from '@open-mercato/cezar-api-client'
-import { TaskComposer, TaskHeaderMain } from '@open-mercato/cezar-extension-api'
+import { TaskComposer, TaskHeaderMain, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 import { TaskThreadRoute, ThreadView } from './task-thread'
 import { buildTranscriptRows, mainTranscriptSections } from './session-transcript'
@@ -121,7 +121,7 @@ describe('ThreadView', () => {
       <ThreadView
         run={run('waiting')}
         thread={reduceThread(EVENTS)}
-        layoutSchema={{
+        layoutInput={{
           page: 'task',
           schemaVersion: 1,
           zones: {
@@ -166,6 +166,54 @@ describe('ThreadView', () => {
     expect(page?.getAttribute('data-task-layout-version')).toBe('3')
     expect(screen.getByRole('status').textContent).toContain('bezpiecznego układu domyślnego')
     expect(document.querySelector('[data-slot="run-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-placement-id="task-header"]')).not.toBeNull()
+    expect(document.querySelector('[data-placement-id="task-composer"]')).not.toBeNull()
+  })
+
+  it('renders a migrated stored layout through the Task Page renderer', () => {
+    renderView(
+      <ThreadView
+        run={run('waiting')}
+        thread={reduceThread(EVENTS)}
+        layoutInput={{
+          page: 'task',
+          schemaVersion: 3,
+          zones: {
+            header: [{ id: 'header-v3', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version, required: true }],
+            main: [{ id: 'composer-v3', contract: TaskComposer.id, contractVersion: TaskComposer.version, required: true }],
+            sidebar: [],
+          },
+        }}
+      />,
+    )
+
+    const page = document.querySelector('[data-route="task-thread"]')
+    expect(page?.getAttribute('data-task-layout-status')).toBe('current')
+    expect(document.querySelector('[data-placement-id="header-v3"]')).not.toBeNull()
+    expect(document.querySelector('[data-placement-id="composer-v3"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="task-layout-fallback"]')).toBeNull()
+  })
+
+  it('keeps the composer when a stored main zone holds only task metadata', () => {
+    renderView(
+      <ThreadView
+        run={run('waiting')}
+        thread={reduceThread(EVENTS)}
+        layoutInput={{
+          page: 'task',
+          schemaVersion: 3,
+          zones: {
+            header: [{ id: 'header-v3', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version, required: true }],
+            main: [{ id: 'metadata-v3', contract: TaskMetadata.id, contractVersion: TaskMetadata.version, required: false }],
+          },
+        }}
+      />,
+    )
+
+    expect(document.querySelector('[data-route="task-thread"]')?.getAttribute('data-task-layout-status')).toBe('fallback')
+    expect(document.querySelector('[data-placement-id="task-composer"]')).not.toBeNull()
+    expect(document.querySelector('[data-placement-id="metadata-v3"]')).toBeNull()
+    expect(document.querySelector('[data-slot="task-layout-fallback"]')?.textContent).toContain('bezpiecznego układu domyślnego')
   })
 
   it('an issue-subject closed run links its DISCOVERED issue URL, never the incidental PR (#526)', () => {

@@ -4,6 +4,7 @@ import { TaskComposer, TaskHeaderMain, TaskMetadata } from '@open-mercato/cezar-
 
 import {
   createTaskLayoutSnapshot,
+  loadTaskLayoutSnapshot,
   replaceTaskLayout,
   replaceTaskLayoutInput,
   validateTaskLayout,
@@ -66,5 +67,63 @@ describe('Task Page layout lifecycle', () => {
     expect(validateTaskLayout({ page: 'task', schemaVersion: 1, zones: { header: [metadata], main: [composer], sidebar: [] } })).toEqual([
       { code: 'contract-not-served', schemaZone: 'header', pageZone: 'task.header', placementId: 'metadata', contractId: TaskMetadata.id, contractVersion: TaskMetadata.version },
     ])
+  })
+})
+
+describe('stored Task Page layout boundary', () => {
+  const header = { id: 'header-custom', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version, required: true }
+  const composer = { id: 'composer-custom', contract: TaskComposer.id, contractVersion: TaskComposer.version, required: true }
+
+  it('renders the default layout when nothing is stored, without calling it a fallback', () => {
+    const loaded = loadTaskLayoutSnapshot('run-1')
+
+    expect(loaded.fellBack).toBe(false)
+    expect(loaded.snapshot.source).toBe('default')
+    expect(loaded.snapshot).toEqual(createTaskLayoutSnapshot({ identity: 'run-1' }))
+  })
+
+  it('migrates an older stored document and hands the renderer its placements', () => {
+    const loaded = loadTaskLayoutSnapshot('run-1', {
+      page: 'task',
+      schemaVersion: 2,
+      zones: { header: [{ id: 'header-custom', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version }], main: [composer] },
+    })
+
+    expect(loaded.load.status).toBe('migrated')
+    expect(loaded.fellBack).toBe(false)
+    expect(loaded.snapshot.source).toBe('supplied')
+    expect(loaded.snapshot.schema.schemaVersion).toBe(1)
+    expect(loaded.snapshot.schema.zones.header?.[0]?.id).toBe('header-custom')
+    expect(loaded.snapshot.schema.zones.main?.[0]).toEqual({ id: 'composer-custom', contract: TaskComposer.id, contractVersion: TaskComposer.version })
+  })
+
+  it('renders the default layout when the loader rejects the stored document', () => {
+    const loaded = loadTaskLayoutSnapshot('run-1', { page: 'task', schemaVersion: 3, zones: { header: [header] } })
+
+    expect(loaded.load.status).toBe('fallback')
+    expect(loaded.fellBack).toBe(true)
+    expect(loaded.snapshot.source).toBe('default')
+  })
+
+  it('renders the default layout when the renderer rejects a document the loader accepted', () => {
+    const stored = { page: 'task', schemaVersion: 3, zones: { header: [header], main: [composer], footer: [] } }
+    const loaded = loadTaskLayoutSnapshot('run-1', stored)
+
+    expect(loaded.load.status).toBe('current')
+    expect(loaded.fellBack).toBe(true)
+    expect(loaded.snapshot.source).toBe('default')
+    expect(loaded.snapshot.diagnostics).toEqual([{ code: 'unknown-zone', schemaZone: 'footer' }])
+    expect(stored.zones.footer).toEqual([])
+  })
+
+  it('treats a main zone of task metadata alone as a missing composer', () => {
+    const loaded = loadTaskLayoutSnapshot('run-1', {
+      page: 'task',
+      schemaVersion: 3,
+      zones: { header: [header], main: [{ id: 'metadata', contract: TaskMetadata.id, contractVersion: TaskMetadata.version, required: false }] },
+    })
+
+    expect(loaded.fellBack).toBe(true)
+    expect(loaded.load.status === 'fallback' ? loaded.load.error.code : undefined).toBe('missing-required-placement')
   })
 })

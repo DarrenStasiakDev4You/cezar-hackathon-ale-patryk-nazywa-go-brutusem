@@ -16,7 +16,11 @@ task shell, actions, footer/review surfaces, drafts and edit-mode interaction re
 existing consumers. This registry is separate from the DOM edit-mode `LayoutRegistry` in
 `packages/web/src/components/layout-registry.tsx`; the latter continues to own draggable layout
 elements and edit-mode state. Layout schema data is ephemeral in the route instance and is not
-persisted or migrated by the renderer.
+persisted or migrated by the renderer. A stored document reaches the renderer only through
+`loadTaskLayoutSnapshot`: `loadTaskPageLayout` migrates it and requires the header and composer
+roles by contract (placement ids are free-form, and `task.main` also admits `TaskMetadata`),
+`toRenderLayoutSchema` projects it onto the v1 render schema, and a rejection at either stage
+renders the default layout with the fallback notice.
 
 Layout policy is immutable metadata on the component contract (`movable`, `removable`,
 `replaceable`, `allowedZones` and `category`). `packages/web/src/page-layout/constraints.ts` is the

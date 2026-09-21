@@ -13,9 +13,10 @@ import type { ReactElement } from 'react'
 
 import { ComponentHost } from '@/component-registry/component-host'
 import { admitPagePlacement, LayoutRenderer, PageLayoutProvider, type PageLayoutRegistry, createPageLayoutRegistry, TaskPage } from '@/page-layout'
+import type { LayoutLoadResult } from '@/lib/layout-migrations'
 import type { BindingRenderInput, LayoutRenderIssue, TaskLayoutSnapshot, ValidatedLayoutBinding } from '@/page-layout/layout-types'
 
-import { defaultTaskPageLayout } from './task-layout-schema'
+import { defaultTaskPageLayout, loadTaskPageLayout, toRenderLayoutSchema } from './task-layout-schema'
 
 export interface TaskPageLayoutContext {
   readonly header?: TaskHeaderMainProps
@@ -51,6 +52,29 @@ export function createTaskLayoutSnapshot(input: TaskLayoutInput): TaskLayoutSnap
   const base = snapshot(input.identity, defaultTaskPageLayout, 'default', [])
   if (input.supplied === undefined) return base
   return replaceTaskLayout(base, input.supplied).snapshot
+}
+
+export interface LoadedTaskLayout {
+  readonly snapshot: TaskLayoutSnapshot
+  /** The stored document's migration result (spec 2026-09-20-layout-schema-migrations-a). */
+  readonly load: LayoutLoadResult
+  /** The stored document was not used: the loader fell back, or the renderer rejected its projection. */
+  readonly fellBack: boolean
+}
+
+/**
+ * The Task Page's one layout boundary. A stored document of any supported version is migrated and
+ * checked for the page's required roles by `loadTaskPageLayout`, projected onto the render schema,
+ * and validated for rendering by `createTaskLayoutSnapshot`. Either stage rejecting it renders the
+ * default layout; `stored === undefined` means nothing is stored and is not a fallback.
+ */
+export function loadTaskLayoutSnapshot(identity: string, stored?: unknown): LoadedTaskLayout {
+  const load = loadTaskPageLayout(stored ?? defaultTaskPageLayout)
+  if (stored === undefined || load.status === 'fallback') {
+    return { snapshot: createTaskLayoutSnapshot({ identity }), load, fellBack: load.status === 'fallback' }
+  }
+  const snapshot = createTaskLayoutSnapshot({ identity, supplied: toRenderLayoutSchema(load.schema) })
+  return { snapshot, load, fellBack: snapshot.source === 'default' }
 }
 
 export function replaceTaskLayout(

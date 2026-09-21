@@ -3,6 +3,7 @@ import {
   TaskComposer,
   TaskHeaderMain,
   type LayoutSchema,
+  type LayoutZone,
 } from '@open-mercato/cezar-extension-api'
 
 import {
@@ -60,23 +61,27 @@ export const defaultTaskPageLayoutV3: LayoutSchemaV3 = deepFreeze({
   },
 })
 
-const requiredTaskPagePlacements = [
-  { zone: 'header', id: 'task-header', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version },
-  { zone: 'main', id: 'task-composer', contract: TaskComposer.id, contractVersion: TaskComposer.version },
+/**
+ * The roles a stored Task Page layout may not drop. Core renders the header and the composer only
+ * through their placements (spec 2026-09-20-layout-renderer), so a document without one hides it.
+ * Placement ids are free-form; the role is its contract. A non-empty zone is not enough: `task.main`
+ * also accepts `TaskMetadata` (#71), so a main zone holding only metadata would drop the composer.
+ */
+const requiredTaskPageRoles = [
+  { zone: 'header', contract: TaskHeaderMain.id, contractVersion: TaskHeaderMain.version },
+  { zone: 'main', contract: TaskComposer.id, contractVersion: TaskComposer.version },
 ] as const
 
 function missingRequiredPlacement(schema: LayoutSchemaV3): LayoutMigrationError | undefined {
-  for (const required of requiredTaskPagePlacements) {
-    const placement = schema.zones[required.zone]?.find(
-      (candidate) => candidate.id === required.id &&
-        candidate.contract === required.contract &&
-        candidate.contractVersion === required.contractVersion,
+  for (const role of requiredTaskPageRoles) {
+    const present = schema.zones[role.zone]?.some(
+      (placement) => placement.contract === role.contract && placement.contractVersion === role.contractVersion,
     )
-    if (placement === undefined) {
+    if (present !== true) {
       return {
         code: 'missing-required-placement',
-        path: `$.zones.${required.zone}`,
-        message: `required Task Page placement "${required.id}" is missing`,
+        path: `$.zones.${role.zone}`,
+        message: `required Task Page contract "${role.contract}" is missing`,
       }
     }
   }
@@ -95,6 +100,24 @@ export function loadTaskPageLayout(input: unknown, options: LayoutMigrationOptio
   return error === undefined
     ? result
     : { status: 'fallback', fallback: defaultTaskPageLayoutV3, original: input, error }
+}
+
+/**
+ * The renderer accepts only the normalized current `LayoutSchema` (spec 2026-09-20-layout-renderer,
+ * "Existing schema and migration work"), so a migrated document is projected onto it. The one field
+ * dropped is `required`: requiredness is page-zone policy, which the renderer reads from `TaskPage`.
+ */
+export function toRenderLayoutSchema(schema: LayoutSchemaV3): LayoutSchema {
+  const zones: Record<string, LayoutZone> = {}
+  for (const [zone, placements] of Object.entries(schema.zones)) {
+    zones[zone] = placements.map(({ id, contract, contractVersion, layout }) => ({
+      id,
+      contract,
+      contractVersion,
+      ...(layout === undefined ? {} : { layout }),
+    }))
+  }
+  return deepFreeze({ page: schema.page, schemaVersion: LAYOUT_SCHEMA_VERSION, zones })
 }
 
 export const LAYOUT_MIGRATION_FALLBACK_MESSAGE = 'Nie udało się zaktualizować własnego układu. Użyto bezpiecznego układu domyślnego.'
