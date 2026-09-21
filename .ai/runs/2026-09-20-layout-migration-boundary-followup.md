@@ -25,10 +25,18 @@ Risks:
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
-> 2026-09-20 validation note: Step 2.2 remains pending because `npm test` fails at
-> `packages/web/src/page-layout/registry.test.ts:42`; the same failure reproduces on clean
-> `origin/main`, and PR #76 does not touch the registry. The authoritative review requested
-> changes and the page-registry invariant needs maintainer resolution before this step can close.
+> 2026-09-20 validation note: Step 2.2 remained pending because `npm test` failed at
+> `packages/web/src/page-layout/registry.test.ts:42`; the same failure reproduced on clean
+> `origin/main`, and PR #76 does not touch the registry.
+>
+> 2026-09-22 resume: #71 reconciled that invariant on `main` (`TaskPage`'s `task.main` zone now
+> accepts `TaskMetadata`). Merging `origin/main` into this branch (d92a882a, a merge commit, no
+> history rewrite) cleared the blocker without touching this PR's files. Full gate on d92a882a:
+> typecheck, `npm test` (474 files / 8474 tests), `test:unit` (36), build and `test:package` (16)
+> all exit 0. Earlier `npm test` runs on the same commit hit intermittent timing failures in
+> suites this PR does not touch (load-induced `findBy`/5 s timeouts, and an `ENOTEMPTY` teardown
+> race in `packages/cezar/src/workflows/auto-resume.test.ts`); each passed on an isolated rerun,
+> and the server suite is byte-identical to `origin/main`.
 
 ### Phase 1: Production boundary and semantic validation
 
@@ -38,4 +46,4 @@ Risks:
 ### Phase 2: Regression coverage and verification
 
 - [x] 2.1 Add production-boundary and missing-required-placement regression tests. — 738109b4
-- [ ] 2.2 Run the full validation gate, review the diff, and publish the follow-up PR.
+- [x] 2.2 Run the full validation gate, review the diff, and publish the follow-up PR. — d92a882a
