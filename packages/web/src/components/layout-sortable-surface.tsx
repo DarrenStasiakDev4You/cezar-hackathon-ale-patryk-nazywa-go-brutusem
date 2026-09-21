@@ -69,7 +69,7 @@ export function LayoutDropZone({ id, children, className, hitAreaClassName }: {
   const { activeId } = useLayoutSortableContext()
   const registry = useLayoutRegistry()
   const activeElement = activeId ? registry.get(activeId) : undefined
-  const acceptsLayoutNode = Boolean(activeElement)
+  const acceptsLayoutNode = Boolean(activeElement && registry.canMoveToZone(activeElement.id, id))
   return (
     <div
       className={className}
@@ -243,6 +243,7 @@ export function resolveLayoutMove(registry: LayoutRegistry, activeId: string, ov
   const source = registry.get(activeId)
   const target = registry.get(overId)
   if (!source || !target || source.id === target.id) return null
+  if (target.zoneId !== undefined && !registry.canMoveToZone(source.id, target.zoneId)) return null
 
   const siblings = registry.getSiblingIds(source.parentId)
   const sourceIndex = siblings.indexOf(source.id)
@@ -271,7 +272,7 @@ function applyLayoutMove(registry: LayoutRegistry, move: LayoutMove): boolean {
   const targetIndex = move.targetId === null
     ? available.length
     : available.indexOf(move.targetId) + (move.position === 'after' ? 1 : 0)
-  return targetIndex >= 0 && registry.moveNode(source.id, destinationParent, targetIndex)
+  return targetIndex >= 0 && registry.tryMoveNode(source.id, destinationParent, targetIndex, registry.get(move.targetId ?? '')?.zoneId ?? source.zoneId).applied
 }
 
 export function LayoutSortableSurface({
@@ -378,9 +379,9 @@ export function LayoutSortableSurface({
     if (dragMode === 'container' && activePlaceholder?.visible && activePlaceholder.placement) {
       const siblings = registry.getSiblingIds(source?.parentId)
       const availableCount = siblings.filter((id) => id !== sourceId).length
-      moved = source
-        ? registry.moveNode(sourceId, source.parentId, activePlaceholder.placement === 'before' ? 0 : availableCount)
-        : false
+        moved = source
+          ? registry.tryMoveNode(sourceId, source.parentId, activePlaceholder.placement === 'before' ? 0 : availableCount).applied
+          : false
     } else if (targetId) {
       if (targetId.startsWith('layout-zone:')) {
         if (!source) {
@@ -393,7 +394,9 @@ export function LayoutSortableSurface({
           return
         }
         const parentId = targetId.slice('layout-zone:'.length)
-        moved = registry.moveNode(sourceId, parentId === 'root' ? null : parentId, registry.getSiblingIds(parentId === 'root' ? null : parentId).length)
+        const destinationParent = parentId === 'root' ? null : parentId
+        const destinationZone = destinationParent === null ? source.zoneId : registry.get(destinationParent)?.zoneId
+        moved = registry.tryMoveNode(sourceId, destinationParent, registry.getSiblingIds(destinationParent).length, destinationZone).applied
       } else {
         const move = resolveLayoutMove(registry, sourceId, targetId)
         if (move) moved = applyLayoutMove(registry, move)
@@ -407,7 +410,12 @@ export function LayoutSortableSurface({
     setActiveGeometry(null)
     placeholderRef.current = null
     setPlaceholder(null)
-    setLiveMessage(moved && source ? `Przeniesiono: ${elementLabel(source)}` : 'Przeciąganie anulowane')
+    const rejectionMessage = source?.policy?.movable === false
+      ? 'Ten element nie może być przenoszony.'
+      : targetId?.startsWith('layout-zone:') && source && !registry.canMoveToZone(source.id, targetId.slice('layout-zone:'.length))
+        ? `Ten element nie może zostać przeniesiony do ${targetId.slice('layout-zone:'.length)}.`
+        : 'Przeciąganie anulowane'
+    setLiveMessage(moved && source ? `Przeniesiono: ${elementLabel(source)}` : rejectionMessage)
   }, [dragMode, onLayoutChange, overId, registry])
 
   const handleDragCancel = React.useCallback(() => {
@@ -440,6 +448,7 @@ export function LayoutSortableSurface({
           }
         : undefined
     if (!bounds) return undefined
+    if (target?.zoneId !== undefined && !registry.canMoveToZone(activeElement.id, target.zoneId)) return undefined
 
     const siblings = registry.getSiblingIds(activeElement.parentId)
     const sourceIndex = siblings.indexOf(activeElement.id)

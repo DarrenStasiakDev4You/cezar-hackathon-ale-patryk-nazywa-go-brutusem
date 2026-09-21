@@ -10,6 +10,7 @@ import {
   type ZoneDefinition,
   type ZoneId,
 } from './definitions'
+import { zoneAdmissionIssue } from './constraints'
 
 export interface PageLayoutRegistry {
   registerPage(definition: PageDefinition): Disposable
@@ -125,16 +126,14 @@ function validateContent(pages: ReadonlyMap<PageId, PageDefinition>, content: Pa
         continue
       }
       keys.add(item.key)
-      if (item.placement !== zone.placement) {
-        issues.push({ code: 'placement-not-accepted', zoneId: zone.id, placement: item.placement })
+      const admission = zoneAdmissionIssue(zone, item)
+      if (admission === 'placement-not-accepted') {
+        issues.push({ code: admission, zoneId: zone.id, placement: item.placement })
         continue
       }
-      const accepted = zone.accepts === undefined || zone.accepts.some(
-        (contract) => contract.id === item.contract.id && contract.version === item.contract.version,
-      )
-      if (!accepted) {
+      if (admission !== null) {
         issues.push({
-          code: 'contract-not-accepted',
+          code: admission,
           zoneId: zone.id,
           contractId: typeof item.contract.id === 'string' ? item.contract.id : '',
           version: typeof item.contract.version === 'number' ? item.contract.version : 0,

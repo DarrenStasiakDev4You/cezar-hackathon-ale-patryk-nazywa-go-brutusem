@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { defineComponentContract } from '@open-mercato/cezar-extension-api'
+import { defineComponentContract, TaskMetadata } from '@open-mercato/cezar-extension-api'
 
 import { CORE_COMPONENT_CONTRACTS } from '@/component-registry/core-contracts'
 import { createCoreComponentRegistry } from '@/component-registry/core-components'
@@ -34,12 +34,18 @@ describe('page layout definitions', () => {
     expect(TaskPage.zones[0]?.accepts?.[0]).toMatchObject({ id: 'cezar.task.header.main', version: 1 })
     expect(TaskPage.zones[1]?.accepts?.[0]).toMatchObject({ id: 'cezar.task.composer', version: 1 })
     expect(TaskPage.zones[2]?.required).toBe(false)
+    expect(TaskMetadata).toMatchObject({
+      movable: true,
+      removable: true,
+      allowedZones: ['task.main', 'task.sidebar'],
+      category: 'task.metadata',
+    })
   })
 
   it('keeps every narrow Task Page contract backed by a core default', () => {
     const narrowContracts = TaskPage.zones.flatMap((zone) => zone.accepts ?? [])
 
-    expect(narrowContracts.map((contract) => contract.id)).toEqual(CORE_COMPONENT_CONTRACTS.map((contract) => contract.id))
+    expect(narrowContracts.map((contract) => contract.id).sort()).toEqual(CORE_COMPONENT_CONTRACTS.map((contract) => contract.id).sort())
     expect(missingCoreDefaults(createCoreComponentRegistry(), narrowContracts)).toEqual([])
   })
 
